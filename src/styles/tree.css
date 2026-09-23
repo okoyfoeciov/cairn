@@ -1,0 +1,715 @@
+/* ==========================================================================
+ * src/styles/tree.css
+ * Owner: 01.  Spec: CONTRACT.md §5.2 (the file-tree box model — spike D
+ * verbatim, B9), §5.1 rule 5 (no transitions), §3.3 (the scroller's height),
+ * §5.12.4 (why the scroller block is memory-load-bearing), §4.5 (the search
+ * panel shares this box).
+ *
+ * 27px rows, indent guides, the chevron mask, and THE ONE
+ * `.tree-scroller, .search-scroller` BLOCK, verbatim.  DECLARES NO CUSTOM
+ * PROPERTY (CONTRACT §5.1).
+ *
+ * The row/menu/inline-rename BEHAVIOUR is owner 04's (src/tree.ts, menu.ts,
+ * inline-edit.ts); this file draws, it does not act.
+ *
+ * OWNERSHIP NOTE, REPORTED NOT RESOLVED.  CONTRACT §6.4 (errata 2, Y13) puts
+ * this file under owner 01, so that the grouped `.tree-scroller,
+ * .search-scroller` rule below has exactly one declaring file.  This phase's
+ * assignment handed the file to owner 04 instead.  Owner 04 has changed exactly
+ * one block — the row-state selectors at the foot, renaming the scaffold's
+ * `.tr.is-active` to spec-04 §5.4's `.a` and adding `.c`, because src/tree.ts's
+ * 16-entry className table is indexed by those two bits.  NOTHING in the
+ * scroller block, the row box model or the chevron block is touched: those are
+ * §5.2 verbatim and are memory-load-bearing (G5d).  The ownership collision
+ * itself is for the integrator, not for this file.
+ * ======================================================================== */
+
+/* ---- the sidebar scroller (§5.2 X6) — MEMORY-LOAD-BEARING ---------------
+ * `overflow-y: scroll`, never `auto`: left to `auto`, every tree row's usable
+ * width changes by 8px the moment the vault grows past one screen, and row
+ * ellipsis moves with it.
+ *
+ * §5.12.4.2: the 8px STYLED scrollbar is what takes the collapsed-surface
+ * configuration from 1.57x the bare backing store to 1.00x — a pane left on
+ * WebKit's default scrollbar inherits the 17px legacy one and costs an extra
+ * page tile column, ~7 MB at 2x.  BOTH memory spike rigs made exactly this
+ * mistake and each therefore reported an inflated compositing baseline.
+ * G5d fails if any of the four rules below regresses.
+ *
+ * `.tree-scroller` and `.search-scroller` are NEVER live at the same time — the
+ * search panel REPLACES the tree in the sidebar (§4.5) — so the document's
+ * ceiling is TWO scrollable boxes, not three (`layers.scrollers`). */
+.tree-scroller, .search-scroller {
+  overflow-y: scroll;             /* reserve the 8px gutter ALWAYS — never auto */
+  scrollbar-gutter: stable;
+}
+.tree-scroller::-webkit-scrollbar,       .search-scroller::-webkit-scrollbar
+      { width: var(--scrollbar-gutter-w); background: transparent }  /* 8px [M] */
+.tree-scroller::-webkit-scrollbar-track, .search-scroller::-webkit-scrollbar-track
+      { background: transparent }
+/* Obsidian's own styled thumb (app.css:9664-9678), reproduced in an 8px track
+ * instead of its 12px one — see the --scrollbar-gutter-w note in tokens.css for
+ * why the track does not widen and why the VISIBLE thumb still lands 7px wide in
+ * the same place.  Obsidian insets its thumb with a transparent border under
+ * `background-clip: padding-box`; the border is `3px 3px 3px 2px` there and 1px
+ * on the LEFT only here, which spends the one pixel an 8px track can spare on
+ * the side the pane edge is not on.  `--radius-l` (12px) IS Obsidian's
+ * `--scrollbar-radius`; on a 7px-wide thumb it is a pill either way, and the
+ * token is used rather than the literal so the two cannot drift.
+ * `min-height: 45px` is Obsidian's too (9671) and it is not cosmetic: without it
+ * the 3,600-note vault draws a 4px sliver you cannot grab. */
+.tree-scroller::-webkit-scrollbar-thumb, .search-scroller::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);            /* rgba(255,255,255,.1)        */
+  border-radius: var(--radius-l);                /* 12px == Obsidian's          */
+  background-clip: padding-box;
+  border-left: 1px solid transparent;            /* 8px track -> 7px of ink     */
+  min-height: 45px;
+}
+.tree-scroller::-webkit-scrollbar-thumb:hover,  .search-scroller::-webkit-scrollbar-thumb:hover,
+.tree-scroller::-webkit-scrollbar-thumb:active, .search-scroller::-webkit-scrollbar-thumb:active
+      { background: var(--scrollbar-thumb-hover) }               /* .1 -> .2    */
+
+/* Horizontal geometry, content coords (§5.2): the sidebar is x 0..411; the
+ * scroller's border box is x 0..409 with the sidebar's own 3px right padding
+ * beyond it (chrome.css), so the reserved gutter is the scroller's rightmost
+ * 8px at x 401..409 and the thumb paints there — reproducing the measured run
+ * sx 402..410 within the +/-1 antialias spill.  Rows lay out in the remaining
+ * 401px.  Vertically the band is 842 - 24 x (banners shown), taken from flex,
+ * never from the constant: a banner appearing is an ordinary resize (§3.3). */
+.tree-scroller, .search-scroller {
+  flex: 1 1 auto;
+  min-height: 0;
+  position: relative;
+  overflow-x: hidden;
+}
+
+/* §0.32.4 — 24px OF EMPTY SPACE UNDER THE LAST ROW: OBSIDIAN'S OWN, `[S]`.
+ *
+ * User ruling, 2026-09-12: *"Let's copy the Obsidian padding space."*  The value
+ * is `--size-4-6` = 24px, which is what §0.30 E72 transcribed in the first
+ * place; §0.32's divergence is WITHDRAWN and this is a transcription again.
+ *
+ * MEASURED off the user's own Obsidian screenshot before it was taken: last
+ * row's box bottom at device y ~88, the scroller's bottom rule at 120, so the
+ * gap is 32 device px = 25.6 CSS at dpr 1.25 — 24 within the error of reading a
+ * row box off its ink.  It is a little UNDER one row on the 27px pitch, not the
+ * one-to-two rows it looks like.
+ *
+ * THE SEQUENCE IS KEPT AS A RECORD, and it is the only reason this comment is
+ * longer than one line: 24 [S] -> 72 -> 216 -> 144 -> 108 -> 24 [S].  Every step
+ * between the two 24s was a user ruling tried in the app, and the last one
+ * returns to the transcription.  **Do not re-derive any of them**; if this
+ * number is ever to move again it moves by a ruling, and the ruling that stands
+ * today is "copy Obsidian".
+ *
+ * [S] `.nav-files-container` (app.css:15817-15818):
+ *
+ *     padding: var(--size-4-1) var(--size-4-3) var(--size-4-6) var(--size-4-3);
+ *     padding-bottom: max(var(--safe-area-inset-bottom), var(--size-4-6));
+ *
+ * `--size-4-6` is 24px (app.css:2661).  ONLY THE BOTTOM IS TRANSCRIBED: the
+ * other three are Obsidian's horizontal box model for its rows, and Cairn's is
+ * §5.2's `--cx0`/`--tx0` measured geometry, which G9 asserts to the pixel.
+ * Copying the 12px sides would move every row and fail four gate rows.
+ * `--safe-area-inset-bottom` is 0 on both of Cairn's targets and the `max()` is
+ * dropped with it, rather than transcribed as a value that can never win.
+ *
+ * IT COSTS THE GATE NOTHING: padding-bottom leaves the BORDER box alone, and
+ * every `tree.scroll` and `sidebar.gutter` row in verify-geometry.js reads the
+ * border box or the horizontal content box.  What it changes is `scrollHeight`,
+ * which is the point.
+ *
+ * SCOPED TO THE TREE.  `.search-scroller` is grouped with it in every other rule
+ * in this file and NOT in this one: the search panel draws no context menu, so
+ * empty space below its last hit would buy nothing and it is not what Obsidian
+ * pads either.  The ruling above does not widen that scope: a search panel has
+ * no create rows to reach either. */
+/* §0.34 E80 — AND OBSIDIAN'S OWN 12px AT THE TOP.  A user ruling, revised
+ * twice, and the last revision is a TRANSCRIPTION rather than a size:
+ *   §0.34 E80    `var(--row-h)`         *"Let's say 1 row's height is okay!"*
+ *   §0.34.3      `calc(--row-h / 2)`    *"half a row's height is enough"* = 13.5
+ *   §0.34.4 [S]  `12px`                 *"Do the same with top padding (we
+ *                                          don't have this ribbon, we just need
+ *                                          to measure the space between the
+ *                                          first row and the ribbon)"*
+ *
+ * [S] MEASURED IN THE PINNED ENGINE, Obsidian's own `app.css` over its own DOM
+ * — `.nav-header > .nav-buttons-container` above `.nav-files-container`:
+ *
+ *     navHeaderPadding 8px      filesContainerPaddingTop 4px
+ *     navButtonsBottom 32       navHeaderBottom 40      firstRowTop 44
+ *     gap ribbon->first row 12  gap nav-header->first row 4
+ *
+ * The 12 is `.nav-header { padding: var(--size-4-2) }`'s BOTTOM half, 8px
+ * (app.css:15784), plus `.nav-files-container`'s opening `var(--size-4-1)`, 4px
+ * (app.css:15817).  Two elements, one gap — and the user asked for the GAP.
+ *
+ * ⚠ 4 IS THE OTHER CANDIDATE AND IT IS THE WRONG ONE HERE.  Box to box, the
+ * nav-header's bottom edge to the first row IS 4px, because Obsidian's 8 is
+ * padding INSIDE the nav-header.  Cairn draws no nav-header — §0.12 E14 deleted
+ * the nav toolbar — so there is no box here to carry that 8, and copying the
+ * declaration instead of the space would put the first row 8px above Obsidian's.
+ * Transcribe the SPACE when the element the other half lived on is gone.
+ *
+ * A literal, because Cairn defines no `--size-4-N` tokens: the sum of two of
+ * Obsidian's is not an expression this sheet can spell.  The bottom's 24 is a
+ * literal for the same reason.  It no longer tracks `--row-h`, and that is the
+ * point — Obsidian's gap is not a function of its row pitch either.
+ *
+ * ⚠ THIS ONE IS NOT COSMETIC TO `tree.ts`, UNLIKE THE BOTTOM.  `scrollTop` is
+ * measured from the padding box, so a top padding moves every row in SCROLL
+ * coordinates while leaving it alone in SIZER coordinates, and the virtual
+ * scroller converts between the two in four places.  `tree.ts` reads this value
+ * out of the computed style (`padTop`) and corrects them; it does not hardcode
+ * 12.  Change the number here and nothing needs to change there — but move the
+ * PROPERTY onto another element and `measure()` has to move with it.
+ *
+ * Measured both ways AT A 27px TOP PADDING: the correction changed 22 painted
+ * rows to 23 at max scroll and NOTHING a user could see, because `OVERSCAN = 8`
+ * absorbs a one-row shift — and at §0.34.4's 12px it absorbs it with far more
+ * margin still.  It is in because being right by coincidence is not being right,
+ * and the coincidence is between an overscan and a padding that have no
+ * relationship — see the note on `padTop` in tree.ts. */
+.tree-scroller {
+  padding-top: 12px;                     /* [S] §0.34.4 — Obsidian's ribbon gap  */
+  padding-bottom: 24px;                  /* [S] §0.32.4 — Obsidian's --size-4-6  */
+}
+
+/* The sizer.  Rows are absolutely positioned inside it, so the 27px pitch IS
+ * the row box height and the scroller's scrollHeight is one multiplication. */
+.sz { position: relative; width: 100%; }
+
+/* ---- the row box model — §5.2, spike D verbatim (B9) --------------------
+ * Refuted, not merely outvoted: `--tx0: 38` is a BOX at content 38 = sx 39,
+ * while depth-0 text ink is measured at sx 37 — ink 2px LEFT of the box
+ * containing it.  No font does this.  spec-04 §4.1 and spec-05 §8.1 are wrong
+ * by +3px on every name at every depth.
+ *
+ * Row structure is spec-04's block-with-padding, NOT spec-01's flex: one
+ * element, one `<svg class="chev">` child (§0.50 E98 — it was a ::before mask),
+ * one text node, guides as a repeating-linear-gradient on the row itself.  `text-overflow: ellipsis` does
+ * not apply to an anonymous flex item, so a flex row would clip long filenames
+ * hard instead of ellipsing them.
+ *
+ *   d | chev box | ink sx | guide sx | text box | ink sx
+ *   0 |    15    |   22   |    24    |    35    |   37
+ *   1 |    32    |   39   |    41    |    52    |   54
+ *   2 |    49    |   56   |    58    |    69    |   71
+ *   3 |    66    |   73   |    75    |    86    |   88/89
+ * 13 of 13 recorded ink samples reproduced.
+ *
+ * ⚠ §0.48 E96 — THE `chev box` AND `text box` COLUMNS ARE NOW +1: 16/33/50/67
+ * and 36/53/70/87.  The table above is the spike-D reading and is kept as the
+ * dated record; every one of its numbers carried a "− 1px frame" correction
+ * against the reference PNG, and SPIKE O STRUCK THAT FRAME (the PNG's edge is a
+ * white wash over content, not chrome — the same finding that moved the window
+ * from 1918×958 to 1920×964).  The `guide sx` and `ink sx` columns were always
+ * right; it is the CONTENT coordinates derived from them that were short.
+ * Measured against the live Obsidian four ways — see tokens.css. */
+.tr {
+  position: absolute; left: 0; right: 0; top: 0;
+  height: var(--row-h); line-height: var(--row-h);
+  padding-left: calc(var(--tx0) + var(--d) * var(--row-indent));   /* 35 + 17d */
+  /* calc(17px − gutter) = 9px at the current 8px gutter, 2026-09-15 — WAS a
+     flat 6px, and Obsidian's label always clips exactly 8px inside its FILL's
+     own right edge, not the row's.  `.tr::before`'s right inset (below) is
+     `calc(12px − var(--scrollbar-gutter-w) − 3px)`, so the label edge
+     Obsidian's rule wants is that PLUS 8px — spelled out here in the SAME
+     terms, not as the literal `9px` the arithmetic happens to give today, so
+     a future change to `--scrollbar-gutter-w` moves both insets together
+     instead of quietly reopening this exact bug through a different token.
+     User report: a long name's "…" sat 7px right of Obsidian's, i.e. one
+     extra glyph fit.  The overflowing rule below adds the same
+     `--nav-scrollbar-w` term `.tr::before`'s does, for the same reason. */
+  padding-right: calc(17px - var(--scrollbar-gutter-w));   /* fill inset + 8px */
+  font-size: var(--tree-fs); font-weight: 400; color: var(--text-muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  /* §0.48 E96 — THE STRIPE IS `--hairline`, NOT `1px`, and the difference is a
+     device pixel.  Obsidian's guide is a real border and Chromium snaps a used
+     border to floor(dpr)/dpr; a gradient STOP gets no such treatment, so a flat
+     1px stripe (1.25 device px at dpr 1.25) painted two columns wherever it
+     started on a fractional one — the reported "unusually thick" line at depth
+     3.  `chrome.ts` writes the snapped value; tokens.css carries the reason. */
+  background-image: repeating-linear-gradient(90deg, var(--indent-guide) 0 var(--hairline), transparent var(--hairline) var(--row-indent));
+  background-repeat: no-repeat;
+  background-position: var(--gx0) 0;
+  /* §0.48 E96 — THE BOX ENDS JUST AFTER THE LAST STRIPE, NOT A FULL STEP LATER.
+     This was `calc(var(--d) * var(--row-indent))`, which ends the background box
+     exactly where the NEXT stripe begins — and the rasteriser paints that
+     boundary column at partial coverage.  Measured: a depth-2 row drew guides
+     at device 30 and 51 and a THIRD, half-ink column at 72 (value 53 against a
+     full 66 and a 40 ground) that Obsidian does not have.  That is the user's
+     report — "Obsidian doesn't have the line INSIDE Memory's files" — and it is
+     a different defect from the thick line, with a different cause.
+     HALF A STEP, NOT `+ --hairline`, and the half is what keeps the gate honest.
+     Any box edge strictly between the last stripe's end and the next stripe's
+     start removes the bleed; `(d - 0.5) * step` is the one that does it with NO
+     reference to `--hairline` and therefore none to dpr.  The first draft used
+     `(d - 1) * step + --hairline`, which renders identically and made the
+     expected background-size a function of the device scale — G9 caught it
+     immediately (`expect 17 got 0.8`), and verify-geometry.js's own header says
+     why that matters: *"Nothing here touches devicePixelRatio… the answers are
+     identical at 1x, 2x and any fractional scale."*
+     `max(0px, …)` because depth 0 computes negative and a negative
+     background-size is invalid (it would paint the row's full width). */
+  background-size: max(0px, calc((var(--d) - 0.5) * var(--row-indent))) 100%;
+}
+
+/* `.tr.d` is applied when isDir(i) && subtree[i] > 0 (M61): an EMPTY FOLDER
+ * DRAWS NO CHEVRON.  A file carries the same padding-left, so a file and a
+ * folder at the same depth share a text origin for free.
+ * Stroke-width 2, not 3: at S=16, sw:2 predicts sx 22 (matches) and sw:3
+ * predicts 21.  The transform origin is the glyph's centre, 8px 13.5px in row
+ * coordinates, not spec-04's 6px 13.5px.
+ *
+ * §0.50 E98 — THE CHEVRON IS AN INLINE `<svg class="chev">` CHILD OF THE ROW,
+ * NOT A `-webkit-mask` ON `::before`.  The old mask source was an SVG DOCUMENT
+ * (`--chev`, a data: URL), and on Chromium/Linux an SVG loaded as a CSS image
+ * is laid out in an isolated page whose screen info reads scale 1.0; that
+ * page's layout overwrote Blink's process-wide font-strike scale
+ * (`LayoutView::LayoutRoot`, crbug.com/845468) the first time the tree
+ * painted, and the next text strike populated before a main-document layout
+ * -- the note's `th` cells, through Obsidian's `min-width: 6ch` -- lost its
+ * subpixel-positioning flag and with it one device pixel of ascent.  That was
+ * LP-10, the 0.8px line, 12 launches in 21.  An inline `<svg>` is painted by
+ * the document itself and has no page of its own; it is also Obsidian's
+ * construction (`createDiv("tree-item-icon collapse-icon")` + `setIcon`).
+ * Measured at rest against the mask: 0 of 2,040 channels differ.  Every row,
+ * file or folder, carries the child; `.d` shows it.  `pointer-events: none`
+ * keeps the row as the event target the hit test expects. */
+.tr > .chev {
+  display: none; position: absolute;
+  top: calc((var(--row-h) - var(--chev-w)) / 2);                  /* 5.5px     */
+  left: calc(var(--cx0) + var(--d) * var(--row-indent));          /* 16 + 17d */
+  width: var(--chev-w); height: var(--chev-w);
+  fill: none;
+  stroke: var(--text-faint);             /* #666666 — NOT spec-04's #8a8a8a    */
+  pointer-events: none;
+  transform-origin: 50% 50%;                                       /* 8px 13.5px in row coordinates */
+}
+.tr.d > .chev { display: block; }
+.tr.d.o > .chev { transform: rotate(90deg); }
+
+/* §0.44 E90 — THE ARROW TURNS, AND IT TURNS ONLY ON THE ROW YOU CLICKED.
+ *
+ * [S] MEASURED IN THE LIVE OBSIDIAN 1.13.7 (`tools/obsidian-live.mjs`, Debian,
+ * 2026-09-12) and read in its own sheet, which agree:
+ *
+ *     .collapse-icon svg.svg-icon        { transition: transform 100ms ease-in-out }   app.css:7893
+ *     .collapse-icon.is-collapsed svg    { transform: rotate(calc(--direction * -1 * 90deg)) }
+ *
+ * and the running app computes `transform | 0.1s | ease-in-out`, sweeping
+ * `matrix(0,-1,1,0,0,0)` -> `matrix(1,0,0,1,0,0)` over ~100ms.  Obsidian's
+ * NEUTRAL orientation is the open one (chevron down) and it rotates -90deg to
+ * close; Cairn's mask is right-pointing at rest and rotates +90deg to open.
+ * Same 90-degree sweep, same duration, same easing, opposite sign because the
+ * two base glyphs point different ways — do not "fix" the sign to match the
+ * declaration, it would spin the arrow the wrong way.
+ *
+ * ── WHY THE DURATION IS A CUSTOM PROPERTY AND NOT A LITERAL ────────────────
+ * THE ROWS ARE POOLED.  `.tr` elements are recycled by the virtualiser, so a
+ * slot that drew an OPEN folder at one scroll position draws a CLOSED one at
+ * the next — `paint()` rewrites `className` and the `.o` bit flips with it.  A
+ * flat `transition: transform 100ms` here would animate that, and a fast scroll
+ * through a tree of mixed folders would spin arrows all over the sidebar.  That
+ * is not a hypothetical: it is the same recycling `invalidatePool()` exists for.
+ *
+ * So the transition is always declared and its DURATION is `--chev-ms`, which
+ * is `0ms` everywhere except the one row `tree.ts` arms for the ~100ms of a
+ * deliberate toggle.  A custom property is the channel that reaches here: the
+ * chevron is a child `<svg>` (§0.50 E98; it was a `::before` before), and
+ * `tree.ts` arms the ROW, which the child inherits from — one write per toggle
+ * rather than a second element to find and style.
+ *
+ * ── AND WHY `!important` ──────────────────────────────────────────────────
+ * `base.css:51` is §5.1 rule 5's blanket `*, *::before, *::after { transition:
+ * none !important }`.  Between two author `!important` declarations the cascade
+ * falls back to SPECIFICITY, and `.tr.d > .chev` (0,3,0) outranks `*` (0,0,0)
+ * — so this wins where a normal declaration would have been silently
+ * dead.  That is §0.24.5 E53's lesson applied on purpose instead of paid for:
+ * three declarations written to match Obsidian were dead on arrival there and
+ * NOTHING FAILED.  This is the third documented exemption to rule 5, after the
+ * Properties fold's two, and it is the first outside that block. */
+.tr.d > .chev {
+  transition: transform var(--chev-ms, 0ms) ease-in-out !important;
+}
+
+/* A pooled row that is currently outside the painted band.  `.tr` sets no
+ * `display`, so the `hidden` ATTRIBUTE's UA rule already does this; it is
+ * restated because the row pool toggles `el.hidden` on every jump-scroll and a
+ * future `display:` on `.tr` would silently un-hide 49 stale rows. */
+.tr[hidden] { display: none; }
+
+/* ---- row states — all [O] Obsidian defaults; none appear in the reference --
+ * THE FILL IS AN INSET ROUNDED RECT, AND THE FULL-BLEED PARAGRAPH THAT STOOD
+ * HERE IS WITHDRAWN BY USER RULING 2026-09-14 ("Pixel identical!").  Measured
+ * live on Obsidian 1.13.7 (`tools/obsidian-live.mjs`, Debian, a two-note
+ * vault, Misc open): the open row's `.nav-file-title` is 276 wide inside a
+ * 300 container carrying 12px of horizontal padding — the fill stops 12px
+ * short of the SIDEBAR on each side — `border-radius: 4px`, `margin: 0 0 2px`,
+ * 24.9 tall (25 CSS px: the 2px bottom gap is the margin, the same 25+2 split
+ * the reference PNG measured on the active row).  The hover fill is the same
+ * rect (same element, `:hover`).  Verified in-engine on Cairn at dpr 1,
+ * 2026-09-14: 12 of 12 pixel checks — left edge 12, right edge exclusive 389
+ * on a 401 row, fill rows y..y+24, gap y+25..y+26, both top corners cut by the
+ * radius, the inactive row untouched.
+ *
+ * THE RIGHT INSET IS NOT 12px IN ROW COORDINATES, and the user caught it the
+ * same day ("the space between the highlighting tile's right and the
+ * sidebar!").  Obsidian's container spans its sidebar FULLY, so 12px of
+ * container padding is 12px from the sidebar edge on both sides (measured:
+ * sidebar 44..344, fill 56..332).  Cairn's row does NOT span its sidebar:
+ * the row ends 8px (the reserved scrollbar gutter, x 401..409) + 3px (the
+ * sidebar's own right padding, chrome.css §5.2) short of it — measured live:
+ * sidebar 0..412, scroller 0..409, row 0..401, so a symmetric `right: 12px`
+ * left a 23px visible gap against Obsidian's 12.  The rule below therefore
+ * insets the fill 12px from the SIDEBAR edge, which in row coordinates is
+ * `left: 12px` and `right: calc(12px - var(--scrollbar-gutter-w) - 3px)` =
+ * 1px.  Spelled as the subtraction so it tracks the gutter token instead of
+ * hardcoding the difference of two structures in two files.
+ * Obsidian's default also raises the active row to weight 500; we keep 400,
+ * because a weight change reflows the label and can push a long filename into
+ * ellipsis on selection.  Brightening to --text-normal is enough to read as
+ * selected. [C]
+ *
+ * THREE ORTHOGONAL STATES, THREE SELECTORS (spec-04 §6.2) — plus the
+ * shift-selection below, which is a fourth bit in the same table:
+ *   hover  — CSS only, transient, no JS listener anywhere;
+ *   .a     — ACTIVE: the note open in the single tab.  Exactly one file row or
+ *            none.  Persistent and focus-independent: it must survive the tree
+ *            losing focus, a sort change and a watcher refresh.  User ruling,
+ *            2026-09-14 [C]: a vault holding exactly ONE note draws no `.a`
+ *            fill at all — `tree.ts` withholds the ACTIVE bit when its file
+ *            count is 1, so `aria-selected` goes with it.  Obsidian highlights
+ *            its single row (`is-active` at the hover value, measured live on
+ *            1.13.7 with `tools/obsidian-live.mjs`), and this deliberately
+ *            differs.  User ruling, 2026-09-15 [C]: while a shift-selection
+ *            is live, `.a` is withheld everywhere and the selection is the
+ *            one highlight system on screen — no grey intruding on, or
+ *            beside, the purple range;
+ *   .c     — CURSOR: the keyboard focus row.  Its RING renders only under
+ *            `.tree-scroller.kbd-focus:focus` — the ring rule below says why
+ *            that is not `:focus-visible` any more.
+ * The short names are not cosmetic: src/tree.ts precomputes a 32-entry
+ * className table indexed by `chev | open<<1 | active<<2 | cursor<<3 | sel<<4`,
+ * which is what removes string concatenation from the paint path (spec-04
+ * §5.4).  The scaffold's `.tr.is-active` is renamed to `.a` here for that
+ * reason; no probe row and no other stylesheet referenced it
+ * (`tools/verify-geometry.js` keys on `.tr` and `.tr.d` only).
+ *
+ * --bg-modifier-active AND --bg-modifier-hover ARE THE SAME VALUE, and that is
+ * correct: Obsidian declares `--nav-item-background-active: var(--background-
+ * modifier-hover)`, read from its own stylesheet 2026-09-09. This comment
+ * previously called the collision a defect and Y3 ruled them apart at .075/.15;
+ * both are overturned, and tokens.css carries the evidence. The active row is
+ * distinguished by INK (--text-normal), exactly as Obsidian distinguishes it. */
+/* THE FILL STOPS 2px SHORT OF THE ROW PITCH, and that is measured, not taste.
+ * Obsidian's `.nav-file-title` is `height: 24.9px; margin: 0 0 2px`, so its
+ * 27px pitch is a 25px fill plus a 2px gap -- confirmed twice, independently:
+ * the live app's computed style (Obsidian 1.13.7, 2026-09-09) and the
+ * reference PNG, whose active row measures 25 rows of fill inside a 27px row
+ * pitch. Cairn filled all 27, so every selected or hovered row was 2px taller
+ * than Obsidian's and adjacent hovers touched where Obsidian's do not.
+ *
+ * IT IS PAINTED, NOT LAID OUT — AND SINCE 2026-09-14 NOT EVEN ON THE ROW.
+ * Obsidian gets the gap from `margin-bottom` on separate row elements; `.tr`
+ * is an ABSOLUTELY POSITIONED row in a virtualised list at a fixed `--row-h`
+ * pitch (spec-04 §5.4), and a margin there would either be ignored or
+ * desynchronise the row pool from its scroll maths.  The fill lives on
+ * `.tr::before` (below), so the 2px gap is geometry — `bottom: 2px` — and
+ * `.tr`'s own box is byte-for-byte what G9 pins.  The `inset 0 -2px 0
+ * var(--bg-secondary)` shadow that used to mask the gap is deleted with the
+ * full-bleed fill; the gap now shows the scroller through, which is the
+ * colour that shadow was mixed to match.
+ *
+ * WHY A PSEUDO AND NOT THE ROW'S OWN BACKGROUND, both halves load-bearing:
+ * (1) a `background-color` fills the whole border box and no border-radius
+ * can round an INSET rect out of it; (2) `.tr`'s box belongs to G9, and the
+ * obvious alternative — transparent 12px side borders with
+ * `background-clip: padding-box` — widens the border box G9 measures.  The
+ * pseudo is free (the chevron has been a child `<svg>` since §0.50 E98, and
+ * no `.tr::before`/`::after` rule exists) and needs no JS: `paint()`'s class
+ * bits are untouched, so `aria-selected` still rides with `.a`, and the
+ * single-note suppression still holds (no `.a`, no fill).
+ *
+ * STACKING, because the naive version fails silently: a positioned pseudo
+ * with no z-index paints ABOVE inline content (positioned descendants beat
+ * non-positioned text), which would cover the label.  `z-index: -1` puts the
+ * fill behind the text and the chevron but above the row's own background —
+ * which puts the indent guides UNDER the fill on hover/active rows.  That is
+ * Obsidian's order too: its guides live on the children container, behind
+ * the titles.  `.tr`'s own `translateY` transform is the stacking context
+ * that keeps the -1 inside the row. */
+.tr::before {
+  content: ''; position: absolute; top: 0; bottom: 2px; left: 12px;
+  right: calc(12px - var(--scrollbar-gutter-w) - 3px);
+  border-radius: 4px; corner-shape: var(--tree-corner-shape); z-index: -1;
+  background-color: transparent;
+}
+/* THE RIGHT INSET FOLLOWS OBSIDIAN'S SCROLLBAR, NOT CAIRN'S GUTTER — user
+ * report 2026-09-15, "Look at the space between the pink tile and the
+ * sidebar!! Cairn doesn't have it."  The rule above is right only while the
+ * tree does not overflow.  Measured live on macOS at dpr 1, sidebar 412, both
+ * apps on one fixture: OVERFLOWING, Obsidian's fill is x 12..384 with its thumb
+ * at 401..408 and ground between (16px), Cairn's was 12..399 against a thumb
+ * at 402..408 (2px); NOT overflowing, both are 12..399.
+ *
+ * The mechanism: `.nav-files-container` is `overflow-y: auto` with 12px of
+ * side padding (app.css:15813), so its scrollbar takes width out of the box
+ * the fill is inset from — but only while the rows overflow.  Cairn's scroller
+ * reserves its 8px gutter always (X6), so its box never moves: tree.ts says
+ * WHEN (`.is-overflowing`, the scrollHeight vs clientHeight arithmetic it
+ * already owns) and chrome.ts says HOW MUCH (`--nav-scrollbar-w`, 15 on this
+ * Mac, probed).  1 + 15 = 16 -> fill 12..384 at 412, Obsidian's to the column.
+ * On Linux 1 + 12 = 13 -> 12..387: from app.css, NOT measured on Debian.
+ *
+ * The scrollbar itself is not changed: Cairn's thumb is still its styled 7px
+ * #3e3e3e one, where Obsidian's macOS bar is the engine's 8px `gray`. */
+.tree-scroller.is-overflowing .tr::before {
+  right: calc(12px - var(--scrollbar-gutter-w) - 3px + var(--nav-scrollbar-w));
+}
+/* …AND THE LABEL'S CLIP EDGE MOVES WITH IT.  Obsidian's fill box IS its title
+ * element, `padding: var(--nav-item-padding)` = 4 8 4 24, so a long name
+ * ellipsizes exactly 8px inside the fill's right edge, in EVERY state: 392 not
+ * overflowing, 377 overflowing (400−8 and 385−8).  Cairn's `.tr` is a wider box
+ * than its fill (`::before`) and the two insets were tuned separately, so this
+ * relation did not hold: measured 395 not overflowing (3px past Obsidian's
+ * 392 — pre-existing) and 380 overflowing (+3px past 377, PLUS the padding
+ * fix below closes the gap the new right inset opened).  The SAME relation as
+ * the base rule — `padding-right = ::before's right inset + 8px` — spelled in
+ * the SAME terms as `::before`'s inset just above (`12px − gutter − 3px +
+ * nav-scrollbar-w`), not as the `9px + nav-scrollbar-w` the arithmetic gives
+ * today, for the reason the base rule's comment gives: a `--scrollbar-gutter-w`
+ * change must not be able to separate the two insets again. */
+.tree-scroller.is-overflowing .tr {
+  padding-right: calc(17px - var(--scrollbar-gutter-w) + var(--nav-scrollbar-w));
+}
+.tr:hover::before { background-color: var(--bg-modifier-hover); }   /* -> #363636 */
+.tr.a::before     { background-color: var(--bg-modifier-active); }
+.tr.a             { color: var(--text-normal); }
+/* The shift-selection fill (2026-09-14): Obsidian's own
+ * `--nav-item-background-selected` — `color-mix(in oklch, var(--color-accent)
+ * 15%, transparent)` — and `--accent` IS that accent (`#8a5cf5`, measured
+ * equal down to the channel in chrome.css), so the mix reproduces their
+ * purple by construction.  Same inset rounded rect (same element), same
+ * normal ink (`--nav-item-color-selected` is `--text-normal`).
+ * AFTER `.tr.a::before` on purpose: equal specificity, so source order
+ * decides, and app.css carries `.tree-item-self.is-selected` AFTER
+ * `.tree-item-self.is-active` — the selected fill wins on a row that is both,
+ * which is what makes a range containing the open note read uniform. */
+.tr.s::before     { background-color: color-mix(in oklch, var(--accent) 15%, transparent); }
+.tr.s             { color: var(--text-normal); }
+/* The secret row (user feature, 2026-09-16): a secret file's row draws sky
+ * blue, so credentials are spottable in a vault-wide glance.  Colour-only —
+ * the row box never moves for it — and AFTER `.tr.s` on purpose, equal
+ * specificity: the mark survives the active and selection fills, because a
+ * row that stopped reading as secret the moment it was opened or selected
+ * would defeat the purpose.  The transient drag gestures below still win
+ * while live.  The hue is user-chosen (#5EB3F6, picked from a rendered
+ * preview against this ground): a literal, not a token, because no palette
+ * token holds it. */
+.tr.is-secret     { color: #5EB3F6; }
+/* ---- drag-to-move (Obsidian's file-explorer drop, transcribed) --------------
+ * app.css + app.js, 1.13.7, measured 2026-09-16 (`/tmp/obsidian-app.*`):
+ *
+ *     .tree-item-self.is-being-dragged-over {
+ *       color: var(--nav-item-color-highlighted);  = var(--text-accent)
+ *       background: color-mix(in oklch, var(--interactive-accent) 10%, transparent); }
+ *     .nav-folder.is-being-dragged-over {
+ *       border-radius: var(--radius-s);
+ *       background: color-mix(in oklch, var(--interactive-accent) 10%, transparent); }
+ *     .tree-item-self.is-being-dragged {
+ *       color: var(--text-on-accent);
+ *       background-color: var(--interactive-accent); }
+ *
+ * Cairn's fill lives on `.tr::before` (the inset rounded rect), not on the row,
+ * so the backgrounds go there and the inks stay on the row — the same split
+ * `.tr.s`/`‑.a` already use. `--accent` IS Obsidian's `--interactive-accent`
+ * (`#8a5cf5`, tokens.css) and `--text-accent` IS its highlighted ink, so both
+ * mixes reproduce by construction. AFTER `.tr.s` on purpose: a row that is both
+ * selected and dragged (the common multi-drag) reads as dragged, and a row that
+ * is both a drop target and selected reads as a target — the drag is the newer
+ * gesture and wins while it is live. */
+.tr.is-drop::before { background-color: color-mix(in oklch, var(--accent) 10%, transparent); }
+.tr.is-drop         { color: var(--text-accent); }
+.tr.is-drag::before { background-color: var(--accent); }
+.tr.is-drag         { color: var(--text-on-accent); }
+/* While dragging, the hover fill must not fight the drag fills for the pointer:
+ * Obsidian's `body.is-grabbing` forces `cursor: grabbing` everywhere and its
+ * `:not(.is-grabbing)` guards keep `.is-being-dragged:hover` at the dragged
+ * colours. Cairn's `:hover` is one rule above; the guard below keeps a hovered
+ * source row at the dragged colours for the same reason. */
+body.is-grabbing, body.is-grabbing *:not(.workspace-leaf-resize-handle) {
+  cursor: grabbing !important;
+}
+body.is-grabbing .tr.is-drag:hover::before { background-color: var(--accent); }
+body.is-grabbing .tr.is-drag:hover { color: var(--text-on-accent); }
+/* The ghost follower: `.drag-ghost` + `.drag-ghost-self` + `.drag-ghost-action`,
+ * transcribed from app.css (1.13.7). Fixed, dark, white text, 300px cap, icon +
+ * title on the first line and the `Move into “X”` action on the second at 70%.
+ * The native image is hidden (Obsidian's `NO(e)`: `setDragImage` on the 1x1
+ * transparent GIF — a 0x0 node is ignored and the default feedback flies to
+ * the cursor instead), so this is the only thing under the cursor. `z-index`
+ * sits above menus (80) and the
+ * modal (80): a drag can cross either. */
+.drag-ghost {
+  position: fixed;
+  font-size: var(--fs-ui-small); /* [S] --font-ui-small: 13px */
+  color: #fff; /* [S] --drag-ghost-text-color */
+  padding: 6px 8px; /* [S] --size-2-3 --size-4-2 */
+  border-radius: var(--radius-s); /* [S] 4px */
+  background-color: rgba(0, 0, 0, 0.85); /* [S] --drag-ghost-background */
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1); /* [S] --drag-item-shadow */
+  z-index: 100;
+  max-width: 300px; /* [S] */
+  font-weight: 500; /* [S] --font-medium */
+  pointer-events: none; /* [S] */
+}
+.drag-ghost-self {
+  display: flex; /* [S] */
+  align-items: center;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+/* The ghost icon: Obsidian's `.drag-ghost-self > .svg-icon` — `--icon-xs`
+ * at 70% ink, centred, 4px from the title (`--size-2-2`), never shrinking.
+ * Cairn's SVGs are 16px (`icons.ts`), one step above Obsidian's 14px xs —
+ * the ghost is transient and never gated, and a 16px icon from the app's own
+ * table beats a 14px one recalled for the occasion. */
+.drag-ghost-icon {
+  opacity: 0.7; /* [S] */
+  align-self: center; /* [S] */
+  margin-right: 4px; /* [S] --size-2-2 */
+  flex-shrink: 0; /* [S] */
+  display: inline-flex;
+}
+.drag-ghost-icon svg {
+  display: block;
+}
+.drag-ghost-action {
+  padding: 2px 0 0 0; /* [S] --size-2-1 0 0 0 */
+  font-size: var(--fs-ui-smaller); /* [S] --font-ui-smaller: 12px */
+  opacity: 0.7; /* [S] */
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* THE CURSOR RING IS OBSIDIAN'S `has-focus`, 2026-09-15 — user report: "Did
+ * you see the gray line in the first note?  That was the first click.  Remove
+ * that gray line."
+ *
+ * WHEN.  It was `.tree-scroller:focus-visible .tr.c`, and Chromium makes a
+ * mouse-focused box `:focus-visible` on a bare SHIFT keydown (measured, Chrome
+ * 142), so the Shift held for a shift-click drew it on the row plain-clicked
+ * first.  `.kbd-focus` is tree.ts's own flag instead: set by keyboard
+ * navigation, cleared by a plain click — Obsidian's `has-focus` lifecycle, read
+ * from app.js and measured live (no ring after a click, a Shift or a
+ * shift-click; a ring after ArrowDown).  `:focus` stands in for Obsidian's
+ * `.workspace-leaf.mod-active`: the ring hides when the tree is not where keys
+ * go, and comes back with it.
+ *
+ * WHAT.  `body:not(.is-phone) .workspace-leaf.mod-active .tree-item-self
+ * .has-focus { box-shadow: 0 0 0 2px var(--background-modifier-border-focus) }`
+ * (app.css:10454) — an OUTSET 2px #555555 around the ROUNDED FILL, so its
+ * corners follow the fill's radius.  It was an inset 1px #3f3f3f square on
+ * the whole 401x27 row from x 0, which is what the screenshot shows.  It goes
+ * on `::before` because that is the fill's box; the pseudo is `z-index: -1`,
+ * and nothing it paints under — label, chevron — reaches the ring's 2px.
+ *
+ * THE TOP EDGE LIES OUTSIDE THE ROW, and two things took it away — both
+ * measured in real windows against the live Obsidian, 746 missing pixels on
+ * one row.  (1) `.tr { overflow: hidden }` (the ellipsis needs it) clips the
+ * shadow at the row's box, and the fill is `top: 0`, so the 2px above it is
+ * outside; the bottom 2px is the row's own gap and survives.  `overflow:
+ * clip` with `overflow-clip-margin: 2px` lets exactly those 2px through and
+ * nothing else — A/B'd in the pinned engine: 0 differing pixels inside the
+ * row box against `hidden`, ellipsis included, on a long name and a short
+ * one.  (2) The rows are pooled and translated, so the row ABOVE can come
+ * LATER in the DOM and paint its own background — the indent guides — over
+ * those 2px; `z-index: 1` lifts the cursor row's stacking context over its
+ * neighbours.  Obsidian's order is the same by construction: its guides are
+ * a border on the children container, behind every title.  One side effect,
+ * stated: the margin also lets a LABEL's glyph ink out by 2px, so a name built
+ * from stacked combining marks paints up to 2px into its neighbours while it
+ * is the keyboard row (measured: 8 px above, 15 below, on a zalgo name; 0 on
+ * plain and emoji names).  Obsidian clips its title text in an inner box.
+ *
+ * ONE COLUMN SHORT, STATED.  The scroller clips its content at its padding
+ * box, x 0..401.  When the fill ends at 385 (overflowing, classic bars) the
+ * ring's right side is 385..386 and draws in full.  When it ends at 399 —
+ * not overflowing, or overlay scroll bars — the ring wants 400..401: x 401 is
+ * Cairn's reserved gutter and is clipped, where Obsidian, which reserves
+ * none, draws it (measured: 19 solid + 6 anti-aliased pixels on one row). */
+.tree-scroller.kbd-focus:focus .tr.c {
+  overflow: clip;
+  overflow-clip-margin: 2px;
+  z-index: 1;
+}
+.tree-scroller.kbd-focus:focus .tr.c::before {
+  box-shadow: 0 0 0 2px var(--bg-modifier-border-focus);
+}
+
+/* ---- the row being renamed / created (§7.3 case 11, §5.4.2) -------------
+ * OBSIDIAN'S OWN, read out of `obsidian-1.13.7.asar`'s `app.css` (§0.17's
+ * method) rather than derived — 10396-10408:
+ *
+ *   .tree-item-self.is-being-renamed { flex-grow: 1; white-space: normal;
+ *       box-shadow: 0 0 0 2px var(--background-modifier-border-focus) }
+ *   .tree-item-self.is-being-renamed [contenteditable="true"],
+ *   .tree-item-self.is-being-renamed .tree-item-inner { cursor: text; flex-grow: 1 }
+ *   .tree-item-self.is-being-renamed:focus-within {
+ *       color: var(--nav-item-color-active);            -> --text-normal
+ *       box-shadow: 0 0 0 2px var(--interactive-accent) }  -> --accent
+ *
+ * with `--nav-item-radius: var(--radius-s)` (2456) on the row itself.  The
+ * field always has the focus while it exists, so only the `:focus-within` arm
+ * is reproduced; `--border-focus` never shows.
+ *
+ * TWO DEVIATIONS, STATED.  Neither is cosmetic and neither is a choice:
+ *
+ * 1. THE RING IS INSET.  Obsidian's rows sit inside a padded container, so a
+ *    2px OUTSET ring has 2px of its own to paint into on every side.  Cairn's
+ *    rows are FULL-BLEED by the [C] ruling above (`left: 0; right: 0`) inside a
+ *    scroller that is `overflow-x: hidden`, so an outset ring would have its
+ *    left 2px clipped away and would draw three sides of a rectangle.  The
+ *    same rule as base.css's outline ban.  The cost is that the ring sits 2px
+ *    inside the row band instead of 2px outside it; the text does not move
+ *    either way.  ⚠ 2026-09-15: the premise is out of date — the fill has been
+ *    an inset rect since 2026-09-14, and the cursor ring above is now Obsidian's
+ *    outset one on that rect.  This ring was not re-derived, or measured.
+ * 2. THE FIELD IS AN `<input>`, not a `contenteditable` — spec-04 §8.1's
+ *    ruling, taken for paste/IME/undo reasons, and it predates this block.
+ *
+ * `display: flex` and `align-items: center` were INLINE STYLES on the host that
+ * `tree.ts`'s `makeEditHost` wrote, with a note asking for exactly this rule;
+ * they are here now and those two lines are deleted. */
+.tr.tr-edit {
+  display: flex;
+  align-items: center;
+  border-radius: var(--radius-s);
+  box-shadow: inset 0 0 0 2px var(--accent);
+  color: var(--text-normal);
+}
+
+/* THE FIELD IS THE ROW'S TEXT.  Obsidian renames in the very element that drew
+ * the name, so not one glyph moves when the editor opens.  An <input> carrying
+ * the form-field box `.inline-edit-input` gives it (chrome.css: a ground, a 1px
+ * border, 4px of padding) would have shifted the name 5px right on open — so
+ * inside a row it has none of them, and the 35 + 17d text origin above is the
+ * field's text origin too. */
+.tr.tr-edit .inline-edit-input {
+  height: var(--row-h);
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font-size: inherit;
+}
+/* …but the 200 ms invalid flash still wins.  `.tr.tr-edit .inline-edit-input`
+ * is (0,3,0) and would otherwise outrank chrome.css's `.inline-edit-input.bad`
+ * at (0,2,0) — the flash would have been silently dead, which is precisely how
+ * §5.1 rule 5 killed the animated version of it (M59). */
+.tr.tr-edit .inline-edit-input.bad { color: var(--text-error); }

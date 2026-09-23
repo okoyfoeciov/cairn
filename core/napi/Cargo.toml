@@ -1,0 +1,43 @@
+# Owner: 07.  The napi-rs addon.
+#
+# THIS CRATE IS THE SHELL'S COMMAND LAYER, and it is deliberately shaped like
+# one: <= one call into `app.rs` per command, no logic of its own, and not one
+# wire format re-declared — the bytes come out of `tree.rs` and
+# `note_frame.rs` themselves.
+[package]
+name         = "cairn-napi"
+version      = "0.1.0"
+edition      = "2021"
+rust-version = "1.77.2"
+license      = "MIT"
+publish      = false
+description  = "Cairn — the Node-API addon that puts the Rust core behind Electron"
+
+[lib]
+# `cdylib` AND NOTHING ELSE.  An `rlib` here would tempt a future test to link
+# the addon rather than the core, and the addon has no logic worth testing:
+# every assertion belongs to `cairn_lib`, where `cargo test` already runs it.
+crate-type = ["cdylib"]
+
+[dependencies]
+cairn = { path = ".." }
+# `serde-json` is load-bearing and is the reason this crate declares no structs.
+# Every result type already carries `#[serde(rename_all = "camelCase")]`
+# (§1.1's X13 casing rule), so serialising through `serde_json::Value` makes
+# those attributes the SINGLE source of truth for the JS shape.  Re-declaring
+# them as `#[napi(object)]` structs would be a second schema to keep in sync.
+# `async` (which pulls `tokio_rt`) is what turns an `async fn` into a JS
+# Promise, and `module_init` below hands napi THIS crate's runtime so there
+# is exactly one in the process and §6.2 X8's 2-worker / 6-blocking tuning
+# still describes it.  `napi9` rather than `napi10`: Electron 39 reports
+# Node-API 10 and node 24 reports 10, so 9 is a strict subset both satisfy —
+# and an addon that needs 10 could not be loaded by an older node running the
+# same tests.
+napi        = { version = "3", features = ["napi9", "serde-json", "async"] }
+napi-derive = "3"
+serde       = { version = "1.0.229", features = ["derive"] }
+serde_json  = "1.0.151"
+tokio       = { version = "1.48", default-features = false, features = ["rt", "rt-multi-thread"] }
+
+[build-dependencies]
+napi-build = "2"

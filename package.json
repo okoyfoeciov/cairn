@@ -1,0 +1,44 @@
+{
+  "name": "cairn",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Cairn — a memory-lean markdown vault viewer",
+  "productName": "Cairn",
+  "identifier": "com.cairn.app",
+  "category": "Office",
+  "type": "module",
+  "scripts": {
+    "build": "node electron-shell/build-native.mjs && node electron-shell/build-app.mjs",
+    "typecheck": "tsc --noEmit",
+    "pretest": "cd core && cargo test --test frame_fixtures -q && cd .. && node tools/scroll-bench.mjs --self-test",
+    "test": "CAIRN_FRAME_FIXTURES=tests/fixtures/frames node --test tests/frontend/*.test.mjs",
+    "selftest:geometry": "node --input-type=module -e \"await import('./tools/verify-geometry.js'); process.exit(globalThis.__verifyGeometry.selfTest().ok ? 0 : 1)\"",
+    "selftest:scroll-bench": "node tools/scroll-bench.mjs --self-test",
+    "bench:scroll": "node tools/scroll-bench.mjs",
+    "bench:scroll:preflight": "node tools/scroll-bench.mjs --preflight",
+    "bench:scroll:obsidian": "node tools/scroll-bench.mjs --obsidian --nodes 2000 --events 0",
+    "verify:electron-pin": "node tools/verify-electron-pin.mjs",
+    "electron:native": "node electron-shell/build-native.mjs",
+    "test:electron-native": "node --test electron-shell/native.test.mjs",
+    "test:electron-close": "node --test electron-shell/close-handshake.test.mjs",
+    "test:electron-lifecycle": "node --test electron-shell/lifecycle.test.mjs",
+    "test:electron-winctl": "node --test electron-shell/window-control.test.mjs",
+    "electron:app": "node electron-shell/build-native.mjs && node electron-shell/build-app.mjs && electron electron-shell/app-main.mjs",
+    "test:electron-package": "node --test electron-shell/package.test.mjs",
+    "test:electron-shipped": "node --test electron-shell/shipped-binary.test.mjs",
+    "test:electron-menu": "node --test electron-shell/menu.test.mjs",
+    "test:sync-client": "node --test electron-shell/sync-client.test.mjs",
+    "package:deb": "node electron-shell/build-native.mjs && node electron-shell/build-app.mjs && node tools/package-electron.mjs --deb",
+    "package:mac": "node electron-shell/build-native.mjs && node electron-shell/build-app.mjs && node tools/package-electron.mjs"
+  },
+  "dependencies": {
+    "@codemirror/commands": "6.11.0",
+    "@codemirror/state": "6.7.2",
+    "@codemirror/view": "6.43.10"
+  },
+  "devDependencies": {
+    "electron": "39.8.3",
+    "esbuild": "0.28.2",
+    "typescript": "5.9.3"
+  }
+}

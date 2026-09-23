@@ -1,0 +1,546 @@
+/* ==========================================================================
+ * src/styles/memoir.css
+ * Owner: 03.  THE MEMOIR PAGE (user feature, 2026-09-17) — memoir's journal
+ * interaction (`~/Downloads/memoir/public/index.html`) dressed in Cairn's
+ * own palette (user ruling, 2026-09-17).
+ *
+ * NAMESPACED: every selector lives under `#memoir`, so nothing here can move
+ * a gate row in the note pane, the sidebar or the chrome.  DECLARES NO CUSTOM
+ * PROPERTY (§5.1, tokens.css): every colour below is a Cairn token consumed
+ * directly, with `color-mix` where the design needs a wash rather than a new
+ * literal.
+ *
+ * TYPE (user ruling, 2026-09-17): Cairn's scale throughout — the prose is the
+ * note's own `--font-text` at `--fs-text`/`--lh-text`, chrome and cards are
+ * `--font-ui` on `--fs-ui-small`/`--fs-ui-smaller`/`--fs-ui-medium`.  The
+ * journal serif is gone on purpose; what stays is the uppercase-verb bar,
+ * pulled from 0.26em tracking into Cairn's range.
+ *
+ * Takeover: `#memoir` fills `main.editor` (which is `position: relative`,
+ * chrome.css) and the shell hides the `#ed` HOST while it shows —
+ * `.editor.is-memoir > #ed { display: none }` below, next to the secret
+ * rule it copies.  `hidden` is display:none, so the gate never sees this
+ * subtree.  The drawers/backdrop are `position: fixed`, but `.editor` is a
+ * paint-containment box (§0.52 E100), which makes it their containing block:
+ * they anchor to the pane, not the window.  That is where they belong.
+ * ======================================================================== */
+
+#memoir {
+  color-scheme: dark;
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--bg-primary);
+  color: var(--text-normal);
+  font-family: var(--font-text);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
+}
+
+#memoir[hidden] { display: none; }
+
+.mm-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding-inline: var(--editor-inset-x);
+  font-family: var(--font-ui);
+  font-size: var(--fs-ui-smaller);
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  user-select: none;
+  position: relative;
+  /* User ruling 2026-09-17: air from the tab strip — 12px sat the verbs
+     against the ceiling; 24px still read cramped, so 36px. */
+  padding-top: 36px;
+  padding-bottom: 8px;
+}
+
+/* User ruling 2026-09-17: NO date and NO sync status on the page.  The status
+   element stays in the DOM and keeps its text (the engine's live leg polls
+   it for the autosaved signal) but renders nothing. */
+#mm-status { display: none; }
+
+/* The two verbs share one absolutely-centred wrapper and sit in normal flow
+   inside it. Centring each button on its own would need a hand-tuned translate
+   per button, and every :active/:disabled state would have to repeat it. */
+.mm-tools {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+#mm-checkBtn, #mm-waysBtn {
+  font-family: var(--font-ui);
+  /* User ruling 2026-09-17: bigger — the tab label's own 13px, not the
+     original 11px. */
+  font-size: var(--fs-ui-small);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  padding: 8px 2px 7px;
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s, opacity 0.2s, transform 0.1s;
+  white-space: nowrap;
+  line-height: 1;
+}
+
+#mm-checkBtn { color: var(--text-accent); }
+#mm-checkBtn:hover { border-bottom-color: color-mix(in srgb, var(--text-accent) 35%, transparent); }
+#mm-checkBtn:active { transform: scale(0.97); }
+#mm-checkBtn:disabled { opacity: 0.45; cursor: wait; }
+#mm-checkBtn.mm-checking { color: var(--text-faint); border-bottom-color: transparent; }
+
+/* Muted at rest, so CHECK stays the only accent-coloured control on the page.
+   Accent only while a selection is live — that colour change IS the affordance,
+   which is why there is no floating bubble over the prose. */
+#mm-waysBtn { color: var(--text-muted); }
+#mm-waysBtn:hover { color: var(--text-normal); border-bottom-color: var(--bg-modifier-border-hover); }
+#mm-waysBtn:active { transform: scale(0.97); }
+#mm-waysBtn:disabled { opacity: 0.45; cursor: wait; }
+#mm-waysBtn.mm-armed {
+  color: var(--text-accent);
+  border-bottom-color: color-mix(in srgb, var(--text-accent) 35%, transparent);
+}
+#mm-waysBtn.mm-working { color: var(--text-faint); border-bottom-color: transparent; }
+#mm-waysBtn .mm-short { display: none; }
+.mm-sep { color: var(--bg-modifier-border-hover); font-size: var(--fs-ui-smaller); user-select: none; }
+
+/* THE NOTE ALIGNMENT (user ruling, 2026-09-17): the journal's first glyph
+   column is the note's — the frame spends exactly the editor's own insets,
+   `--editor-inset-y/x` (§5.3), with no centred max-width column. */
+.mm-frame {
+  flex: 1;
+  display: flex;
+  width: 100%;
+  /* User ruling 2026-09-17: the text sits a bit higher — 16px under the bar,
+     not the full editor inset (the LEFT inset is untouched: that is the note
+     alignment the probe pins). */
+  padding: var(--sp-6) var(--editor-inset-x) 0;
+  min-height: 0;
+}
+
+#mm-editor {
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  background: transparent;
+  border: 0;
+  outline: 0;
+  resize: none;
+  appearance: none;
+  -webkit-appearance: none;
+  border-radius: 0;
+  color: var(--text-normal);
+  font: inherit;
+  font-size: var(--fs-text);
+  line-height: var(--lh-text);
+  caret-color: var(--caret-color);
+  overflow-y: auto;
+}
+
+#mm-editor[readonly] { cursor: progress; }
+
+#memoir ::selection { background: var(--text-selection); }
+
+#memoir ::-webkit-scrollbar { width: 9px; }
+#memoir ::-webkit-scrollbar-track { background: transparent; }
+#memoir ::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 99px;
+  border: 2px solid var(--bg-primary);
+}
+
+/* --- Check panel (side drawer + bottom sheet in narrow panes) --- */
+#mm-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(10,10,10,.34);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.25s ease;
+  z-index: 19;
+}
+#memoir.mm-check-open #mm-backdrop,
+#memoir.mm-ways-open #mm-backdrop { opacity: 1; pointer-events: auto; }
+
+/* One drawer geometry, two drawers. The ways panel is a sibling of the check
+   panel, not a mode of it, so a check result survives a paraphrase and is
+   still there when reopened. */
+#mm-checkPanel, #mm-waysPanel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(440px, 92vw);
+  background: var(--bg-secondary);
+  border-left: 1px solid var(--bg-modifier-border);
+  display: flex;
+  flex-direction: column;
+  transform: translateX(100%);
+  transition: transform 0.28s cubic-bezier(0.32, 0.72, 0, 1);
+  z-index: 20;
+  box-shadow: var(--menu-shadow);
+  overflow: hidden;
+  font-family: var(--font-ui);
+}
+#memoir.mm-check-open #mm-checkPanel,
+#memoir.mm-ways-open #mm-waysPanel { transform: translateX(0); }
+
+.mm-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 18px 14px;
+  border-bottom: 1px solid var(--bg-modifier-border);
+  font-family: var(--font-ui);
+}
+.mm-panel-head h2 {
+  margin: 0;
+  font-size: var(--fs-ui-smaller);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-normal);
+  font-weight: 600;
+}
+.mm-close {
+  width: 30px; height: 30px;
+  border-radius: 999px;
+  border: 1px solid var(--bg-modifier-border);
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+  font-size: var(--fs-ui-medium);
+  line-height: 1;
+}
+.mm-close:hover { color: var(--text-normal); border-color: var(--bg-modifier-border-hover); }
+
+.mm-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 14px 14px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* The gap above sits on the scroller, whose only flex child is this list, so it
+   never reached the cards — they rendered flush against each other. */
+.mm-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.mm-issue {
+  background: var(--bg-form-field);
+  border: 1px solid var(--bg-modifier-border);
+  border-radius: var(--radius-m);
+  padding: 12px 12px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.mm-issue-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-family: var(--font-ui);
+  font-size: var(--fs-ui-smaller);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.mm-issue-cat {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--bg-modifier-hover);
+  border: 1px solid var(--bg-modifier-border);
+  color: var(--text-muted);
+}
+.mm-issue-cat.grammar {
+  border-color: color-mix(in srgb, var(--text-accent) 35%, transparent);
+  color: var(--text-accent);
+}
+.mm-issue-cat.spelling {
+  border-color: color-mix(in srgb, var(--text-error) 35%, transparent);
+  color: var(--text-error);
+}
+.mm-issue-body {
+  font-size: var(--fs-ui-medium);
+  line-height: var(--lh-text);
+  font-family: var(--font-ui);
+  letter-spacing: 0.01em;
+  color: var(--text-normal);
+  word-break: break-word;
+}
+.mm-issue-body .mm-orig {
+  background: color-mix(in srgb, var(--text-error) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--text-error) 25%, transparent);
+  padding: 1px 6px;
+  border-radius: 6px;
+  text-decoration: line-through;
+  text-decoration-color: color-mix(in srgb, var(--text-error) 60%, transparent);
+}
+.mm-issue-body .mm-arrow { color: var(--text-faint); margin: 0 4px; }
+.mm-issue-body .mm-sugg {
+  background: color-mix(in srgb, var(--text-accent) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--text-accent) 25%, transparent);
+  padding: 1px 6px;
+  border-radius: 6px;
+  color: var(--text-normal);
+}
+.mm-issue-reason {
+  font-family: var(--font-ui);
+  font-size: var(--fs-ui-smaller);
+  line-height: 1.5;
+  color: var(--text-muted);
+  letter-spacing: 0.01em;
+}
+
+/* --- Other ways (paraphrase) --- */
+#mm-waysSource {
+  padding: 12px 18px;
+  border-bottom: 1px solid var(--bg-modifier-border);
+  font-family: inherit;
+  font-size: var(--fs-ui-medium);
+  line-height: var(--lh-text);
+  color: var(--text-muted);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 22vh;
+  overflow-y: auto;
+}
+/* The sentence heuristic will split wrong on an ellipsis or a quoted line. Show
+   the whole span rather than an ellipsised hint: a wrong split has to be
+   visible, not mysterious. */
+#mm-waysSource .mm-src-label {
+  display: block;
+  font-family: var(--font-ui);
+  font-size: var(--fs-ui-smaller);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+  margin-bottom: 6px;
+}
+
+.mm-variant {
+  background: var(--bg-form-field);
+  border: 1px solid var(--bg-modifier-border);
+  border-radius: var(--radius-m);
+  padding: 12px 12px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.mm-variant-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-family: var(--font-ui);
+  font-size: var(--fs-ui-smaller);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.mm-variant-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--bg-modifier-hover);
+  border: 1px solid var(--bg-modifier-border);
+  color: var(--text-muted);
+}
+.mm-variant-tag.natural {
+  border-color: color-mix(in srgb, var(--text-accent) 35%, transparent);
+  color: var(--text-accent);
+}
+/* Prose reads as prose: the alternative is set in the journal's own serif, not
+   in the sans used for chrome and explanations. */
+.mm-variant-text {
+  font-family: inherit;
+  font-size: var(--fs-text);
+  line-height: var(--lh-text);
+  color: var(--text-normal);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+/* An accent underline, not a highlighter block — the phrase stays readable. */
+.mm-variant-text mark {
+  background: transparent;
+  color: var(--text-accent);
+  box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--text-accent) 45%, transparent);
+}
+.mm-variant-note {
+  font-family: var(--font-ui);
+  font-size: var(--fs-ui-smaller);
+  line-height: 1.5;
+  color: var(--text-muted);
+  letter-spacing: 0.01em;
+}
+
+.mm-empty {
+  font-family: var(--font-ui);
+  font-size: var(--fs-ui-small);
+  line-height: var(--lh-text);
+  color: var(--text-faint);
+  text-align: center;
+  padding: 28px 12px;
+}
+@keyframes mm-spin { to { transform: rotate(360deg); } }
+
+.mm-checking {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  padding: 56px 20px 48px;
+  text-align: center;
+}
+.mm-ink {
+  position: relative;
+  width: 52px;
+  height: 52px;
+  display: grid;
+  place-items: center;
+}
+.mm-ink .mm-ink-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 1.5px solid color-mix(in srgb, var(--text-accent) 18%, transparent);
+  border-top-color: var(--text-accent);
+  animation: mm-spin 0.9s linear infinite;
+}
+.mm-ink .mm-ink-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-accent);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--text-accent) 55%, transparent),
+              0 0 28px color-mix(in srgb, var(--text-accent) 25%, transparent);
+  animation: mm-pulse 1.4s ease-in-out infinite;
+}
+@keyframes mm-pulse {
+  0%, 100% { transform: scale(0.85); opacity: 0.9; }
+  50% { transform: scale(1.25); opacity: 1; }
+}
+.mm-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  width: 112px;
+  align-items: center;
+}
+.mm-lines span {
+  height: 2px;
+  border-radius: 99px;
+  background: linear-gradient(90deg, transparent,
+    color-mix(in srgb, var(--text-accent) 70%, transparent), transparent);
+  background-size: 200% 100%;
+  animation: mm-shimmer 1.3s ease-in-out infinite;
+}
+.mm-lines span:nth-child(1) { width: 100%; animation-delay: 0s; }
+.mm-lines span:nth-child(2) { width: 82%; animation-delay: 0.15s; opacity: 0.9; }
+.mm-lines span:nth-child(3) { width: 68%; animation-delay: 0.3s; opacity: 0.75; }
+@keyframes mm-shimmer {
+  0% { background-position: 200% 0; opacity: 0.5; }
+  50% { background-position: 0% 0; opacity: 1; }
+  100% { background-position: -200% 0; opacity: 0.5; }
+}
+.mm-checking-text {
+  font-family: var(--font-ui);
+  font-size: var(--fs-ui-small);
+  letter-spacing: 0.02em;
+  line-height: 1.7;
+  color: var(--text-muted);
+}
+.mm-checking-text strong {
+  display: block;
+  font-size: var(--fs-ui-smaller);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--text-normal);
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+.mm-checking-text em {
+  font-style: normal;
+  color: var(--text-faint);
+  font-size: var(--fs-ui-smaller);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+@media (prefers-reduced-motion: reduce) {
+  /* Scoped + !important like the exemption below, and AFTER it, so the
+     accessibility preference still wins where it applies. */
+  #memoir .mm-ink-ring,
+  #memoir .mm-ink-dot,
+  #memoir .mm-lines span { animation: none !important; }
+}
+
+/* FOURTH EXEMPTION TO §5.1 RULE 5 (base.css: `animation: none !important`).
+ * Reported frozen mid-frame by the user: the blanket ban stops the ink
+ * ring/dot and the shimmer lines.  Scoped to these three selectors inside
+ * `#memoir` only — `#memoir .mm-x` (1,1,0) outranks `*` (0,0,0), and
+ * `!important` beats `!important` by specificity, the same mechanism as the
+ * folder chevron's exemption.  Drawer slides and button transitions stay
+ * banned (unreported). */
+#memoir .mm-ink-ring { animation: mm-spin 0.9s linear infinite !important; }
+#memoir .mm-ink-dot { animation: mm-pulse 1.4s ease-in-out infinite !important; }
+#memoir .mm-lines span { animation: mm-shimmer 1.3s ease-in-out infinite !important; }
+
+@media (max-width: 860px) {
+  #mm-checkPanel, #mm-waysPanel {
+    top: auto;
+    width: 100%;
+    height: min(72vh, 640px);
+    border-left: 0;
+    border-top: 1px solid var(--bg-modifier-border);
+    border-radius: 18px 18px 0 0;
+    transform: translateY(100%);
+  }
+  #memoir.mm-check-open #mm-checkPanel,
+  #memoir.mm-ways-open #mm-waysPanel { transform: translateY(0); }
+  .mm-frame { padding-bottom: 32px; }
+}
+
+/* Required, not cosmetic: CHECK · OTHER WAYS at 0.26em tracking needs its
+   short form in a narrow pane. */
+@media (max-width: 600px) {
+  .mm-tools { gap: 10px; }
+  .mm-sep { display: none; }
+  #mm-waysBtn .mm-full { display: none; }
+  #mm-waysBtn .mm-short { display: inline; }
+  #mm-checkBtn, #mm-waysBtn { letter-spacing: 0.08em; }
+}
+
+/* 320px (an old SE): the centred pair clears with room from the bar's own
+   inset, which now matches the editor's. */
+@media (max-width: 360px) {
+  .mm-bar { padding-inline: 14px; }
+}
+
+/* THE TAKEOVER, beside the secret rule it copies (editor.css): hide the `#ed`
+   HOST while the memoir page shows — never the CM6 view itself. */
+.editor.is-memoir > #ed { display: none; }

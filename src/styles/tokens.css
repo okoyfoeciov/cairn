@@ -1,0 +1,968 @@
+/* ==========================================================================
+ * src/styles/tokens.css
+ * Owner: 01.  Spec: CONTRACT.md §5.1 (the collision table), §5.2 (the tree box
+ * model), §5.3/§5.4 (editor + heading ladder), §5.5/§5.6 (structural constants).
+ *
+ * THIS IS THE ONLY FILE IN THE APP THAT MAY DECLARE A CUSTOM PROPERTY.
+ * CONTRACT §5.1 (M32, M36) strikes the `:root` blocks in spec-03 §8.1,
+ * spec-04 §4.3 and spec-05 §8.3.  base.css, chrome.css, tree.css, editor.css
+ * and search.css CONSUME these names and declare nothing.
+ *
+ * Marks: [M] measured · [D] derived from [M] · [O] Obsidian default ·
+ *        [C] a choice CONTRACT.md makes.
+ * ======================================================================== */
+
+:root {
+  /* ══════════════════════════════════════════════════════════════════════
+   * THE GROUNDS.  EVERY ONE OF THESE WAS `[M]` AND EVERY ONE OF THEM WAS A
+   * FRAMEBUFFER BYTE, NOT A COLOUR.  §0.14.1 recorded this as a "palette
+   * conflict" between two Obsidian builds.  It was never a conflict; it was one
+   * measurement, read wrong, for eighteen errata passes.
+   *
+   * `docs/reference/obsidian-macos-window.png` carries an **iCCP chunk**: a
+   * 516-byte ICC profile whose `desc` is `S27E390` — a Samsung panel — with a
+   * `para` transfer curve of gamma **1.96099853515625** and primaries narrower
+   * than sRGB.  A colour-managed macOS screenshot stores what the PANEL was
+   * driven with, not what the CSS said.  Decode it and every ground lands on
+   * Obsidian 1.12.7's declared palette with no residual:
+   *
+   *     raw  ->  sRGB      1.12.7 declares
+   *      28      #1e1e1e   --color-base-00   editor
+   *      33      #242424   --color-base-10   code block
+   *      34      #262626   --color-base-20   sidebar
+   *      47      #363636   --color-base-30   strip AND every 1px rule
+   *     170      #b3b3b3   --color-base-70   --text-muted
+   *     213      #dadada   --color-base-100  --text-normal
+   *
+   * Two composite checks land on the nose as well: the hovered titlebar button
+   * reads 59, which is `rgba(255,255,255,.067)` over `#363636` (`.075` gives
+   * 60), and the indent guides read 56, which is 12% white over `#262626`
+   * (Cairn's `.10` over `#222222` predicts 49 — seven levels out).
+   *
+   * THE REPO HAD ALREADY SEEN THIS CURVE TWICE AND EXPLAINED IT AWAY BOTH TIMES:
+   * VISUAL-MEASUREMENTS.md's "`#d5d5d5` peak -> spec `#dadada`" is the profile,
+   * not glyph coverage, and CONTRACT §5.11's "`cacheDisplayInRect` reads #2f2f2f
+   * back as (41,41,41)" is the same curve run forwards.
+   *
+   * SO THESE NOW TARGET 1.13.7, resolved from its own variable chains — the
+   * build on the user's machine, and the only one for which a profile-free
+   * measurement exists here: their screenshot has NO iCCP chunk and reads
+   * #282828 / #1c1c1c / #333333 / #666666, four for four.  The three INKS never
+   * moved (they are the same in both builds and were decoded correctly by
+   * accident, being near the top of the curve where it flattens).
+   *
+   * A MEASUREMENT OVERTURNING THE CONTRACT, FOR THE NINTH TIME.  §5.1's `[M]`
+   * rows and docs/VISUAL-MEASUREMENTS.md's table are now wrong about every
+   * ground and are REPORTED, not quietly edited.
+   * ══════════════════════════════════════════════════════════════════════ */
+  --bg-primary:         #1c1c1c;  /* [S] --color-base-00. UNMOVED: 1.12.7's
+                                     #1e1e1e decodes from raw 28, but 1.13.7
+                                     declares #1C1C1C, and the two coincide      */
+  --bg-primary-alt:     #232323;  /* [S] --code-background -> --background-primary-alt
+                                     -> --color-base-10.  Was #212121           */
+  --bg-secondary:       #282828;  /* [S] --background-secondary -> --color-base-20.
+                                     Was #222222.  Also the menu's ground        */
+  --bg-titlebar:        #333333;  /* [S] --titlebar-background-FOCUSED ->
+                                     --background-secondary-alt -> --color-base-30.
+                                     Was #2f2f2f.  NOT --background-secondary:
+                                     app.css:2818 says that and app.css:2819 +
+                                     4116-4118 immediately override it under
+                                     `body.is-focused`, which every reference
+                                     capture and every real window is.  Reading
+                                     2818 and stopping there is how an earlier
+                                     pass concluded the strip merges into the
+                                     sidebar; it does not                        */
+  --bg-modifier-border: #333333;  /* [S] --background-modifier-border ->
+                                     --color-base-30.  Was #2f2f2f — and this is
+                                     the SAME base-30 as the strip and as
+                                     --tab-outline, which §0.6 E8 had already
+                                     taken from 1.13.7.  That is what made the
+                                     palette a mixture before this pass          */
+  /* [S] §0.27 E67 — --background-modifier-border-hover -> --color-base-35, which
+     is #3f3f3f in the dark theme (app.css:2874 + :2977).  It is the MENU's
+     border, and --bg-modifier-border above is the menu's SEPARATOR; Cairn was
+     drawing both with the separator's #333333.  Note this is the same value as
+     --border-focus below and NOT the same token: that one is
+     --background-modifier-border-FOCUS, which is --color-base-40. */
+  --bg-modifier-border-hover: #3f3f3f;
+  --bg-modifier-hover:  rgba(255,255,255,.067); /* [S] --background-modifier-hover
+                                     = color-mix(in oklch, white 6.7%, transparent).
+                                     Was .075, and .067 is what the reference's
+                                     hovered titlebar button decodes to exactly  */
+  /* [C] §5.1 / errata 2 Y3 — .15, NOT .075.  The two names carried the IDENTICAL
+     rgba(255,255,255,.075) until now, so the SELECTED tree row was pixel-
+     identical to a merely hovered one and the only difference between them was
+     the ink colour.  Y3 ruled hover .075 and active .15 (67 vs 51 on the #222
+     ground; spec-04's .09 is 3 levels and invisible).  Ink also goes to
+     --text-normal, which tree.css:152 and search.css:163/211 already do. */
+  /* ══ Y3 IS OVERTURNED. OBSIDIAN DOES NOT DISTINGUISH THESE. ══════════════
+   * Read out of Obsidian 1.13.7's own stylesheet on 2026-09-09, §0.17's method
+   * applied to the live renderer rather than to a derivation:
+   *
+   *     --nav-item-background-active = var(--background-modifier-hover)
+   *     --background-modifier-hover  = color-mix(in oklch, var(--mono-100) 6.7%, transparent)   [dark]
+   *     --background-modifier-hover  = color-mix(in oklch, var(--mono-100) 15%, transparent)    [light]
+   *
+   * The active nav item IS the hover value, by definition and not by
+   * coincidence -- one is declared as `var()` of the other. And note where
+   * Y3's .15 comes from: it is Obsidian's LIGHT-theme hover. The ruling took a
+   * number that exists, from the wrong theme, and made it a distinction
+   * Obsidian has never drawn.
+   *
+   * Measured on the pixels too, before the change: Obsidian's active row is
+   * #363636 = 40 + 0.067x215 over the #282828 sidebar; Cairn's was #484848 =
+   * 40 + 0.15x215. Both apps matched their own tokens exactly, so the tokens
+   * were the whole disagreement.
+   *
+   * Y3's stated worry -- "the SELECTED tree row was pixel-identical to a
+   * merely hovered one and the only difference between them was the ink
+   * colour" -- describes Obsidian ACCURATELY. That is the design: the active
+   * row is told apart by `--nav-item-color-active` (ink) and weight 500, not
+   * by its ground. Cairn already moves the ink to --text-normal; tree.css
+   * keeps weight 400 deliberately and that ruling is untouched here.
+   *
+   * CONTRACT §5.1 Y3 AND THIS LINE NOW DISAGREE, loudly and on purpose:
+   * CLAUDE.md §1 says a measurement beats the contract and that the conflict
+   * must be reported rather than quietly worked around. Reported. */
+  --bg-modifier-active: rgba(255,255,255,.067);  /* [M] = --bg-modifier-hover, as Obsidian declares it */
+  --bg-form-field:      #2e2e2e;  /* [S] --background-modifier-form-field ->
+                                     --color-base-25.  Was #2a2a2a              */
+  --bg-menu:            #282828;  /* [S] --menu-background -> --background-secondary
+                                     -> --color-base-20, i.e. the SAME value as
+                                     --bg-secondary, which is how Obsidian
+                                     declares it.  + 1px --bg-modifier-border
+                                     + --shadow-popover.  Was #222222           */
+
+  /* ---- ink ------------------------------------------------------------- */
+  --text-normal:    #dadada;      /* [M] body, H1, tab label, code              */
+  --text-muted:     #b3b3b3;      /* [M] file-tree rows, icons, vault name      */
+  --text-faint:     #666666;      /* [O] tree chevrons, markdown markers        */
+  --text-on-accent: #ffffff;      /* [O]                                        */
+  /* [S+M] Obsidian 1.13.7 `app.css:2997`, verbatim:
+       --text-selection: color-mix(in oklch, var(--interactive-accent) 33%, transparent)
+     and its `--interactive-accent` is `--color-accent`, i.e. this file's --accent.
+     It WAS `rgba(139,108,239,.25) [O] Obsidian default` — 139,108,239 is #8b6cef,
+     THE PRE-E10 ACCENT (§0.8 E10 corrected --accent from that value to #8a5cf5 and
+     left this copy of it behind), and the .25 was never Obsidian's .33.
+     MEASURED, on the user's own 2026-09-08 screenshot of Obsidian renaming a note:
+     the selection fill over a hovered nav row (#363636) reads (81,66,117), and
+     .33 x #8a5cf5 over #363636 is (81.7, 66.5, 117.4).  The old token predicts
+     (75,64,102).  Two of three channels were out by 6 and 15. */
+  --text-selection: color-mix(in oklch, var(--accent) 33%, transparent);
+  /* [O] §5.1 X3 — destructive menu rows, the invalid-name `.bad` flash in the
+     tree's rename editor and in the inline title's.  It is a TOKEN: the raw
+     #e05252 literal is STRUCK in tree.css, search.css and chrome.css alike. */
+  --text-error:     #fb464c;      /* [S] --text-error -> --color-red.  Was #e05252,
+                                     which is the framebuffer byte of 1.12.7's own
+                                     red.  NOTE --bg-close-hover below is ALREADY
+                                     #fb464c, cited to the same --color-red: the
+                                     two now agree, where before one name held the
+                                     colour and the other held its picture. */
+  /* [C] §5.1 — search-match background.  NOT purple: a purple match is
+     indistinguishable from --text-selection on a selected result row, which is
+     exactly when it is being read.  Yellow is also Obsidian's --text-highlight-bg. */
+  --text-highlight: rgba(255,208,0,.28);
+  --caret-color:    #dadada;      /* [M] 1px, flush with the content inset      */
+
+  /* ---- lines ----------------------------------------------------------- */
+  /* [S] --indentation-guide-color = color-mix(in oklch, white 12%, transparent).
+     DECLARED AS THE BLEND, not as the result: it was `#383838 [M] == rgba(...,.10)
+     over #222`, i.e. a derived value frozen as a literal against a ground that has
+     now moved — the same shape of mistake as the 37px vault bar.  Left as a hex it
+     would have to be re-derived by hand every time a ground changes; as the blend
+     it simply follows.  Over the new #282828 this paints #424242; the old #383838
+     over the old #222222 was 12% white read as 10%. */
+  --indent-guide:   rgba(255,255,255,.12);
+  --border-focus:   #3f3f3f;      /* [O] Obsidian --background-modifier-border-focus */
+  /* [S] 2026-09-15 — Obsidian 1.13.7's REAL --background-modifier-border-focus:
+     `var(--color-base-40)` (app.css:2875) = #555555 in the dark theme (:2978),
+     and measured live on this Mac as exactly #555555 in its tree's keyboard ring
+     (`.tree-item-self.has-focus`, :10454).  THE [O] LABEL ON --border-focus
+     ABOVE IS WRONG: #3f3f3f is --color-base-35, i.e. Obsidian's
+     --background-modifier-border-HOVER.  Its four consumers (base, chrome,
+     editor, search) were never measured against Obsidian and are left alone;
+     only the tree ring, which was, takes this one. */
+  --bg-modifier-border-focus: #555555;
+
+  /* ---- accent ---------------------------------------------------------- */
+  /* [M+S] Obsidian 1.13.7's `--color-accent`, hsl(258,88%,66%).  It WAS #8b6cef,
+     marked [O] "Obsidian dark default hsl(254,80%,68%)" — a copy taken from an
+     older Obsidian, the same version drift the reference PNG carries for the
+     tab's ring (§0.6 E8, spike N §9.1).  MEASURED against it: the resize
+     handle on the user's screen reads (138,92,246), which is (0,0,1) from this
+     value and (-1,-16,+7) from the old one.  Three consumers: the resize
+     handle, the inline-edit focus ring and the modal's primary button. */
+  --accent:         #8a5cf5;
+
+  /* ---- elevation ------------------------------------------------------- */
+  --shadow-popover: 0 2px 8px rgba(0,0,0,.35);  /* [C] §5.1 — the one permitted shadow */
+  /* [S] §0.27 E67 — Obsidian's own `--shadow-s`, dark theme (app.css:3001),
+     verbatim, and `--menu-shadow: var(--shadow-s)` (app.css:2471) is how its
+     `.menu` reaches it.  Three layers, not one: the 15px/30px layer is the one
+     that reads as a shadow at all, and `--shadow-popover`'s single `0 2px 8px`
+     falls off inside 8px where Obsidian's is still visible at 30.
+     `--shadow-popover` is UNCHANGED and still §5.1's: modal.ts and main.ts's
+     delete-failure dialog are its remaining consumers, Obsidian puts
+     `--shadow-l` on ITS modal, and nobody has measured that one. */
+  --shadow-s: 0 1px 2px rgba(0,0,0,.121), 0 3.4px 6.7px rgba(0,0,0,.179),
+               0 15px 30px rgba(0,0,0,.3);
+  --menu-shadow: var(--shadow-s);
+  --menu-border-color: var(--bg-modifier-border-hover);
+  /* [S] the delete-confirm dialog, 2026-09-14 — Obsidian's own modal tokens,
+     dark theme, read out of obsidian-1.13.7.asar's app.css (§0.17) and measured
+     live with tools/obsidian-live.mjs: `--modal-background` ->
+     `--background-primary`, `--modal-radius` -> `--radius-l`,
+     `--modal-border-color` -> `--color-base-40` (#555555 dark),
+     `--dialog-width: 560px`, `--button-radius` -> `--input-radius` (5px),
+     `--shadow-l` dark (`mod-dim` container).  The shadow's light/dark twins
+     differ only in the last layer (0.1/30px vs 0.2/90px); the strong one is
+     the dark theme's, confirmed by pixel A/B against the live dialog. */
+  --modal-border-color: #555555;
+  --dialog-width: 560px;
+  --button-radius: 5px;
+  --shadow-l: 0 1px 2px rgba(0,0,0,.071), 0 3.4px 6.7px rgba(0,0,0,.112),
+              0 15px 30px rgba(0,0,0,.2);
+
+  /* ---- scrollbar ------------------------------------------------------- */
+  /* [S] Obsidian 1.13.7's OWN `--scrollbar-thumb-bg`, read out of its app.css
+     (line 2629): `color-mix(in oklch, var(--mono-100) 10%, transparent)`, and
+     `--mono-100: white` in the dark theme (2962) — i.e. rgba(255,255,255,.1),
+     with `--scrollbar-active-thumb-bg` at 20% (2627) for hover and active.
+
+     IT WAS `#606060 [M]`, AND THAT MEASUREMENT WAS NOT WRONG — IT WAS OF A
+     SCROLLBAR CAIRN CANNOT DRAW.  Obsidian branches on the platform, in its own
+     app.js: `rd.isMacOS || document.body.addClass("styled-scrollbars")`, so the
+     styled `::-webkit-scrollbar` rules at app.css:9654-9681 are painted on
+     Linux and Windows and NOT on macOS.  What macOS gets instead is the native
+     scrollbar, and the reference PNG shows exactly that: sampling
+     docs/reference/obsidian-macos-window.png at row 500 gives a 13px TRACK of
+     #272727 from x 396..408 with a solid 8px #606060 thumb centred in it at
+     x 399..406.  A translucent thumb on a transparent track cannot produce that,
+     and neither can `.mod-macos { --scrollbar-thumb-bg: gray }` (app.css:3028) —
+     `gray` is #808080, 32 per channel away from the #606060 that is actually
+     there.  The colour is WebKit's own for a native macOS scrollbar; it is not
+     derived from any Obsidian token, and no claim here says it is.
+
+     CAIRN IS NEVER IN THE NATIVE BRANCH, on either platform.  §5.12.4.2 REQUIRES
+     the styled 8px scrollbar, because a pane left on WebKit's 17px legacy one
+     costs a page tile column (~7 MB at 2x, a G5d failure).  So Cairn is
+     permanently in Obsidian's STYLED branch and must take the styled branch's
+     colour — which is also the branch the user is looking at, on Debian, in
+     1.13.7.  Matching #606060 meant painting a macOS-native colour into a
+     styled scrollbar on Linux, which is neither app's rendering of anything.
+
+     TRANSLUCENT ON PURPOSE ON LINUX, not a tidied-up literal: one token then
+     reads #383838 over the sidebar's #222222 and #333333 over the editor's
+     #1c1c1c, which is the per-pane difference Obsidian has and an opaque
+     #606060 cannot express.  See `:root[data-os="linux"]` below, which is
+     where this value now lives — user ruling, 2026-09-15, OVERTURNING the
+     paragraph above FOR macOS ONLY: match what Obsidian's macOS window
+     actually shows, an opaque native-style thumb, rather than the styled
+     branch's translucent one.  The Linux argument is untouched — Cairn is
+     still permanently in the styled branch there, and painting a macOS colour
+     into it would still be neither app's rendering of anything; it is macOS
+     that is no longer held to that branch on principle. */
+  /* [S] 2026-09-15 — macOS's OWN colours, re-measured LIVE (not the reference
+     PNG's #606060, which was of a WebKit build's native scrollbar, an engine
+     Cairn no longer runs): Obsidian 1.13.7 on Chrome 150, this Mac, classic
+     scroll bars — `#808080` at rest, and — counter-intuitively, but measured
+     twice — `#595a5b`, DARKER, on hover.  `.mod-macos { --scrollbar-thumb-bg:
+     gray }` (app.css:3028) is the design source; `gray` is exactly #808080,
+     so the two agree.  Opaque, because a native scrollbar is: the per-pane
+     translucency argument above does not apply to it.  Consumed on both the
+     tree/search scroller and the editor's (tree.css, editor.css share these
+     two tokens), matching Obsidian's own single document-wide
+     `scrollbar-color` rule. */
+  --scrollbar-thumb:       #808080;
+  --scrollbar-thumb-hover: #595a5b;
+  --scrollbar-track:    transparent;
+  /* [M] §5.1/§5.2 X6 — the ONE reserved gutter, for BOTH the editor and the
+     sidebar.  Load-bearing twice over: it is the 8px that turns a 1442px content
+     column into the 1434px code box (§5.3; was 1440->1432 at the pre-spike-Q
+     33px inset), and under §5.12.4.2 an 8px
+     STYLED scrollbar is what holds the compositing multiplier at 1.00x instead
+     of 1.57x.  Do not "tidy" it away; G5d fails if it regresses.
+
+     8px IS THE SIDEBAR'S, AND ONLY THE SIDEBAR'S — §0.37 E84, 2026-09-12.
+     Obsidian's `--scrollbar-width` is 12px (app.css:2623) with the thumb inset
+     by a `3px 3px 3px 2px` transparent border under `background-clip:
+     padding-box` (9664-9670) — a 7px VISIBLE thumb whose right edge sits 3px
+     inside the pane.  In THIS pane the 8 reproduces that exactly, and the
+     arithmetic is the whole argument: Cairn's scroller border box is x 0..409
+     inside a 412px sidebar (§5.2's own 3px right padding), so an 8px track is
+     401..409 and a 1px left border puts the ink at 402..408.  Obsidian's
+     container fills the 412 and its 12px track is 400..412, so a 2px/3px border
+     puts ITS ink at 402..408.  **The same seven columns.**  The 4px that differs
+     is invisible track, and in a pane whose rows are left-anchored and ellipsed
+     it costs one pixel of content width.
+
+     ⚠ THE SAME ARGUMENT IS FALSE IN THE EDITOR, and this comment used to make it
+     there too — see `--scrollbar-w-editor` below.  The editor pane has no 3px
+     padding, so an 8px track sits FLUSH at the window edge and its ink lands 3px
+     right of Obsidian's; and an editor line box is not left-anchored text, it is
+     the width text WRAPS in.  The user photographed the difference. */
+  --scrollbar-gutter-w: 8px;
+  /* [M] 2026-09-15 — the width OBSIDIAN'S FILE-TREE SCROLLBAR takes out of its
+     rows' box WHILE THE TREE OVERFLOWS, which is not Cairn's gutter above and
+     never changes Cairn's layout: tree.css spends it on the row fill's right
+     inset under `.tree-scroller.is-overflowing`.  chrome.ts OVERWRITES it at
+     mount — 12px on Linux (Obsidian's styled `--scrollbar-width`), and on macOS
+     a probe of Chromium's own bar under Obsidian's `scrollbar-color`, because
+     there the width is the engine's and the system setting's.  15px is that
+     probe on this Mac with classic scroll bars, taken in BOTH apps (Chrome 150
+     and Chrome 142 agree), and stands only where chrome.ts cannot measure. */
+  --nav-scrollbar-w: 15px;
+  /* [S] §0.37 E84 — THE EDITOR'S IS OBSIDIAN'S OWN 12px, `body { --scrollbar-width:
+     12px }` (app.css:2623), live on every platform but macOS because `app.js`
+     runs `rd.isMacOS || document.body.addClass("styled-scrollbars")` and that
+     class is what the `::-webkit-scrollbar` width rule hangs off.
+
+     IT IS RESERVED WHETHER OR NOT A SCROLLBAR IS SHOWN, in both apps:
+     `.markdown-source-view.mod-cm6 .cm-scroller { scrollbar-gutter: stable }`
+     (app.css:3573) and editor.css's own.  So it is not decoration — it is 12px
+     out of `.cm-content`'s width, and therefore 12px out of the column every
+     line in the note wraps in.
+
+     REPORTED BY THE USER as a wrap: one note, one paragraph, Obsidian breaking
+     a url at `https://github.co` where Cairn broke it at `https://github.com/`,
+     with every other line in the two screenshots identical to the pixel.  It is
+     not the line breaker — measured in the pinned engine, `word-break: break-all`
+     goes straight from `github.co` to `github.com/` and never stops at
+     `github.com`, because Chromium forbids a break BEFORE `/` (UAX#14 LB13) even
+     under break-all, so `m/` moves as one unit.  It is 4px of line box, and this
+     token is where the 4px was.  A/B at an identical 1508px pane, Obsidian's own
+     app.css against Cairn's built sheet: reserved gutter **12 vs 8**, line box
+     **1432 vs 1436**. */
+  --scrollbar-w-editor: 12px;
+
+  /* ---- radii ----------------------------------------------------------- */
+  --radius-s:  4px;               /* [M] code block, buttons, tree row fill     */
+  --radius-m:  8px;               /* [D] active tab top corners, menus          */
+  --radius-l: 12px;               /* [O] the modal box (delete confirm)         */
+  /* [S] 2026-09-15 — Obsidian's `.mod-macos { --corner-shape: superellipse(1.33) }`
+     (app.css:3020), applied through `.tree-item-self { corner-shape:
+     var(--corner-shape) }` to EVERY corner drawn on the tree row — the plain
+     fill's `border-radius: 4px` AND the has-focus ring's box-shadow, since both
+     are the same element.  Its base (non-macOS) value is `round` (app.css:2603),
+     which is the browser default and needs no declaration; only the macOS
+     override is a token here, corrected below.  MEASURED, not guessed: the
+     round corner and the superellipse corner give DIFFERENT anti-aliased pixel
+     coverage at every corner of every tree fill and ring (0/21/71 against
+     0/29/79 across a 3px sweep) — 8 pixels per ring were the residual this
+     closes.  Chrome 142 (Cairn's pinned engine) supports `corner-shape` since
+     139, verified with `CSS.supports`. */
+  --tree-corner-shape: superellipse(1.33);
+
+  /* ---- spacing scale (4px base) ---------------------------------------- */
+  --sp-2:  4px;  --sp-4:  8px;
+  --sp-5: 12px;  --sp-6: 16px;
+
+  /* ---- type ------------------------------------------------------------ */
+  /* [M] OBSIDIAN'S OWN `--font-default`, COPIED VERBATIM from its bundle --
+     `/opt/Obsidian/resources/obsidian.asar`, read not derived (§0.17).  Its
+     `--font-interface` and `--font-text` both fall through to it when no theme
+     or override is set, which is Cairn's case, so one stack is the whole story.
+
+     WHY VERBATIM AND NOT "THE RIGHT FONTS": the goal is pixel identity, and an
+     IDENTICAL stack resolves identically BY CONSTRUCTION on every machine,
+     without anyone having to be right about what it resolves TO.  That matters
+     here because two documents were already wrong about exactly that.
+
+     MEASURED in Electron 39.8.3 / Chrome 142 -- the same engine Obsidian ships
+     -- 13px, canvas advance for a 53-char pangram, before this change:
+         Cairn's old stack   356.656  == "Inter" exactly
+         Obsidian's stack    329.329
+         "Inter"             356.656
+         "DejaVu Sans"       379.234
+     So Cairn rendered Inter and Obsidian did not, and the UI has never been
+     pixel-identical on this box.  §8.3 K3 called that, but named Obsidian's
+     font DejaVu Sans, which the numbers refute.  CONTRACT §0.10 E12 is refuted
+     outright: Obsidian bundles Inter as a webfont but `ui-sans-serif` precedes
+     "Inter" in its own stack, so it never reaches it.  BOTH ARE REPORTED, NOT
+     QUIETLY REWRITTEN. */
+  --font-ui: ui-sans-serif, -apple-system, BlinkMacSystemFont, system-ui,
+             "Segoe UI", "Google Sans Flex", Roboto, "Inter Variable", "Inter",
+             "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", sans-serif;
+  --font-text: var(--font-ui);
+  --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, "DejaVu Sans Mono",
+               "Liberation Mono", "Noto Sans Mono", "Ubuntu Mono", Consolas, monospace;
+
+  --fs-ui-smaller: 12px;          /* [O] menu shortcuts, result counts, cap banners */
+  --fs-ui-small:   13px;          /* [M] tree rows, vault name, AND the tab label
+                                     again — Obsidian's --tab-font-size IS
+                                     --font-ui-small (app.css:2691).  §0.11's 12
+                                     was inverted through INTER's cap ratio and
+                                     E23 says Obsidian never renders in Inter    */
+  --fs-ui-medium:  15px;          /* [O] menu items                             */
+  --font-ui-large:  20px;          /* [S] modal title (delete confirm), 2026-09-14:
+                                      Obsidian's own `--font-ui-large`         */
+  --fs-text:       16px;          /* [M] editor body                            */
+  --fs-code:       14px;          /* [M] fenced code, inline code               */
+
+  --lh-text:  1.5;                /* [M] 16px -> 24px pitch                     */
+  /* [M] §5.3/§5.1 X4 — declared as the INTEGER 21px, never 1.5.  14 x 1.5 must
+     not be re-derived at render time and drift sub-pixel; the number is measured,
+     so it is written as a number.  Any surviving `--lh-code: 1.5` is STRUCK. */
+  --lh-code:  21px;
+  /* `--lh-tight: 1.2` is STRUCK (spike Q).  It was a single flat value across
+     all six levels; Obsidian's line-heights are per level.  It had no consumer
+     outside the ladder and the inline title, so it is replaced, not kept. */
+  --lh-ui:    1;                  /* rows are centred by line-height, not leading */
+  /* [S] §0.40 E87 — Obsidian's own `--line-height-tight` (app.css:2422) = 1.3,
+     measured as 20.8px on a 16px table cell.  Declared here rather than
+     written as 1.3 in editor.css because `.nc-table th` restates it, the way
+     Obsidian's own sheet restates it on `th`, and two literals drift.  Named
+     for Obsidian's token, not for its first caller, since 2026-09-15 it has a
+     second: `chrome.ts`'s row-pitch probe (tree row height, `--row-h`) reads
+     the SAME token off `.tree-item-self` (app.css:10353-10364), which is
+     Obsidian's own line-height there too. */
+  --line-height-tight: 1.3;
+
+  /* ---- H1..H6 ladder (§5.4; RE-DERIVED, spike Q, 2026-09-07) -----------
+   * [M] Obsidian 1.13.7's own app.css, resolved in the pinned engine
+   * (Electron 39.8.3 / Chrome/142.0.7444.265) over Obsidian's stylesheet:
+   *   sizes           app.css:2327-2332   1.618/1.462/1.318/1.188/1.076/1em
+   *   weights         app.css:2010-2018   the @supports (font-variation-
+   *                                       settings: normal) branch, which
+   *                                       Chromium 142 TAKES.  app.css:2001-2008
+   *                                       is the fallback that never fires --
+   *                                       and the fallback is what stood here.
+   *   line-heights    app.css:2321-2326   1.2 / 1.2 / 1.3 / 1.4 / 1.5 / 1.5
+   *   letter-spacing  app.css:2315-2320   -0.015 .. 0em
+   *
+   * THE `em` IS DELIBERATE AND IS THE ONLY FORM THAT IS RIGHT AT MORE THAN ONE
+   * BASE.  `--h1-size` is an UNREGISTERED custom property (app.css has ZERO
+   * `@property` rules, verified), so it is carried down as a token stream and
+   * the `em` is evaluated at the USING element -- `.nc-hN` / `.nc-title` --
+   * whose parent `.cm-content` is 16px.  1.618 x 16 = 25.888.
+   * DO NOT register it with `@property`: as a `<length>` it would compute once
+   * at :root, against `body`'s 15px, and freeze at 24.27px.
+   * Same argument as §0.18 E23's font stack: copy the DECLARATION, not the
+   * resolved value, and it resolves identically by construction.
+   *
+   * WHAT STOOD HERE, AND WHY IT WAS WRONG: 29/26/23/20/18/16, flat 1.2, no
+   * letter-spacing.  The 29 was inverted from a 21px ink band through INTER's
+   * cap ratio 0.7275 -- `spec-01-visual.md:355-357` states the premise in as
+   * many words -- on a screenshot that never rendered Inter (§0.18 E23) and
+   * that no longer exists (`spec-01-visual.md:52`).  TWO errors compounding:
+   * the wrong font's ratio, and a tittle-to-baseline glyph band called a cap
+   * height.  CONTRACT §5.4.2's `= measured sy 107..127 ✓` did not catch it
+   * because it was never a check: `spec-01-visual.md:709` designates
+   * `--editor-inset-y` and `--h1-space-after` as two knobs to TUNE against
+   * exactly two ink targets, and two free parameters fitted to two observations
+   * constrain nothing.  Full evidence: `docs/spike-Q-type-spine.md`.
+   *
+   * ~~`--hN-space-after` IS NOT OBSIDIAN'S MODEL and is deliberately left alone
+   * here.~~  **THE RULING WAS TAKEN, §0.30 E74.**  That paragraph was right
+   * about the model and wrong to stop: Obsidian's live preview gives every
+   * heading `padding-top: var(--p-spacing)` and NO padding-bottom, and its base
+   * `.cm-line` is `padding: 0` (app.css:3888), so the space BELOW a heading is
+   * zero.  `--h1-space-after` … `--h6-space-after` (10/9/8/7/6/6) are DELETED
+   * with the six rules that consumed them.  Measured both ways in the pinned
+   * engine on the same DOM: `padding-bottom` 0px against Cairn's 10px, every
+   * other number identical.  `--heading-space-before` below is the other half
+   * and is the one Obsidian actually declares. */
+  /* [S] §0.30 E73 — OBSIDIAN'S `--p-spacing`, VERBATIM (app.css:2577), and it is
+     the space ABOVE every heading line in live preview:
+     `.cm-s-obsidian .cm-line.HyperMD-header { padding-top: var(--p-spacing) }`
+     (app.css:12871).  Cairn had NO space before a heading at all, which the user
+     caught in two screenshots of the same note: the H1's ink sat 20 device px
+     high at dpr 1.25 — 16 CSS px, this number exactly.
+     `1rem`, not `16px`, because that is what Obsidian writes and neither app
+     sets `html { font-size }`, so the two cannot drift.
+     Note `--p-spacing` is `0rem` in Obsidian's SOURCE mode
+     (`.markdown-source-view:not(.is-live-preview)`, app.css:3528); Cairn is
+     always live preview, so the live-preview value is the only one it can
+     have. */
+  /* §0.40 E87 — DECLARED UNDER OBSIDIAN'S OWN NAME NOW, because it has a
+     second consumer: `.markdown-rendered table { margin-block: var(--p-spacing) }`
+     (app.css:13726) is the same token as the heading's padding above, and a
+     table therefore sits in a paragraph's rhythm by construction rather than by
+     two literals agreeing.  `--heading-space-before` is kept as the name E73
+     introduced, pointing at it, so nothing that cites that ruling goes stale. */
+  --p-spacing: 1rem;
+  --heading-space-before: var(--p-spacing);
+  --h1-size: 1.618em; --h1-weight: 700; --h1-lh: 1.2; --h1-ls: -0.015em; /* [M] 25.888px */
+  /* THE INLINE TITLE'S OWN GAP, and it is a SEPARATE token on purpose.  It read
+   * `--h1-space-after` (10px) until 2026-09-09, which conflated two things
+   * Obsidian keeps apart: `--inline-title-margin-bottom` on `.inline-title`,
+   * and the padding model the block above refuses to adopt for body headings.
+   * MEASURED on the live app, not derived -- Obsidian 1.13.7 driven onto a
+   * fixture vault over CDP and asked for its own computed style:
+   *
+   *     .inline-title  fontSize 25.888px  fontWeight 700
+   *                    lineHeight 31.0656px  marginBottom 12.944px
+   *
+   * The first three confirm spike Q's ladder exactly, which is what makes the
+   * fourth trustworthy: the same read that reproduces three known-good values
+   * is not going to be wrong about the one that was open.  §0.19's "ALSO OPEN:
+   * `--h1-space-after` is 10px against Obsidian's `--inline-title-margin-bottom:
+   * 0.5em` = 12.944px" is CLOSED by this line, and closed by measurement rather
+   * than by resolving 0.5em on paper.
+   *
+   * CORROBORATED INDEPENDENTLY, 2026-09-10 (§0.24): a second pass reached the
+   * same 12.944px from the other direction — `app.css:2373`'s
+   * `--inline-title-margin-bottom: 0.5em` consumed by `.inline-title`'s
+   * `margin-block-end` (:4306), resolved against the title's own 25.888px —
+   * and measured a 4px error off two same-scale screenshots (Cairn's
+   * "Properties" ink at 201 against Obsidian's 205) before finding this line
+   * already here.  A value read off the running app and a value derived from
+   * the stylesheet agreeing is worth more than either alone.
+   *
+   * `--h1-space-after` is UNCHANGED at 10px and still governs `.nc-h1`. */
+  --inline-title-space-after: 12.944px;   /* [M] Obsidian 1.13.7, computed */
+  --h2-size: 1.462em; --h2-weight: 680; --h2-lh: 1.2; --h2-ls: -0.011em; /* [M] 23.392px */
+  --h3-size: 1.318em; --h3-weight: 660; --h3-lh: 1.3; --h3-ls: -0.008em; /* [M] 21.088px */
+  --h4-size: 1.188em; --h4-weight: 640; --h4-lh: 1.4; --h4-ls: -0.005em; /* [M] 19.008px */
+  --h5-size: 1.076em; --h5-weight: 620; --h5-lh: 1.5; --h5-ls: -0.002em; /* [M] 17.216px */
+  --h6-size: 1em;     --h6-weight: 600; --h6-lh: 1.5; --h6-ls:  0em;     /* [M] 16.000px */
+
+  /* ---- markdown constructs (§5.4.4 — the v2 live preview, 2026-09-09) ---
+   * [S] READ OUT OF OBSIDIAN **1.12.7**'s `app.css`, which is the version
+   * installed at `/opt/Obsidian` on this machine.  NOTE: every other citation
+   * in this file says "1.13.7 app.css:NNNN" and those line numbers do NOT
+   * resolve in 1.12.7 (2997 is a @font-face here, 2629 is `--size-4-1`), so
+   * they were taken against an app.css this machine does not have.  The VALUES
+   * agree where they overlap — 1.12.7's `--text-selection` is
+   * `hsla(var(--interactive-accent-hsl), 0.33)`, the same .33 — so nothing
+   * below contradicts anything above; the version label is what differs, and
+   * these are labelled honestly.  Line numbers here are 1.12.7's.
+   *
+   * Obsidian's names are on the right where this file renames them.  A value
+   * written `var(--x)` here is Obsidian's own indirection, resolved to Cairn's
+   * token of the same meaning, not a fresh choice. */
+  /* app.css:2251 `--font-weight: var(--font-normal)` and 2255 `--font-normal:
+     400`.  It is the INDIRECTION that matters, not the number: every heading
+     rule in `app.css` re-declares `--font-weight` to its own level's weight and
+     then writes `font-weight: var(--font-weight)`, so `.cm-strong`'s
+     `calc(var(--font-weight) + var(--bold-modifier))` lands at 900 inside an H1
+     and at 600 in body copy.  editor.css's `.nc-hN` were re-pointed through it
+     for that reason; a flat `font-weight: 700` on bold loses the distinction. */
+  --font-weight:      400;
+  --bold-modifier:    200;             /* app.css:2093  added to --font-weight  */
+
+  /* Relative, and subject to §0.24.9's one-level rule for the same reason. */
+  --code-size:        0.875em;         /* app.css:2171 --code-size = --font-smaller
+                                          (2240).  RELATIVE on purpose: inline code
+                                          inside an H1 is .875 of the H1, which an
+                                          absolute --fs-code 14px would not give.  */
+  --code-radius:      var(--radius-s); /* app.css:2170                           */
+
+  --list-marker-color: var(--text-faint);  /* app.css:2424                       */
+  --list-bullet-size:  0.3em;              /* app.css:2429                       */
+  --list-indent-editing: 0.75em;           /* app.css:2421, the marker's
+                                              padding-inline-start in the editor */
+  /* [S] §0.35 E81 — `--list-marker-space`, app.css:13209.  It is `0` in
+     `.markdown-source-view` and `0.25em` under `.is-live-preview`; Cairn is
+     ALWAYS live preview, so the live-preview value is the only one it can have —
+     the same reasoning §0.30 E73 used for `--p-spacing`.  ONE CONSUMER: a list
+     CONTINUATION line's leading whitespace, which takes
+     `--list-indent-editing + --list-marker-space` = 1em.  Nothing else in
+     Obsidian spends it either, and `.HyperMD-list-line-nobullet`'s rule is the
+     only place it appears outside its own declaration. */
+  --list-marker-space: 0.25em;
+
+  /* [S] §0.51 E99 — ONE LEVEL OF LIST INDENT, and the number `livepreview.ts`
+     says must not be used for the marker's own padding.
+       app.css:2441  --list-indent: calc(var(--indent-unit) * var(--indent-size))
+       app.css:2372  --indent-size: 4
+       app.css:2373  --indent-unit: 0.5625em
+     = 2.25em = 36px on the editor's 16px body, and MEASURED at 36.000 in the
+     live 1.13.7 on a `.cm-indent` span.
+
+     WHAT CONSUMES IT IS A `min-width`, WHICH IS THE WHOLE POINT: Obsidian marks
+     a whole tab or four whole spaces `.cm-indent` and gives that span
+     `min-width: var(--list-indent)` (app.css:8185), so one level of source
+     indentation is one level WIDE no matter what the file spelled it with.  A
+     tab renders 36px, four spaces render 36px, and `tab-size` never enters the
+     geometry.  Cairn had neither the token nor the quantisation: a tab-indented
+     nested bullet measured 30.087 against Obsidian's 36.
+
+     RELATIVE, and §0.24.9 E58's one-level rule applies — it is consumed on the
+     indent span itself, which inherits the body size, exactly as Obsidian's is.
+     Obsidian also spends it on `.cm-line.HyperMD-list-line { tab-size }`
+     (app.css:13228), and `editor.css` now does too.  That declaration was first
+     left out here on the reasoning that a tab inside an indent run is a whole
+     group and never reaches `tab-size` — which the LIVE DOM refuted: a tab that
+     ends a partial run of spaces gets no group at all and advances by tab stop.
+     The reasoning was sound and the app does something else. */
+  --indent-size: 4;
+  --indent-unit: 0.5625em;
+  --list-indent: calc(var(--indent-unit) * var(--indent-size));
+  --list-spacing:      0.075em;            /* app.css:2423, top AND bottom       */
+
+  --quote-border-w:     2px;               /* app.css:2087 --blockquote-border-thickness */
+  --quote-border-color: var(--accent);     /* app.css:2088 -> --interactive-accent */
+
+  --hr-thickness: 2px;                     /* app.css:2332                        */
+  --hr-color:     #363636;                 /* app.css:2331 --hr-color ->
+                                              --background-modifier-border (2829)
+                                              -> --color-base-30, and the DARK
+                                              --color-base-30 is #363636 (2939).   */
+
+  /* app.css:2409 --link-external-color -> --text-accent, and the dark theme's
+     --text-accent is --color-accent-1 (2955), which is
+     hsl(h-3, s*1.02, l*1.15) of --color-accent (2948).  --accent is
+     hsl(258,88%,66%), so this is hsl(255, 89.76%, 75.9%).  Written as the
+     hsl() so it follows --accent's own derivation rather than freezing a hex
+     against it -- the same argument as --indent-guide above. */
+  --text-accent: hsl(255, 89.76%, 75.9%);
+  --link-color: var(--text-accent);
+  /* [S] app.css:2430.  A SECOND token holding the same value, kept separate
+     because Obsidian keeps it separate: `--link-color` dresses an internal
+     link and `--link-external-color` a url, and its own dark theme happens to
+     point both at --text-accent.  Collapsing them here would lose the reason
+     the two CSS rules in editor.css are two rules (§0.36 E83). */
+  --link-external-color: var(--text-accent);
+  /* [S] app.css:2185-2186.  The fold arrow on the Properties heading is
+     --text-faint at rest and THE ACCENT when collapsed — which is the state a
+     reader sees it in most, because at rest it is `opacity: 0` until the
+     heading is hovered (app.css:7238/:7260). */
+  --collapse-icon-color: var(--text-faint);
+  --collapse-icon-color-collapsed: var(--text-accent);
+  --link-decoration-thickness: auto;       /* app.css:2407                        */
+
+  /* app.css:2852 --text-highlight-bg = rgba(--text-highlight-bg-rgb, 0.4), and
+     --text-highlight-bg-rgb is `255, 208, 0` (2851).  --text-highlight above is
+     the SEARCH match at .28 and is a different token with the same hue: §5.1's
+     ruling picked yellow for search precisely because it is Obsidian's
+     highlight colour, and `==this==` is where that colour actually comes from. */
+  --highlight-bg: rgba(255,208,0,.4);
+
+  /* [S] app.css:2346 `--icon-color: var(--text-muted)`, and it is the ONE token
+     the property rows' glyphs take (`.metadata-property-icon`, app.css:11320,
+     sets `color: var(--icon-color)` and nothing overrides `--icon-size`, so the
+     glyph is `--icon-m` 18px at `--icon-m-stroke-width` 1.75).
+     IT WAS `--text-faint`, AND THE USER MEASURED THE DIFFERENCE BEFORE I DID:
+     a brightness profile down one column of the `name` row's glyph peaks at
+     151 in Obsidian against 74 in Cairn, over the same ground. #b3b3b3 and
+     #666666 predict exactly 149 and 72.  It read as "Obsidian's icons are
+     bigger"; half of it was that they are twice as bright. */
+  --icon-color: var(--text-muted);
+
+  --checkbox-size:   var(--fs-text);       /* app.css:2156 -> --font-text-size    */
+  --checkbox-radius: var(--radius-s);      /* app.css:2155                        */
+  --checkbox-color:  var(--accent);        /* app.css:2158 -> --interactive-accent */
+  --checkbox-marker-color: var(--text-on-accent);  /* app.css:3254               */
+  --checkbox-border-color: var(--text-faint);      /* app.css:2160               */
+  --checkbox-border-color-hover: var(--text-muted);/* app.css:2161               */
+  --checkbox-margin-inline-start: 0.85em;          /* app.css:2162               */
+  --checklist-done-color: var(--text-muted);       /* app.css:2164               */
+  --checklist-done-decoration: line-through;       /* app.css:2163               */
+
+  /* ---- the Properties block (§5.4.5) ------------------------------------
+   * [S] Obsidian 1.12.7 `app.css:2480-2524`, the `--metadata-*` group, resolved
+   * to Cairn's tokens of the same meaning.  Obsidian's own values are
+   * transparent/0 almost throughout: the block has NO background, NO border and
+   * NO divider in the default theme, and everything that makes it read as a
+   * table is the 9em label column plus a 3px gap.  Copying that faithfully
+   * means copying a lot of `transparent`, so the ones that are transparent or
+   * zero are NOT declared here — they would be six tokens with one consumer
+   * each and no way to be wrong.  What is declared is what carries a value. */
+  --metadata-padding: 8px 0;             /* app.css:2484  --size-4-2 0        */
+  --metadata-gap: 3px;                   /* app.css:2492                      */
+  --metadata-property-radius: 6px;       /* app.css:2494                      */
+  --metadata-label-width: 9em;           /* app.css:2513                      */
+  --metadata-label-font-size: 0.875em;   /* app.css:2509 -> --font-smaller    */
+  --metadata-label-color: var(--text-muted);        /* app.css:2511          */
+  --metadata-input-height: calc(var(--fs-text) * 1.75);  /* app.css:2514      */
+  --metadata-input-padding: 4px 8px;     /* app.css:2522  --size-4-1 --size-4-2 */
+  /* ⚠ RELATIVE, AND SO CONSUMABLE AT EXACTLY ONE LEVEL OF A CHAIN (§0.24.9).
+     `app.css` puts this on the value's CHILDREN and leaves `.metadata-property
+     -value` with no font-size at all, so each child resolves `0.875em` against
+     the cell's inherited 16px and lands on 14.  Declaring it on the cell TOO
+     compounds it to 12.25px, which is a defect a reader reports as "the text is
+     smaller" and a stylesheet shows as two correct-looking lines. */
+  --metadata-input-font-size: 0.875em;   /* app.css:2517                      */
+  --metadata-longtext-lines: 3;          /* app.css:2521                      */
+  --metadata-heading-color: var(--text-normal);     /* app.css:11241          */
+  --metadata-heading-weight: 500;        /* app.css:11242 -> --font-medium (2256) */
+
+  /* [S] app.css:2848 `--text-warning -> --color-orange`, and the DARK
+     `--color-orange` is `#e9973f` (app.css:2921; the light one at 2874 is
+     `#ec7500`).  Its one consumer is a property value whose type Obsidian
+     cannot name — `.mod-unknown`, app.css:11479 — which is the row the
+     reference screenshot shows for a nested map. */
+  --text-warning: #e9973f;
+
+  /* [S] app.css:2539-2553's `--pill-*`, but ONLY the two that survive
+     app.css:11457's override: inside a property value the border width and both
+     paddings are forced to 0, so a list renders as its items separated by one
+     `--size-2-3` gap.  --pill-color there is --metadata-input-text-color, i.e.
+     --text-normal. */
+  --pill-gap: 6px;                       /* app.css:2626 --size-2-3           */
+
+  /* ---- icons ----------------------------------------------------------- */
+  --icon-color:         #b3b3b3;  /* [D] == --text-muted                        */
+  --icon-opacity:       .85;      /* [O] Obsidian --icon-opacity                */
+  --icon-opacity-hover: 1;        /* [O]                                        */
+  --icon-vault:         16px;     /* [D] vault-switcher chevron                 */
+
+  /* ---- file-tree box model — CONTRACT §5.2 (spike D verbatim, B9) ------- */
+  /* [D] 27px WAS a round number, assumed since spike D and never re-derived.
+     2026-09-15 — Obsidian's real row pitch is `.tree-item-self`'s content
+     height (font-size 13px * line-height 1.3 + 4px top/bottom padding,
+     app.css:10353-10364) PLUS its `margin-bottom` (--size-2-1 = 2px) — the
+     SAME split Cairn's own box model already uses (the fill is `top:0;
+     bottom:2px`, so `rowH − 2` is the item and `2` is the gap).  MEASURED as
+     26.890625 on this Mac, not derived: `1.3 * 13 = 16.9` exactly, but a
+     browser's line-box height for a unitless line-height is the font's own
+     metrics rounded to its hinting grid, and spike Q's history (§0.17) is
+     explicit that this project does not GUESS that rounding from one
+     screenshot.  `chrome.ts`'s `applyRowH` measures it from a probe carrying
+     Obsidian's own font-size/line-height/padding, on THIS engine, and
+     overwrites this literal as an inline style before first paint — which is
+     also what makes it correct on Debian's different font, unlike a second
+     hardcoded number would be.  27px is the FALLBACK for wherever the probe
+     cannot run (a DOM-shim test) — `tree.ts`'s own `ROW_H_FALLBACK` is the
+     same number for the same reason. */
+  --row-h:      27px;             /* [M] row pitch (fallback; see chrome.ts)    */
+  /* §0.49 E97 — 16 + A SNAPPED 1px BORDER, which is 17 at dpr 1 and 2 and 16.8
+     at dpr 1.25.  It was a flat `17px`.
+     THE DESIGN VALUE IS STILL 17 AND THAT IS WHAT G9 ASSERTS: Obsidian's own is
+     `margin 12 + border 1 + padding 4`, and the 16.8 is Chromium snapping the
+     border term, not a different layout.  Cairn has no border in its chain to
+     do that snapping for it — the whole indent is one padding — so the step
+     spells the three terms out.  `--ind` does not exist anywhere in the app (X1). */
+  --row-indent: calc(16px + var(--hairline));   /* [M] indent step, the ONE name */
+  --chev-w:     16px;             /* [C] free parameter; 16 matches every §8.1 icon */
+  /* §0.48 E96 — THESE THREE MOVED +1px ON 2026-09-12, AND THE OLD VALUES ARE
+     WRITTEN BESIDE THEM BECAUSE THE REASON THEY WERE WRONG IS REUSABLE.
+
+     Each carried a "− 1px frame" correction against the reference PNG's screen
+     columns: `--tx0` says so in as many words ("sx 37 − 1px bearing − 1px
+     frame") and `--gx0` said "guides at sx 24/41/58" → content 23/40/57.
+     **SPIKE O STRUCK THAT FRAME.** The reference PNG's edge is a 20% white wash
+     OVER content, not a chrome border, which is the same finding that took the
+     window from 1918×958 to 1920×964 (§0.22 E41). The tree box model was never
+     re-derived after it, so the whole tree sat one pixel left of Obsidian's.
+
+     MEASURED IN THE LIVE OBSIDIAN 1.13.7 (Debian, dpr 1.25, the user's own
+     settings and default theme), four independent ways, all agreeing:
+       guides   device 30 / 51 / 72   where Cairn drew 29 / 50 / 71
+       chevron  ink from device 24    where Cairn drew from 23
+       text     device 67 / 88 / 108  where Cairn drew 66 / 87 / 108
+       and Obsidian's own DOM puts `.tree-item-inner` at exactly 36.000 at
+       depth 0, against `--tx0: 35`.
+     A measurement of the LIVE APP beats a derivation from the reference PNG —
+     this is the twelfth time in this project (§1's authority table). */
+  --cx0:        16px;             /* [D] = --gx0 - --chev-w/2. WAS 15 (§0.48 E96) */
+  --tx0:        36px;             /* [M] Obsidian's own `.tree-item-inner` left
+                                     at depth 0, read from its live DOM.
+                                     WAS 35 (§0.48 E96)                         */
+  --gx0:        24px;             /* [M] guides at device 30/51/72 at dpr 1.25.
+                                     WAS 23 (§0.48 E96)                         */
+
+  /* §0.49 E97 — ONE PIXEL AS CHROMIUM ACTUALLY RENDERS IT.  Two consumers.
+     (It was `--guide-w` for one pass; the name described its first caller and
+     not the thing, which is why it is `--hairline` now.)
+     Obsidian draws each guide as a real `border-inline-start: 1px`, and
+     Chromium SNAPS a used border to `floor(dpr)/dpr` CSS px — 0.8 at dpr 1.25,
+     1.0 at dpr 1 and 2 (§0.26.2 E66's rule). Cairn draws its guides as
+     `repeating-linear-gradient` STOPS, and a gradient stop is rasterised by
+     coverage rather than snapped: a flat 1px stripe is 1.25 device px, so
+     wherever it starts on a fractional column it paints TWO. That is exactly
+     what the user reported — "Creds and Envs lines are unusually thick" —
+     measured as device columns 71 AND 72 both at full ink where every other
+     guide was one column.
+     `chrome.ts` overwrites this with the snapped value at boot; 1px is the
+     correct FALLBACK because it is already right at dpr 1 and 2.
+
+     THE SECOND CONSUMER IS `--row-indent` BELOW, AND IT IS THE REASON THIS IS
+     NOT CALLED `--guide-w` ANY MORE.  Obsidian's indent step is THREE terms —
+     `margin 12 + border 1 + padding 4` — and only the border snaps, so its
+     RENDERED step is 16.8 at dpr 1.25 and 17 at dpr 1 and 2.  Cairn collapses
+     all three into one `padding-left`, and a padding does not snap, so the step
+     has to carry the snapped border term itself or the two apps diverge by
+     0.2px per level.  Measured: at depth 3 that had put Cairn's text one device
+     column right of Obsidian's (109 against 108) while depths 1 and 2 agreed. */
+  --hairline:     1px;             /* [D] floor(dpr)/dpr — written by chrome.ts  */
+  --tree-fs:    13px;             /* [M] 13px glyph band; named separately because
+                                     the search panel must consume it (§4.5)    */
+
+  /* ~~[C] §5.1 X2 — the tree chevron is a TOKEN, not an icon~~ — STRUCK BY
+     §0.50 E98.  `--chev` was a data: URL SVG consumed as a `-webkit-mask`, and
+     an SVG loaded as a CSS IMAGE is laid out by Chromium in an isolated page
+     whose screen info reads scale 1.0; on Linux that page's `LayoutRoot`
+     overwrites Blink's process-wide font-strike scale, and the next text strike
+     populated before a main-document layout lost one device pixel of ascent
+     (LP-10, the 0.8px line).  The glyph now lives in icons.ts as `chevron()` —
+     a real `<svg>` element, Obsidian's own construction — and no stylesheet in
+     this app may load an SVG through a data: URL as a CSS image again:
+     tests/frontend/no-svg-images.test.mjs pins it (the task tick, Obsidian's
+     own snapped raster, is its one recorded exception). */
+
+  /* ---- structural constants (all [M] or [D]) --------------------------- */
+  /* [M+S] §0.6 E8 — THE STRIP IS 40, NOT 39, and the old 39 was not so much
+     wrong as INCOMPLETE: it measured the FILL RUN and missed the 1px rule under
+     it.  Obsidian's own app.css:6642-6651 —
+        .workspace-tab-header-container { height: var(--header-height) [40px];
+          border-bottom: var(--tab-outline-width) solid var(--tab-outline-color) }
+     — is 40px border-box = 39px of #2f2f2f fill + a 1px rule.  Measured back at
+     two independent scales off the reference: 39.0 of fill, 40.1 total.
+     `.titlebar` therefore carries `border-bottom: 1px` and the fill is STILL 39,
+     so nothing inside the strip moves; everything BELOW it moves down 1px,
+     because base.css:68 insets `.app` by exactly this token.  spike-N §8. */
+  --titlebar-h:     40px;
+  /* [M] §5.5 — the sidebar's DEFAULT width, and still the measured one.  It is
+     no longer FIXED: §0.7 E9 makes the sidebar resizable and overturns M60, so
+     chrome.ts overwrites this token as an inline style on <html> while dragging
+     and at boot from the persisted value.  Exactly TWO rules consume it —
+     `.titlebar-left` and `.sidebar` — and `.tab-strip` / `.editor` are both
+     `flex: 1 1 auto`, so the whole layout follows from this one number.
+     EVERY gate row still measures 412, because the default did not move and
+     `--pixeltest` never injects a persisted width (lib.rs). */
+  --sidebar-w:     412px;
+  --divider-w:       3px;         /* [M+S] §0.7 E9 — Obsidian --divider-width-hover,
+                                     and the handle measures 3.07 CSS px on the
+                                     reference.  It is the HIT TARGET; it overlays
+                                     the sidebar's own 3px right padding and takes
+                                     no layout space of its own.               */
+  /* [S+M] BORDER BOX, includes the 1px rule.  WAS 37, which §5.10 R2 called
+     normative and which was never measured — it is `winH 958 - rule 921`, and
+     958 is six short of the reference PNG's real 964px content box.  THE
+     REFERENCE MEASURES THIS BAR AT 43 and Obsidian 1.13.7 computes 43: they
+     agree, and the "42 / version drift" an earlier pass wrote here was a
+     misreading of the window frame.  The same correction closes R2's
+     "unexplained 3px" ink-centre residual exactly.  Full derivation — including
+     why three of the PNG's four edges are a 20% white wash OVER content and not
+     a frame — is in chrome.css's `.vault-bar` comment.  Read it before touching
+     this.  Moving this moves the tree band: 958 - 40 - 43 = 875, rule at y915. */
+  --vaultbar-h:     43px;
+  /* [M] Obsidian's own --file-margins-x / -y, BOTH `var(--size-4-8)` = 32px
+     (app.css:2243-2244 + :2662).  WERE 33 and 30, both marked [M], and NEITHER
+     was a measurement (spike Q §1.4):
+       -y 30  was the designated FIT parameter.  spec-01-visual.md:709 says it
+              outright -- "if a heading ever looks vertically off, tune ONLY
+              --editor-inset-y and --h1-space-after".  It had been nudged until
+              the picture matched, and what it was cancelling out was --h1-size
+              being 29 instead of 25.888.  Two errors hiding each other; fixing
+              only the ladder would have made this one visible on its own.
+       -x 33  was an INK-EDGE reading of a 32px box.  The editor pane's left
+              edge is x 410, +32 puts the box at 442, and the reference's title
+              ink starts at 443 -- one pixel of `u` left side bearing.  The same
+              file warns about exactly this trap for the tree and then commits
+              it in its Editor section (VISUAL-MEASUREMENTS.md:47).
+     CONSEQUENCE, FLAGGED: the line box widens 1432 -> 1434.  The 1432 marked
+     [M] "the measured code box" is ink-to-ink across a 1434px box, measured off
+     a 2.png that no longer exists; 1434 is the box.  See spike Q §1.4. */
+  --editor-inset-x: 32px;         /* [M] §5.3 — .cm-scroller padding-left/right */
+  --editor-inset-y: 32px;         /* [M] §5.3 — .cm-scroller padding-top        */
+  --tab-w:         200px;         /* [M] active tab sx 431..630                 */
+  --tab-x:          18px;         /* [M] tab left edge, from the editor pane's left */
+
+  /* ---- the tab (§0.6 E8, spike N §9) ----------------------------------- */
+  /* THE TAB DOES NOT FILL THE STRIP.  Obsidian insets it 6px from the top
+     (app.css:6661, `margin: 6px -5px -1px` on the inner scroller) and lets it
+     BLEED 1px past the strip's rule, so tab and pane read as one surface with
+     no line between them.  Measured on the reference: the tab's 1px ring lands
+     at CSS y 5.46 against a predicted 6, and 7 is excluded — at 7 the ring
+     would fall on a row the capture shows is already pane-coloured. */
+  /* [M] 7, NOT 6.  The first pass read 5.46 off a downscaled capture, rounded to
+     6, and shipped a tab one pixel too tall — the user saw it.  Re-measured on
+     two same-scale crops (1.25 img/CSS, both strips exactly 50 image px):
+     Obsidian's first tab row is cssY 7.20 and Cairn's was 6.40, and both reach
+     the full 200px at +4.8 rows, so the radius was right and only the origin
+     was wrong.  It reconciles with the reference PNG too: there the tab top is
+     stripY 6 on a 39px strip, i.e. bottom 39 and HEIGHT 33 — the same 33 as
+     here, because the tab is anchored to the strip's BOTTOM, not its top. */
+  --tab-top:         7px;
+  --tab-radius:      6px;         /* [S] Obsidian --tab-radius-active: 6px 6px 0 0.
+                                     NOT --radius-m: that token is 8px and its
+                                     "[D] active tab top corners" was a derivation
+                                     off the radius ladder.  Obsidian gives the tab
+                                     its own 6px and keeps an 8px --radius-m for
+                                     menus, which is exactly what we do now.    */
+  --tab-curve:       6px;         /* [S] the outward shoulder's radius          */
+  /* [S] 2026-09-16 — the HOVER pill's radius (Obsidian `.workspace-tab-header-
+     inner { border-radius: var(--tab-radius) }`), which is PLATFORM-SCOPED in
+     Obsidian itself: base `body` carries `--tab-radius: var(--radius-s)` = 4px
+     (app.css:2739) and top-level `.mod-macos` re-seats it to `var(--radius-m)`
+     = 8px (app.css:3037).  NOT the active tab's 6px (`--tab-radius-active`,
+     platform-independent): on no platform does the pill copy the tab.  The
+     8px Cairn shipped globally was the macOS value worn on Linux, where the
+     pill rendered visibly rounder than the app being cloned — photographed by
+     the user.  The Linux value lives in the PLATFORM OVERRIDES block below,
+     the only place a token may depend on the OS. */
+  --tab-pill-radius: var(--radius-m);
+  --tab-outline: #333333;         /* [S] Obsidian --tab-outline-color ->
+                                     --divider-color -> --background-modifier-border
+                                     -> --color-base-30.  DELIBERATELY NOT
+                                     --bg-modifier-border (#2f2f2f): that is this
+                                     project's own [M] for its other 1px rules,
+                                     and conflating the two would either redraw
+                                     every rule in the app or draw this one wrong. */
+  /* [S] 2026-09-15 — Obsidian's `--divider-color` itself: `var(--background-
+     modifier-border)` -> `var(--color-base-30)` = #333333 in the dark theme
+     (app.css:2196, 2873, 2976), read from the currently-pinned 1.13.7 asar —
+     the SAME chain `--tab-outline` above resolves through, kept as its own
+     token because Obsidian keeps `--tab-outline-color` and `--divider-color`
+     named separately too, one call site each.  `docs/KNOWN-ISSUES.md` UI-3
+     recorded an EARLIER live sample of this exact border as `#363636`; that
+     reading is superseded by this one, taken directly from the pinned
+     stylesheet's own cascade rather than off a screenshot the border's
+     dpr-1.25 snapping could blend at its edge. */
+  --divider-color: #333333;
+  --macos-tl-inset: 88px;         /* [D] §5.6 — traffic-light reserve.  NOT 89: the
+                                     discs span content x 21..73, so 89 leaves 16px
+                                     not 23, and 88 puts the search button's centre
+                                     on content x 103 as §5.1 requires.
+                                     SPIKE N §4 DECOMPOSED IT: Obsidian computes the
+                                     same quantity as `--size-4-2 + --frame-left-space`
+                                     = 8 + (80 - ribbon), and with the ribbon hidden
+                                     that is 8 + 80 = 88 exactly.  The [D] was right
+                                     and now has a formula; the Linux override below
+                                     zeroes only the traffic-light term.        */
+
+  /* ---- the Linux window controls (§0.5 E7, spike N §3) ------------------ */
+  --winctl-w:       44px;         /* [M+S] spike N §3.2 — 16px padding + a 12px glyph
+                                     + 16px padding.  Confirmed independently: the
+                                     three ink centres measure 1937.9 / 1981.9 /
+                                     2025.98 against a 2048 right edge, i.e. a 44px
+                                     pitch and a 22px half-width, to a tenth of a px */
+  --bg-close-hover: #fb464c;      /* [O] Obsidian --color-red, which is what
+                                     --background-modifier-error resolves to for
+                                     `.mod-close:hover`.  NOT --text-error (#e05252):
+                                     that is a different token for a different job and
+                                     §5.1's collision table keeps them apart.  */
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * PLATFORM OVERRIDES — the only place in the app where a token depends on the
+ * OS.  `data-os` ships as `macos` in index.html and is corrected at boot by
+ * chrome.ts (§0.5 E7); if that read ever fails the app keeps the macOS values,
+ * which is the safe direction because macOS is what every gate measures.
+ * ══════════════════════════════════════════════════════════════════════════ */
+:root[data-os="linux"] {
+  /* Linux has no traffic lights, so the 80px reserve is dead space — measured
+     at 88px of it in the shipped Debian build, which put the search button's
+     centre on 103 where the reference has 25.  Obsidian zeroes the same term:
+     `.mod-windows, .mod-linux { --frame-left-space: 0px }`, leaving the strip's
+     own `--size-4-2` padding of 8px.  Spike N §4.  [S] */
+  --macos-tl-inset: 8px;
+  /* Obsidian's own default, app.css:2603 — `round` needs no declaration, but
+     naming it here means a Linux build never inherits the macOS override by
+     accident if this file's order ever changes. */
+  --tree-corner-shape: round;
+  /* 2026-09-15 — Obsidian's STYLED-branch thumb (app.css:9654-9681, live only
+     on Linux/Windows): `color-mix(in oklch, var(--mono-100) 10%, transparent)`
+     = rgba(255,255,255,.1) at rest, 20% on hover/active (app.css:2629+2962,
+     2627).  The base `:root` above now carries the macOS-only opaque colour,
+     by user ruling; this is the value the base block declared until then, and
+     the reasoning for keeping it HERE (Cairn is permanently in the styled
+     8px-scrollbar branch on Linux, §5.12.4.2, and a macOS-native colour there
+     would be neither app's rendering of anything) is unchanged.
+     THE LEADING ZEROS ARE LOAD-BEARING, not house style: these two are read
+     back as RAW AUTHORED TEXT by tools/verify-geometry.js (a custom property
+     is not canonicalised by getComputedStyle the way a real colour is), and
+     its `alpha()` helper matched `.1` as the integer 1.  The helper is
+     hardened too — both, because either alone leaves the trap set for the
+     next value. */
+  --scrollbar-thumb:       rgba(255,255,255,0.1);  /* [S] app.css:2629 + 2962    */
+  --scrollbar-thumb-hover: rgba(255,255,255,0.2);  /* [S] app.css:2627, :hover/:active */
+  /* [S] 2026-09-16 — Obsidian's base-body `--tab-radius: var(--radius-s)`
+     (app.css:2739): off macOS the tab hover pill is 4px, not the 8px
+     `.mod-macos` re-seats it to (app.css:3037).  See `--tab-pill-radius`
+     above, which is the token this corrects. */
+  --tab-pill-radius: var(--radius-s);
+}

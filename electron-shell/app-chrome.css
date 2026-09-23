@@ -1,0 +1,79 @@
+/*
+ * electron-shell/app-chrome.css -- K5, and nothing else.
+ *
+ * Loaded AFTER src/styles/* and never instead of any of it. It exists because
+ * the drag region is the one piece of chrome that is the shell's business.
+ *
+ * `-webkit-app-region: drag` INHERITS, so a drag on the strip would turn the
+ * tab, its label and the close button into drag handles that swallow their own
+ * clicks -- a failure that looks like a JavaScript bug. So `drag` is declared
+ * once on the strip and `no-drag` is handed back to everything interactive.
+ *
+ * The markup carries no drag attributes; the region is declared here alone.
+ */
+
+.titlebar {
+  -webkit-app-region: drag;
+}
+
+/* Everything the user is meant to click. `.tab` covers its label by
+   inheritance. */
+.titlebar button,
+.titlebar .tab,
+.titlebar .tab-label,
+.titlebar .window-controls,
+.titlebar .window-controls .win-btn {
+  -webkit-app-region: no-drag;
+}
+
+/* The macOS traffic lights are native chrome drawn OVER the window, so they
+   need no region of their own -- but the 88px §5.6 reserves for them must not
+   become a click target that starts a drag on mousedown before the OS sees it. */
+.titlebar .titlebar-left {
+  -webkit-app-region: drag;
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
+ * THE INLINE-TITLE BOX -- a pixel-identity divergence, corrected under the
+ * project's own authority order rather than by preference.
+ *
+ * MEASURED (Obsidian 1.13.7's own bundle): the inline title is ONE persistent
+ * `contenteditable="true"` div edited in place. On focus it gets no box at
+ * all -- app.css has no `.inline-title:focus` rule, and two global rules
+ * (`:focus{outline:none}` and `[contenteditable]{outline:none}`) remove the
+ * focus ring. The only things that change are the caret and ::selection.
+ *
+ * CAIRN today: `editor.ts:978` swaps in an `<input class="nc-title-edit">`,
+ * and `editor.css:255-257` gives it `background: var(--bg-form-field)`
+ * (#2e2e2e) plus `border: 1px solid var(--border-focus)` (#3f3f3f) and a 4px
+ * radius -- a filled, bordered, full-width box Obsidian does not draw.
+ *
+ * WHY THIS OVERRIDE IS LEGITIMATE AND NOT A PREFERENCE. CONTRACT §5.4.2
+ * (rank 2) mandates the INPUT MECHANISM, and that is untouched here. The BOX
+ * STYLING comes from spec-03 §5.5 (rank 3, "design detail only"). CLAUDE.md §1
+ * ranks a measurement above a spec, and Obsidian's rendering is a
+ * measurement. So the fill and the edge go; the mechanism stays.
+ *
+ * THE BORDER IS REMOVED FROM LAYOUT, NOT JUST DECOLOURED. An earlier revision
+ * of this rule kept it at 1px transparent to preserve `.bad`; MEASURED, that
+ * still moved the text. The input has `box-sizing: border-box` and no explicit
+ * `height`, so its 31.0656px content box (--h1-size 1.618em = 25.888px x
+ * --h1-lh 1.2) plus two 1px borders renders 33.0656px: the widget grew 2px and
+ * the glyphs dropped 1px the moment it was clicked. At rest .nc-title is
+ * 31.0656 with a 0px border, so `border: none` makes the editing box exactly
+ * the resting box. (Was 34.8 / 36.8 on a 29px H1; spike Q re-derived the
+ * ladder. The ARGUMENT is size-independent -- two 1px borders always add 2px.)
+ *
+ * `.bad` (invalid name / name taken) moves to an INSET BOX-SHADOW, which
+ * paints no layout. base.css:59 already establishes that as this project's
+ * focus-ring mechanism -- "box-shadow: inset 0 0 0 1px, never outline".
+ * ═══════════════════════════════════════════════════════════════════════════ */
+.nc-title-edit {
+  background: transparent;
+  border: none;
+  border-radius: 0;
+}
+
+.nc-title-edit.bad {
+  box-shadow: inset 0 0 0 1px var(--text-error);
+}

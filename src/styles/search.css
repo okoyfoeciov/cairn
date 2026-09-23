@@ -1,0 +1,270 @@
+/* ==========================================================================
+ * src/styles/search.css
+ * Owner: 05.  Spec: CONTRACT.md §4 (the search engine), §4.5 (the search panel
+ * shares the tree's box and CONSUMES its tokens), §5.1 (--text-highlight is
+ * yellow, not purple; tokens.css is the only declaration site), §5.2 (the row
+ * box model and THE ONE scroller block, which lives in tree.css), §3.3 errata 2
+ * / ruling Y17 (the cap banners stay visible in BOTH sidebar views),
+ * §5.12.4 (two scrollable boxes, never three).  spec-05 §8.
+ *
+ * DECLARES NO CUSTOM PROPERTY (CONTRACT §5.1).
+ *
+ * Three constraints this file is bound by and cannot negotiate:
+ *   - `.search-scroller` REPLACES `.tree-scroller` in the sidebar; the two are
+ *     never live at the same time, which is what keeps the document at TWO
+ *     scrollable boxes (§5.12.4, probe row `layers.scrollers`).  Its scroller
+ *     block — `overflow-y: scroll`, `scrollbar-gutter: stable`, `flex: 1 1 auto`,
+ *     `min-height: 0`, and the 8px `::-webkit-scrollbar` / transparent track /
+ *     `--scrollbar-thumb` thumb at `border-radius: 4px` — is already written,
+ *     verbatim and ONCE, in tree.css (errata 2).  NOTHING BELOW RESTATES IT.
+ *     A duplicated `::-webkit-scrollbar` rule is how one pane silently ends up
+ *     on WebKit's 17px legacy scrollbar and the graphics multiplier goes to
+ *     1.57x (§5.12.4.2, a G5d failure), so this is a memory rule, not tidiness.
+ *   - spec-05's `--sr-bg` / `--sr-muted` / `--sr-hairline` / `--sr-indent` names
+ *     are STRUCK (§5.1).  Consume --bg-secondary, --text-muted, --indent-guide
+ *     and --row-indent.  The raw #e05252 literal is STRUCK: use --text-error.
+ *   - the match highlight is `--text-highlight`, rgba(255,208,0,.28).  NOT
+ *     purple: spec-01's rgba(139,108,239,.35) is indistinguishable from
+ *     --text-selection the moment a result row is selected, which is exactly
+ *     when it is being read.
+ *
+ * ALIGNED BY CONSTRUCTION (§4.5).  Every row metric here is a token consumed by
+ * name — `--row-h`, `--tree-fs`, `--tx0`, `--cx0`, `--chev-w` — never a restated
+ * number, so the tree and the panel cannot drift when the sidebar is toggled.
+ * `--chev-w` is the one errata 2 added to that list and it is used below for
+ * exactly the reason errata 2 gives: the group-header chevron is the same 16px
+ * mask box at the same `--cx0` as a tree row's, and a panel that restated 16px
+ * locally would drift the moment `--chev-w` (a free parameter, §5.2) moved.
+ * `--row-indent` and `--gx0` are deliberately NOT used: the result list is FLAT,
+ * so it draws no indent guides and has no depth.
+ *
+ * NO TRANSITIONS AND NO ANIMATIONS (§5.1 rule 5, M59) — base.css enforces it
+ * globally with `!important`, and spec-05 §8.7's animated 2px progress bar and
+ * its `@keyframes sr-slide` are DELETED, not restyled.  An animating element is
+ * promoted to its own compositing surface, and after §5.12 recovered every
+ * app-created surface to 0.0 MB a surface this panel creates would be the ONLY
+ * self-inflicted one in the app.  The progress affordance is text: the count
+ * line reads `Searching…` after 120 ms (§8.7).
+ * ======================================================================== */
+
+/* ---- the panel band ----------------------------------------------------
+ * `.search-panel` occupies EXACTLY the band `.tree-scroller` occupies: below
+ * the §7.3 banners and the §3.3 cap banners, above the vault bar.  It takes that
+ * height from flex and never from the constant 875 — a banner appearing is an
+ * ordinary resize and shortens both sidebar views identically (§3.3), which is
+ * what makes toggling the views reflow nothing.  (§0.12 E14 deleted the nav
+ * toolbar that used to sit above this band; the band simply got 40px taller and
+ * not one rule in this file changed.)
+ *
+ * `overflow: hidden` and NOT `auto`: this element must never become a scroller.
+ * The panel contributes EXACTLY ONE scrollable box to the document and it is
+ * `.sr-list` (§5.12.4.3 — a third viewport-sized scroller costs ~23.5 MB at 2x).
+ *
+ * DEVIATION FROM spec-05 §8.3, REPORTED: that block opens with
+ * `position: absolute; inset: 0`.  There is no `.sidebar-body` element in
+ * index.html (owner 01) for it to be absolute against, so `inset: 0` resolves
+ * against `.sidebar` itself and covers the banners and the vault bar — and it
+ * also contradicted §8.2's own stack, which draws the banners and the vault bar
+ * OUTSIDE the panel.  A flex child in the tree scroller's slot is the same
+ * geometry with none of that, so that is what ships.  (spec-05 §8.1's other
+ * half — "the nav toolbar stays visible and live while the panel is open" — is
+ * moot: §0.12 E14 deleted the toolbar.) */
+.search-panel {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--bg-secondary);       /* #282828 — the sidebar's own ground   */
+  font-family: var(--font-ui);
+  -webkit-user-select: none;
+  user-select: none;
+}
+/* `.search-panel` sets `display: flex`, which BEATS the UA sheet's
+ * `[hidden] { display: none }`.  Without this rule the hidden panel would still
+ * lay out — two live sidebar views, two scrollers, and G5d fails. */
+.search-panel[hidden] { display: none; }
+
+/* ---- input (spec-01's measured numbers, not spec-05's freehand ones, M36) --
+ * The row is a flex line now, because it carries the back button as well as the
+ * field.  `position: relative` stays: `.sr-clear` is absolutely positioned
+ * against it and is anchored to the row's RIGHT edge, which the button does not
+ * move.  The 40px row height is unchanged (5 + 30 + 5), so the count line and
+ * the list below start exactly where they did. */
+.sr-input-row { flex: 0 0 auto; position: relative; display: flex; align-items: center; }
+
+/* The way back to the tree — Cairn's own control, wearing Obsidian's own Files
+ * glyph (see src/search.ts).  A 24px square on the field's own 30px line, so it
+ * adds NO height; it takes 24 + 6 of the field's width and nothing else. */
+.sr-back {
+  flex: 0 0 24px; width: 24px; height: 24px;
+  margin-left: 8px;
+  color: var(--text-faint);
+}
+.sr-back:hover { color: var(--text-muted); background: var(--bg-modifier-hover); }
+
+.sr-input {
+  display: block; flex: 1 1 auto; min-width: 0; height: 30px;
+  margin: 5px 8px 5px 6px;
+  background: var(--bg-form-field);              /* #2e2e2e                      */
+  border: 1px solid var(--bg-modifier-border);   /* #333333                      */
+  border-radius: var(--radius-s);                /* 4px                          */
+  padding: 0 26px 0 8px;                         /* right pad clears .sr-clear   */
+  font: 400 var(--fs-ui-small)/28px var(--font-ui);
+  color: var(--text-normal);
+  caret-color: var(--caret-color);
+  outline: none;
+  -webkit-user-select: text;
+  user-select: text;
+}
+.sr-input::placeholder { color: var(--text-faint); }
+/* base.css rules a focus ring is `box-shadow`, never `outline`, so it clips to
+ * the box.  This one is inside the 8px margin and cannot reach the gutter. */
+.sr-input:focus {
+  border-color: var(--border-focus);             /* #3f3f3f                      */
+  box-shadow: 0 0 0 2px var(--border-focus);
+}
+
+.sr-clear {
+  position: absolute; right: 15px; top: 13px;
+  width: 14px; height: 14px; line-height: 14px; text-align: center;
+  font-size: var(--fs-ui-smaller); color: var(--text-faint);
+  cursor: default; border-radius: 3px;
+}
+.sr-clear:hover { color: var(--text-muted); background: var(--bg-modifier-hover); }
+.sr-clear[hidden] { display: none; }
+
+/* ---- count line (§8.5) -------------------------------------------------
+ * One `--row-h` band so the list below starts on the tree's own 27px rhythm.
+ * Single line + ellipsis, per §5.12.4.3: it must fit or clip, never wrap into
+ * something that could scroll. */
+.sr-count {
+  flex: 0 0 auto;
+  height: var(--row-h); line-height: var(--row-h);
+  padding: 0 12px;
+  font-size: var(--fs-ui-smaller); color: var(--text-faint);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.sr-count[hidden] { display: none; }
+
+/* ---- the list ----------------------------------------------------------
+ * THIS ELEMENT IS `.search-scroller`.  The markup is
+ * `<div class="sr-list search-scroller">`, and every scrolling property it has
+ * comes from tree.css's one grouped block.  The two declarations below are the
+ * panel's own and touch nothing that block owns. */
+.sr-list { padding-bottom: 8px; }
+
+.sr-section-label {
+  height: 22px; line-height: 22px; padding: 0 12px;
+  font-size: var(--fs-ui-smaller); font-weight: 600; letter-spacing: .04em;
+  text-transform: uppercase; color: var(--text-faint);
+}
+
+/* ---- a file row: both a Files hit and a content-group header -----------
+ * ONE BLOCK WITH PADDING, NOT A FLEX CONTAINER — the same trap §5.2 records for
+ * the tree: `text-overflow: ellipsis` does not apply to an anonymous flex item,
+ * so a flex row hard-clips a long filename instead of ellipsing it.  The badge
+ * floats and the chevron is a `::before`.
+ *
+ * `padding-left: var(--tx0)` is the depth-0 text box, 35px, which is the same
+ * origin a depth-0 tree row's name has.  Toggling the sidebar therefore does not
+ * move a single glyph horizontally. */
+.sr-file {
+  position: relative;
+  height: var(--row-h); line-height: var(--row-h);
+  padding-left: var(--tx0); padding-right: 10px;
+  font-size: var(--tree-fs); color: var(--text-muted);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  cursor: default;
+}
+.sr-file:hover     { background: var(--bg-modifier-hover); }
+.sr-file.is-cursor { background: var(--bg-modifier-active); color: var(--text-normal); }
+
+/* The group chevron: the same mask source, the same 16px box at the same
+ * `--cx0`, the same `--text-faint` and the same origin as a tree row's. */
+/* THE GROUP CHEVRON IS AN INLINE `<svg>` (§0.50 E98), appended by search.ts
+ * from `icons.ts`'s `chevron()`, exactly the tree's mark. It occupies the
+ * `::before`'s old box so the click hit-test is unchanged (search.ts reads
+ * `--cx0`/`--chev-w` and the header's rect).
+ *
+ * DIRECTION: the tree's convention wins (§4.5 aligns the two sidebar views and
+ * §8.1 requires "the same as a tree row's"): undecorated = pointing right =
+ * collapsed, +90deg = pointing down = expanded. NO TRANSITION, as the tree has
+ * none. */
+.sr-file--group .chev {
+  position: absolute; top: 0; left: var(--cx0);
+  width: var(--chev-w); height: var(--row-h);
+  color: var(--text-faint);
+  transform-origin: calc(var(--chev-w)/2) calc(var(--row-h)/2);   /* 8px 13.5px */
+}
+.sr-file--group:not(.is-collapsed) .chev { transform: rotate(90deg); }
+
+.sr-badge {
+  float: right; margin-left: 8px;
+  font-size: var(--fs-ui-smaller); color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- snippets ----------------------------------------------------------
+ * Left inset is `--tx0` again, so a snippet block starts under its header's
+ * name rather than under the chevron. */
+.sr-snips { padding: 1px 10px 5px var(--tx0); }
+/* A collapsed group renders NO snippet DOM at all (spec-05 §8.8) — the panel
+ * removes the block rather than hiding it, which is what holds the DOM at ~300
+ * elements against §4.4's `search` ceiling of 800.  This rule is the belt to
+ * that braces: it keeps the geometry right for the one frame between a class
+ * toggle and the removal. */
+.sr-file.is-collapsed + .sr-snips { display: none; }
+
+.sr-snip {
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2;
+  overflow: hidden;
+  font-size: var(--fs-ui-smaller); line-height: 17px; color: var(--text-muted);
+  padding: 2px 6px; margin: 1px 0 1px -6px;
+  border-radius: var(--radius-s); cursor: default;
+  overflow-wrap: anywhere;
+}
+.sr-snip:hover     { background: var(--bg-modifier-hover); }
+.sr-snip.is-cursor { background: var(--bg-modifier-active); color: var(--text-normal); }
+
+/* ---- the match highlight ----------------------------------------------
+ * §5.1 [C]: YELLOW, and the reason is functional, not aesthetic.  At 0.35 alpha
+ * of the accent hue a match is indistinguishable from --text-selection the
+ * moment its row is selected — which is exactly when the user is reading it.
+ * `box-decoration-break: clone` keeps the 1px padding and the 2px radius on both
+ * fragments when a highlight wraps across the snippet's two clamped lines. */
+.sr-hit {
+  background: var(--text-highlight);     /* rgba(255,208,0,.28)                  */
+  color: var(--text-normal);
+  border-radius: 2px;
+  padding: 0 1px;
+  -webkit-box-decoration-break: clone;
+          box-decoration-break: clone;
+}
+
+/* ---- empty and error states (§8.6) ------------------------------------ */
+.sr-state { padding: 10px 12px; }
+.sr-state-primary   { font-size: var(--fs-ui-small);   color: var(--text-faint); }
+.sr-state-secondary { font-size: var(--fs-ui-smaller); color: var(--text-faint);
+                      opacity: .8; margin-top: 4px; }
+
+/* The two rgba() values are --text-error's own colour at 9% and 28% alpha, for
+ * this box's fill and hairline — alpha variants used inside one rule, not a
+ * second declaration of the token (§5.1 X3).  If a --text-error-bg /
+ * --text-error-border pair is ever added to tokens.css, this rule consumes those
+ * and both literals go.
+ *
+ * THEY MOVED WITH --text-error AND ALMOST DID NOT.  These are `#e05252` and now
+ * `#fb464c` written in DECIMAL, and §5.1 X3's guard against a struck literal is
+ * `chrome-ui.test.mjs`'s `/#e05252/i` — a HEX grep, which cannot see either of
+ * these. The token changed under a test that was structurally unable to notice.
+ * That test now checks the decimal form too. */
+.sr-error {
+  margin: 4px 8px; padding: 6px 8px;
+  background: rgba(251,70,76,.09);
+  border: 1px solid rgba(251,70,76,.28);
+  border-radius: var(--radius-s);
+  font-size: var(--fs-ui-smaller); color: var(--text-error);
+  font-family: var(--font-mono);
+  white-space: pre-wrap; overflow-wrap: anywhere;
+}

@@ -1,0 +1,270 @@
+<!doctype html>
+<!--
+  src/index.html — the ONLY HTML document in the app.
+  Owner: 01.  Spec: CONTRACT.md §5.5 (window geometry), §5.6 (macOS chrome),
+  §5.7 (THE DRAG REGION — read the comment on .titlebar before touching it),
+  §0.12 E14 (there is NO nav toolbar; §5.9 is STRUCK), §3.3 (the cap banners),
+  §5.10 R2 (the vault bar), §5.12.4 (the layer architecture this markup must not
+  add a scroller to), §7.4 (the empty state), §7.5 (first run).
+
+  TWO OBLIGATIONS build-app.mjs ASSERTS AT BUILD TIME, both of which it fails loudly
+  on rather than shipping a silently unstyled or unbooted page:
+    1. the CSS placeholder comment, where the stylesheet is inlined.  Its
+       literal text is deliberately NOT spelled out anywhere else in this file:
+       build-app.mjs substitutes it, and a second copy of the token in prose is a
+       stylesheet injected into a comment and a page that renders unstyled with
+       no error anywhere.  (It happened.  build-app.mjs now refuses more than one.)
+    2. `<script src="./app.js"></script>` as a CLASSIC script.  `type="module"`
+       would put the page back under strict-mode ESM, which is the failure class
+       `iife` was chosen to remove (spike C §2.4: an uncaught throw at module
+       scope ABORTS THE WHOLE MODULE under ESM and merely fails silently under a
+       classic script).
+
+  The glyphs are injected at boot from src/icons.ts, which holds the three
+  Lucide literals plus E7's four window controls and is the ONLY place in the app
+  where a string may be assigned to innerHTML (CONTRACT §6.1).  The tree chevron
+  is not among them: it is `--chev` in tokens.css, a -webkit-mask source
+  (§5.1 X2).
+-->
+<html lang="en" data-os="macos">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cairn</title>
+<!--CSS-->
+</head>
+<body>
+
+<!--
+  THE DRAG REGION — CONTRACT §5.7.  The window drags from `.titlebar`, which
+  `electron-shell/app-chrome.css` declares as `-webkit-app-region: drag`; every
+  interactive child takes `no-drag` back.  No element in this file carries a
+  drag attribute: `-webkit-app-region` INHERITS, so one declaration on the strip
+  plus the no-drag list is the whole mechanism, and an attribute on a button
+  would make it swallow its own click.
+-->
+<div class="titlebar">
+
+  <!-- content x 0..411.  The first 88px are the macOS traffic-light reserve
+       (§5.6): the discs span content x 21..73 and the hit targets x 20..74, so
+       88 leaves 16px and puts the search button's centre on content x 103. -->
+  <div class="titlebar-left">
+    <!-- §0.6 E8, A USER DECISION: the `search` and `folder-open` buttons that
+         stood here are DELETED, and both are still reachable — Search is
+         Mod-Shift-F (§7.2, chrome.ts's keydown) and the vault switcher is the
+         `.vault-switch` button in the vault bar at the bottom left (§5.10 R2).
+         Nothing became unreachable, which is the only thing that made this
+         safe to do; it is E4's "no inert decoration" applied one step further,
+         to a control that duplicated another.
+
+         THE ELEMENT ITSELF STAYS, and it is not decoration: it is what reserves
+         --sidebar-w so `.tab-strip` starts on 412, and it is a drag region
+         (§5.7).  Deleting it would move the tab off its measured x 430. -->
+    <div class="spacer"></div>
+    <!-- §9 E4a: the `panel-left` button spec-01 §8.1 drew here is OMITTED at
+         the source.  Nothing in CONTRACT.md ever bound it, §5.5 fixes the
+         sidebar at 412px with no splitter, and the locked feature list has no
+         collapse — so it was a drawn control that does nothing, precisely the
+         "inert decoration" §9 E4 rejects. -->
+  </div>
+
+  <!-- content x 412..1917.  Tab left edge 430 = 412 + 18. -->
+  <div class="tab-strip">
+    <!-- TWO FIXED TABS: the note tab and the `Memoir` tab (user features
+         2026-09-15 and 2026-09-16).  NEITHER carries a close button — user
+         ruling 2026-09-16: *"Please remove the close button on the first tab:
+         We don't need that. Two tabs will be always on this app. Fixed. Can't
+         close!"*  The note tab is hidden with no note open (§7.4 row 3); the
+         Memoir tab is visible whenever a vault is open and opens vault-root
+         `Memoir.md` (created lazily on first select), hidden from the sidebar
+         (src/tree.ts's MEMOIR_PATH) so it appears ONLY here.  Inactive styling
+         (transparent, faint text, hover pill) is transcribed from Obsidian
+         1.13.7's own `.workspace-tab-header` (app.css:6706-7060): an inactive
+          tab carries no fill, no ring and no shoulder curves.  Behaviour is
+          owner 03's in src/tabstrip.ts.  There is no `(deleted)` marker: it is
+          STRUCK.
+          The NOTE tab ships visible and `mountChrome()` hides it at boot
+          whenever no note is open (tabstrip.ts's `hideTabUntilWired`). -->
+    <div class="tab is-active" role="tab">
+      <span class="tab-inner">
+        <span class="tab-label">Untitled</span>
+      </span>
+    </div>
+    <div class="tab" data-tab="memoir" role="tab" hidden>
+      <span class="tab-inner">
+        <span class="tab-label">Memoir</span>
+      </span>
+    </div>
+    <!-- §0.30 E71 — THERE IS NO `+`.  The new-tab button is DELETED, at the
+         user's request: *"Remove the new tab icon. We don't need that feature.
+         We only support single-tab viewer. New note/folder works on the sidebar,
+         not here!"*  It was a NEW NOTE button wearing Obsidian's new-TAB glyph.
+         New note keeps its two real routes — Mod-N, and the tree's context menu
+         (§0.12 E14, §0.16 E18) — and those two are where the destination is
+         unambiguous.  (2026-09-15: the strip holds TWO tabs now — the note tab
+         and the fixed `Memoir` tab above — but still no `+`: Memoir is fixed,
+         not created, so there is nothing for a new-tab button to do.) -->
+  </div>
+
+  <!-- §0.5 E7, spike N §3 — THE LINUX WINDOW CONTROLS.  `display: none` unless
+       <html data-os="linux">, which chrome.ts sets at boot; on macOS this
+       element has no box and no gate row can see it.
+
+       IT MUST BE THE LAST CHILD OF `.titlebar`.  `.titlebar-left` and `.tab`
+       are both `flex: 0 0`, so the 132px this cluster takes comes entirely out
+       of `.tab-strip`'s grow share and the tab stays at x 430 / width 200 —
+       which is exactly what verify-geometry.js's `tab` row asserts.  Put it
+       BEFORE `.tab-strip` and the tab moves to 562 and the gate fails.
+
+       Geometry is Obsidian 1.13.7's, read out of its own app.css and confirmed
+       against the reference screenshot to a tenth of a pixel (spike N §3.2):
+       three 44x39 buttons, flush right, minimize / maximize / close in that
+       order.  The glyphs are its own 12x12 SVGs, byte-for-byte (spike N §3.3).
+
+       The buttons are NOT drag handles: `app-chrome.css` puts them in the
+       `no-drag` list, so a click over a glyph reaches the button. -->
+  <div class="window-controls">
+    <button class="win-btn win-minimize" data-icon="win-minimize"
+            aria-label="Minimize" title="Minimize"></button>
+    <button class="win-btn win-maximize" data-icon="win-maximize"
+            aria-label="Maximize" title="Maximize"></button>
+    <button class="win-btn win-close" data-icon="win-close"
+            aria-label="Close window" title="Close window"></button>
+  </div>
+</div>
+
+<div class="app">
+
+  <!-- content x 0..411, y 39..957.  FIXED at 412px: it does not scale and there
+       is no splitter (§5.5, M60).  NO border-right — the #222222 -> #1c1c1c
+       colour change alone separates the panes (spec-01 §2). -->
+  <aside class="sidebar">
+
+    <!-- §0.12 E14, A USER DECISION: the five-slot nav toolbar that stood here —
+         New note, New folder, Sort, Refresh, Collapse all — is DELETED, at the
+         source, and the 40px band it occupied is gone with it.  The tree
+         scroller now starts at content y 40, immediately under the strip, and
+         is 875 tall (the vault bar below it is 43, not the 37 §5.10 R2 gave —
+         see chrome.css `.vault-bar`).  §5.9 is STRUCK in its entirety.
+
+         NOTHING BECAME UNREACHABLE except Collapse all, which is REMOVED
+         rather than rehomed: New note is Mod-N and the row menus; New folder is
+         the row menus; Sort is pinned to file name A-Z and is no longer a
+         choice; Refresh is the `[ Refresh ]` button on the watcher-degraded
+         banner, which is the ONLY moment it was ever worth a click (§7.3
+         case 16).
+
+         This is §9 E4's "no inert decoration" applied to a whole strip: four of
+         the five duplicated an affordance that already existed, and the fifth
+         only mattered in a failure state that now draws its own control. -->
+
+    <!-- THE BANNER SLOT.  Three kinds of sibling are inserted HERE by
+         src/chrome.ts — as siblings of the live scroller and never as children
+         of it, so they do not scroll away and do not enter the tree's
+         coordinate system.  Ranked, and the rank is normative:
+
+           .vault-lost      48px  §7.3 case 8   "the vault is gone"
+           .watch-degraded  48px  §7.3 case 16  "the vault is not live"  (E14)
+           .cap-banner*     24px  §3.3          "the vault is big"
+
+         gone > stale > truncated.  Each shortens the scroller from 875 through
+         the ordinary resize path; the vault bar does not move.  The geometry
+         fixture trips none of them, so the probe asserts that ZERO .cap-banner
+         and ZERO .watch-degraded elements exist. -->
+
+    <!-- content y 40..914, height 875 (with no banner).  Scroller #1 of the
+         document's TWO (§5.12.4).  Its overflow, gutter and scrollbar rules are
+         in tree.css and are memory-load-bearing: G5d fails if they regress.
+         The row pool is sized from this element's LIVE clientHeight, never from
+         the constant 875 (§3.3) — owner 04. -->
+    <div class="tree-scroller" tabindex="0" role="tree" aria-label="Vault">
+      <div class="sz"></div>
+    </div>
+
+    <!-- content y 915..957.  ONE 43px BORDER-BOX element whose border-top IS
+         the 1px rule at y 915.  §5.10 R2's 37 was derived, not measured — it is
+         `winH 958 - rule 921`, and 958 is six short of the reference PNG's real
+         964px content box.  Obsidian 1.13.7 computes 43 from its own rules
+         (app.css:6319-6330 + 8010-8022) and the reference measures 43 too.
+         chrome.css has the full arithmetic and the window-frame correction.
+         §9 E4, SETTLED: the reference's "?" and gear at the right end are
+         OMITTED.  No space is reserved and nothing inert is drawn. -->
+    <div class="vault-bar">
+      <button class="vault-switch" aria-label="Switch vault" title="Switch vault">
+        <span class="ico ico-vault" data-icon="chevrons-up-down"></span>
+        <span class="vault-name">No vault</span>
+      </button>
+    </div>
+
+    <!-- §0.7 E9 — THE RESIZE HANDLE.  A 3px column absolutely positioned at the
+         sidebar's right edge, so it takes NO layout space: it overlays the
+         sidebar's own 3px right padding and the sidebar is still 412 wide at
+         rest.  LAST CHILD on purpose — every banner is inserted as a sibling of
+         the live scroller ABOVE it (§3.3), and a handle earlier in the list
+         would sit in the middle of that reconciler.  (An older revision of this
+         comment claimed the vault bar is `order: 1`.  IT IS NOT: there is no
+         `order` declaration anywhere in src/styles/, and the sidebar's column is
+         DOM order alone.  Corrected under E14 and reported as a pre-existing
+         defect rather than quietly fixed.)
+
+         `role="separator"` with `aria-orientation` is the ARIA pattern for a
+         window splitter, and it is NOT a drag handle — dragging this resizes
+         the pane, and no sheet declares it a drag region (§5.7). -->
+    <div class="sidebar-resize" role="separator" aria-orientation="vertical"
+         aria-label="Resize sidebar" tabindex="-1"></div>
+  </aside>
+
+  <!-- content x 412..1917, width 1506.  The solve only lands at 1506: at 1507
+       the code box comes out 1435 against the 1434 the insets give (§5.3).
+       There is no tolerance anywhere on the window's width.  (Was 1433 vs 1432
+       at the pre-spike-Q 33px inset; the OFF-BY-ONE ARGUMENT is unchanged --
+       both numbers moved by the same 2.) -->
+  <main class="editor">
+    <!-- CM6 mounts here — owner 03, src/editor.ts.  The `::-webkit-scrollbar`
+         rules MUST name `.cm-scroller`, never this element: a rule on the
+         ancestor does not reach CodeMirror's real scroller, which then inherits
+         the 17px legacy scrollbar (§5.12.4.2, ~7 MB at 2x, a G5d failure). -->
+    <div id="ed"></div>
+
+    <!-- §0.45 E91 — THERE IS NO `No note open` LINE.  §7.4's `.empty-state`
+         element stood here (a centred `--text-faint` line, toggled by owner
+         03's tabstrip.ts) and is DELETED at the user's request, in the same
+         breath as §7.5's first-run panel: *"delete that text also."*
+
+         With no note open the pane is now EMPTY, which is what Obsidian shows —
+         it has no editor in that state at all, so it has no caret and no
+         placeholder line either.  §0.45 E92 takes the caret away for the same
+         reason; the two together are the whole of what was on screen.
+
+         §7.4's table keeps its other four rows: the tab is still not rendered
+         with no note open, and the ✕ still goes through the dirty-buffer
+         guard. -->
+
+    <!-- §0.44 E89 — THERE IS NO FIRST-RUN PROMPT, and its absence is a ruling.
+         §7.5 (M65) drew a centred `Open folder as vault…` button here whenever
+         `current_vault()` answered `{state:'none'}`.  The user's words:
+         *"Remove this text and this feature.  We already have the vault picker
+         at the bottom left corner."*
+
+         M65's reason was that a fresh install would otherwise wait forever
+         behind an empty sidebar and an empty pane WITH NO PROMPT — and that
+         reason expired: §5.10 R2's vault bar is drawn in every state, its
+         `.vault-switch` button opens the recents popover in every state, and
+         that popover's last row is `Open folder as vault…` wired to the very
+         same `pickAndSwitch()` (§0.27 E67.5).  So the route is not lost, it is
+         merely singular, which is E8's own argument for deleting the title-bar
+         buttons applied one step further: a second control that duplicates
+         another is the thing §9 E4 rejects.
+
+         The pane IS blank on a fresh install, and deliberately so.  This
+         comment used to end "`.empty-state` above ships visible and reads
+         `No note open`" — that element is gone too (§0.45 E91), so there is
+         now nothing centred in `.editor` in any state and nothing left to
+         stack.  The vault bar at the bottom left is the whole of the UI a
+         user sees before they pick a vault. -->
+  </main>
+</div>
+
+<script src="./app.js"></script>
+</body>
+</html>

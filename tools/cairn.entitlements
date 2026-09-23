@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Owner: 07.  CONTRACT §9 E5, §8.3 K7.  THE DIAGNOSIS IS IN tools/sign-macos.sh,
+  under "K7 IS ANSWERED"; this file is deliberately thin, for a reason worth
+  knowing: AN XML COMMENT MAY NOT CONTAIN TWO CONSECUTIVE HYPHENS, and the first
+  version of this file was one long comment full of them (it discussed a
+  codesign flag by name).  `plutil ‑lint` PASSED it.  AMFI did not:
+
+      Failed to parse entitlements: AMFIUnserializeXML: syntax error near line 18
+
+  So prose lives in the .sh, where the comment syntax is forgiving, and this
+  file stays close to the three keys it exists to set.  Keep it that way.
+
+  Without these keys the signed .app does not launch at all.  They are a
+  measured fix, not caution.
+-->
+<plist version="1.0">
+<dict>
+  <key>com.apple.security.cs.allow-jit</key>
+  <true/>
+  <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+  <true/>
+  <key>com.apple.security.cs.disable-library-validation</key>
+  <true/>
+</dict>
+</plist>

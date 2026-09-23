@@ -1,0 +1,1537 @@
+/* ==========================================================================
+ * src/styles/editor.css
+ * Owner: 03.  Spec: CONTRACT.md §5.3 (the code block and the editor surface,
+ * B8/M33/M34), §5.4 (headings), §5.4.1 (heading markers), §5.4.2 (the inline
+ * title), §5.12.4.2 (why ::-webkit-scrollbar MUST name .cm-scroller).
+ *
+ * DECLARES NO CUSTOM PROPERTY — tokens.css is the only declaration site
+ * (CONTRACT §5.1).  Every value below is a token, or a number CONTRACT §5.3
+ * prints literally.
+ *
+ * ===========================================================================
+ * SPECIFICITY IS LOAD-BEARING, AND IT IS WHY G9 FAILED ELEVEN ROWS.
+ * ===========================================================================
+ * CodeMirror 6 does not ship a plain `.cm-scroller { ... }`.  Its base theme is
+ * built by `buildTheme("." + baseThemeID, spec)` (@codemirror/view
+ * 6.43.10 dist/index.js:6788,6801) and every rule comes out prefixed with the
+ * generated theme class that `themeClasses` puts on `.cm-editor`:
+ *
+ *     .cx1 .cm-scroller { font-family: monospace; line-height: 1.4;
+ *                         overflow-x: auto; ... }
+ *     .cx1 .cm-content  { padding: 4px 0; margin: 0; ... }
+ *     .cx1 .cm-line     { padding: 0 2px 0 6px; display: block }
+ *
+ * (the real prefix is U+037C + a base-36 counter; it cannot be written here and
+ * MUST NOT be named in a selector).  Those are TWO classes — specificity
+ * (0,2,0).  A bare `.cm-scroller` / `.cm-content` / `.cm-line` in this file is
+ * (0,1,0) and LOSES, in every load order, on every one of the properties CM6
+ * also declares.
+ *
+ * SOURCE ORDER NEVER ENTERED INTO IT.  style-mod mounts CM6's <style> at
+ * `document.head.firstChild` (style-mod 4.1.3 src/style-mod.js, `StyleSet.mount`)
+ * — i.e. BEFORE this sheet, which build.mjs inlines at index.html's placeholder.
+ * This sheet is the later one and wins every TIE.  It lost anyway, because
+ * (0,2,0) beats (0,1,0) before order is ever consulted.
+ *
+ * SO THERE ARE EXACTLY TWO LEGITIMATE WAYS TO BEAT THE BASE THEME, and each
+ * rule below says which one it uses:
+ *
+ *   (A) DON'T COMPETE — declare on a DESCENDANT CM6 does not name.  An
+ *       inherited value loses to any direct declaration, whatever the
+ *       specificity or order of the rule that produced it.  This is how the
+ *       editor's font and line-height are set: CM6 puts `font-family:monospace`
+ *       and `line-height:1.4` on `.cm-scroller`, and puts NO font and NO
+ *       line-height on `.cm-content`, so a rule on `.cm-content` wins outright
+ *       and cannot be re-lost by a future CM6 rule on `.cm-scroller`.
+ *
+ *   (B) OUT-SPECIFY — three classes off the REAL element chain
+ *       `.cm-editor > .cm-scroller > .cm-content > .cm-line`, giving (0,3,0)
+ *       against the base theme's (0,2,0).  Used only where CM6 declares the
+ *       same property on the same element and (A) is impossible: the §5.3
+ *       padding reset.  NOT `#ed ...`: the id would couple this sheet to
+ *       index.html's mount point, and a harness that mounts elsewhere would
+ *       silently lose the reset.  NOT a doubled class either — the DOM chain is
+ *       real and self-documenting.
+ *
+ * REJECTED, DELIBERATELY: `EditorView.theme()`.  It is injected through the same
+ * style-mod tag as the base theme and is mounted after it (dist/index.js:8309
+ * `styleModules.concat(baseTheme).reverse()`), so it also lands at (0,2,0) and
+ * beats the base theme BY MOUNT ORDER, not by specificity — weaker than (B),
+ * which wins outright and still wins ties.  It would also move §5.3's literals
+ * and the tokens into src/editor.ts, against §5.1's single-declaration-site
+ * rule, and move bytes to the JS budget (340.8/360 KB, §6.3.1) — which, unlike
+ * the CSS one retired on 2026-09-07, is still a hard gate.  The one thing it would buy — immunity to CM6 adding
+ * a (0,3,0) base rule — (B) does not have, but neither does a theme.
+ *
+ * INTRA-FILE ORDER STILL MATTERS, in one place and one only: `.cm-line`'s
+ * `margin: 0` and `.nc-hN`'s `margin-bottom` are both (0,1,0), so the reset MUST
+ * stay BEFORE the `.nc-hN` block and before `.nc-title`, or every heading's
+ * margin is zeroed and body line 1 moves off the derived 113.0656.  That is an
+ * ordering this file wholly owns; the cross-library ordering above is not.
+ * Sections 1..4 are in that order and must stay in it.
+ * ======================================================================== */
+
+/* ---- 1. the surface (§5.3) ---------------------------------------------
+ * `#ed` is index.html's mount point; CM6 builds `.cm-editor` inside it.  The
+ * pane is `.editor` (chrome.css, owner 01) and is already `overflow: hidden`,
+ * which is NOT a scroller and earns no compositing surface (§5.12.4.3).
+ * ---------------------------------------------------------------------- */
+#ed { height: 100%; }
+
+/* The secret file's takeover (user feature, 2026-09-16): `.editor.is-secret`
+ * hides the `#ed` HOST, and that choice of element is the whole fix.  Hiding
+ * the CM6 view instead fails twice: its base theme carries
+ * `display: flex !important`, which outranks a normal inline style — and an
+ * emptied-but-visible `#ed` still spans `height: 100%`, so the viewer beside
+ * it lays out BELOW the fold where this pane's `overflow: hidden` clips it.
+ * Measured as a fully rendered, fully probed, fully BLACK pane: every check
+ * read DOM presence, and presence is not visibility. */
+.editor.is-secret > #ed { display: none; }
+
+.cm-editor { height: 100%; background: var(--bg-primary); color: var(--text-normal); }
+.cm-editor.cm-focused { outline: none; }
+
+/* UNCONTESTED (0,1,0) — the base theme declares NONE of these three on
+ * `.cm-scroller`, so a bare selector is enough and is the honest one.  (It does
+ * declare `font-family`, `line-height` and `overflow-x` on this element; those
+ * three moved, see below.) */
+.cm-scroller {
+  /* 32px 32px 0 32px.  spec-03 §8.2's `.cm-content{padding:24px 33px 30vh}` is
+   * STRUCK: the padding sits on the SCROLLER and the 30vh bottom padding is
+   * dropped.  Recorded functional gap: the last line does not scroll to
+   * mid-pane.  WAS 30/33: spike Q found neither was measured — 30 is the fit
+   * parameter spec-01-visual.md:709 designates and 33 is an ink-edge reading of
+   * a 32px box.  Obsidian's --file-margins-y/-x are both 32 (app.css:2243-2244). */
+  padding: var(--editor-inset-y) var(--editor-inset-x) 0 var(--editor-inset-x);
+  overflow-y: scroll;            /* reserve the 8px gutter ALWAYS (§5.3 point 3) */
+  scrollbar-gutter: stable;      /* preferred where supported; harmless where not */
+}
+/* THE SELECTOR MUST NAME `.cm-scroller`, NEVER `#ed` OR ANY ANCESTOR
+ * (§5.12.4.2).  A rule on the ancestor does not reach CodeMirror's real
+ * scroller, which then inherits the 17px legacy scrollbar: both memory spike
+ * rigs made exactly this mistake, each measured a 17px gutter instead of 8, and
+ * each therefore reported a 1.57x compositing multiplier instead of 1.00x.
+ * Under §5.12 that is ~7 MB at 2x, so it is a G5d failure and not merely a
+ * geometry one.  Nothing in CM6's base theme touches these pseudo-elements, so
+ * (0,1,0) is uncontested here too. */
+/* §0.37 E84 — 12px HERE, 8px IN THE SIDEBAR, and the two are Obsidian's own
+ * arithmetic rather than a preference.  `body { --scrollbar-width: 12px }`
+ * (app.css:2623) is the real track in both panes; the sidebar's 3px right
+ * padding lets Cairn spend 8 there and land the same seven columns of ink
+ * (tokens.css has the sum).  This pane has no such padding, and its track is
+ * RESERVED whether or not a scrollbar shows — `scrollbar-gutter: stable`, both
+ * apps — so the 4px comes straight out of the column every line wraps in. */
+.cm-scroller::-webkit-scrollbar       { width: var(--scrollbar-w-editor); background: transparent; }
+.cm-scroller::-webkit-scrollbar-track { background: var(--scrollbar-track); }
+/* The SAME thumb the sidebar draws (tree.css) — Obsidian's styled thumb applies
+ * to every scroller it has, and the token is translucent precisely so this one
+ * reads #333333 over the editor's #1c1c1c while the sidebar's reads #383838 over
+ * #222222, with no second colour declared anywhere.  The rule is restated here
+ * and NOT grouped with tree.css's because §5.12.4.2 requires this selector to
+ * name `.cm-scroller` itself; what must never be duplicated is the
+ * `::-webkit-scrollbar` WIDTH, and that is still declared once per scroller. */
+.cm-scroller::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: var(--radius-l);
+  background-clip: padding-box;
+  /* [S] `--scrollbar-border-width: 3px 3px 3px 2px` (app.css), verbatim, and it
+   * is what keeps the VISIBLE thumb 7px wide on a 12px track — and puts it where
+   * Obsidian puts it.  The sidebar's 1px left border is the same 7px of ink on
+   * an 8px track; only here does the position depend on the border, because only
+   * here is the track flush with the window edge.  At the gate window: track
+   * 1908..1919, ink 1910..1916, which is Obsidian's to the column.  The 1px
+   * version put it at 1913..1919 — three columns right of Obsidian's. */
+  border: 3px solid transparent;
+  border-width: 3px 3px 3px 2px;
+  min-height: 45px;
+}
+.cm-scroller::-webkit-scrollbar-thumb:hover,
+.cm-scroller::-webkit-scrollbar-thumb:active { background: var(--scrollbar-thumb-hover); }
+
+/* (B) OUT-SPECIFY.  `overflow-x` is the ONE property where the base theme
+ * (`overflow-x: auto`) and this sheet collide on `.cm-scroller` ITSELF, so (A)
+ * is impossible — overflow is not an inherited property.  The real chain gives
+ * only `.cm-editor > .cm-scroller`, which is (0,2,0): a TIE, decided by source
+ * order, which is exactly the accident this file no longer relies on.  The
+ * class is therefore repeated once to reach (0,3,0) and win outright.  Ugly,
+ * deliberate, and cheaper than naming `#ed` (see (B) in the header).
+ * It is not cosmetic: §5.3's 1434px code box assumes the line box never gets a
+ * horizontal scrollbar, and `auto` would give every note that ever overflows
+ * one — the exact phantom scroll §5.3 forbids the code block's margin from
+ * creating. */
+.cm-editor .cm-scroller.cm-scroller { overflow-x: hidden; }
+
+/* (A) DON'T COMPETE.  THE EDITOR'S TYPE IS DECLARED HERE, ON `.cm-content`, AND
+ * MUST NOT BE MOVED BACK UP TO `.cm-scroller`.  The base theme sets
+ * `font-family: monospace` and `line-height: 1.4` on `.cm-scroller` at (0,2,0);
+ * a bare `.cm-scroller` rule in this sheet is (0,1,0) and loses BOTH — which is
+ * how the app shipped a 22.4px body pitch (16 x 1.4) and, unmeasured by the
+ * font-insensitive geometry probe, a MONOSPACE editor.  CM6 declares no font
+ * and no line-height on `.cm-content`, so these win as direct declarations over
+ * an inherited value, at (0,1,0), in any order, permanently. */
+.cm-content {
+  font-family: var(--font-text);
+  font-size: var(--fs-text);     /* 16px [M] */
+  line-height: var(--lh-text);   /* 1.5 -> the measured 24px body pitch */
+  -webkit-font-smoothing: antialiased;
+}
+
+/* §0.45 E93 — THE CARET'S COLOUR, OUT-SPECIFIED AT (0,3,0) FOR THE SAME REASON
+ * AS THE PADDING BELOW.  `caret-color: var(--caret-color)` was declared on
+ * `.cm-content` above at (0,1,0) and was SILENTLY LOSING: CM6's base theme
+ * ships
+ *
+ *     "&dark .cm-content": { caretColor: "white" }
+ *
+ * which expands to `.cm-editor.cm-dark .cm-content` at (0,3,0).  Ordering
+ * cannot rescue it — StyleModule deliberately injects at the TOP of `<head>` so
+ * author rules win at EQUAL specificity, and these are not equal.  Measured in
+ * the live app 2026-09-12: `--caret-color` resolved to `#dadada` on
+ * `.cm-content` and `caret-color` computed **`rgb(255, 255, 255)`**.
+ *
+ * So the caret has been WHITE since CM6 was mounted, against a token marked
+ * `[M]`.  Obsidian's own is `--caret-color: var(--text-normal)` (app.css:2154)
+ * applied at `.cm-content { caret-color: var(--caret-color) }` (app.css:3238),
+ * and Cairn's `--text-normal` IS `#dadada` — the same value the token already
+ * carried. **This restores an intended value, it does not choose a new one.**
+ *
+ * Found while removing the caret from the empty pane (§0.45 E92), by reading
+ * the computed style rather than the declaration — the declaration was right
+ * the whole time. It is the same trap as §0.24.5 E53's three dead transitions:
+ * a rule that is correct, present, and outranked fails in total silence.
+ *
+ * The selector is the REAL element chain, as the reset below is. */
+.cm-editor .cm-scroller .cm-content { caret-color: var(--caret-color); }
+
+/* §5.3's reset, (B) OUT-SPECIFY at (0,3,0).  CM6's base theme ships
+ * `.cx1 .cm-content { padding: 4px 0 }` and `.cx1 .cm-line { padding: 0 2px 0 6px }`
+ * at (0,2,0); left alone they shift every line 6px right and every box top down
+ * 4px — the measured `title box top 73` (want 69) and `heading text 451` (want
+ * 445).  A blank markdown line must occupy exactly one empty 24px line box and a
+ * paragraph must get no extra margin — that is the measured sy 214 -> 247 =
+ * 48 = 2 x 24.
+ * The selectors are the REAL element chain, not decoration: CM6 builds
+ * `.cm-editor > .cm-scroller > .cm-content > .cm-line`, always. */
+.cm-editor .cm-scroller .cm-content { padding: 0; margin: 0; }
+.cm-scroller .cm-content .cm-line   { padding: 0; }
+
+/* (0,1,0) ON PURPOSE, and the one intra-file ordering this sheet owns: nothing
+ * in the base theme sets a margin on `.cm-line`, so this needs no specificity —
+ * and it MUST NOT have any, because §3's `.nc-hN { margin-bottom }` is (0,1,0)
+ * and beats it only by coming later in this file. */
+.cm-line { margin: 0; }
+
+/* ---- 1b. THE BLOCK-WIDGET BOX (§5.4.2, §5.4.5) -------------------------
+ * The outer element of EVERY block widget this editor draws — the inline title
+ * and the Properties panel.  It exists for exactly one reason and it is not
+ * cosmetic: it is what makes CM6's height map agree with the layout.
+ *
+ * CM6 records a block's height as `child.dom.getBoundingClientRect().height`
+ * (`@codemirror/view` 6.43, `measureVisibleLineHeights`) — a BORDER BOX, which
+ * excludes margins.  Both widgets carry Obsidian's own `margin-block-end`
+ * (`--inline-title-margin-bottom` and `.metadata-container`'s 2rem), so the map
+ * was short by 12.944px on every note and by 44.944px on every note with
+ * frontmatter, while the layout was right.  `posAtCoords` picks the block out
+ * of the MAP, so a click landed up to two lines below the pointer — reported by
+ * the user, reproduced 2026-09-10, and it is the same defect the heading
+ * margins caused (§3 says the rest).
+ *
+ * `flow-root` makes this box a block formatting context, so the child's bottom
+ * margin is CONTAINED by it instead of collapsing through: the box measures
+ * 44.0096 for the title and the height map is exact.  Obsidian needs no such
+ * box because its `.inline-title` and `.metadata-container` are siblings of
+ * `.cm-contentContainer` inside `.cm-sizer` (app.js: `sizerEl.insertAfter(...)`)
+ * and CM6 never measures them at all; Cairn draws both as widgets INSIDE
+ * `.cm-content` (§5.4.2 X18) and pays for it here.
+ *
+ * IT MUST STAY EMPTY OF ANYTHING ELSE.  No padding, no margin, no background:
+ * every visible number stays on the child, so G9's `title box top`,
+ * `margin-bottom` and `title box + margin == first line top` rows still read
+ * the values the contract states, and the wrapper is invisible to them. */
+.nc-block { display: flow-root; }
+
+.cm-editor ::selection { background: var(--text-selection); }
+
+/* ---- 2. the fenced code block (§5.3, B8/M34) ---------------------------
+ * ONE class on EVERY line of the block, opening fence to closing fence
+ * INCLUSIVE.  FENCE LINES ARE ORDINARY CODE LINES — same fill, same 14px mono,
+ * same 21px pitch, same --text-normal ink, inside the tinted box; the ONLY
+ * thing distinguishing them is the border radius, because they happen to be
+ * first and last.  VISUAL-MEASUREMENTS.md's "dimmer fence colour" prose and
+ * both specs' dimmed-fence guesses are STRUCK (spike D's re-sample: peak ink
+ * 213 on the backticks, on the `sh` and on the body alike).
+ *
+ * `margin: 0`, NOT spec-03 §8.4's `0 -16px`: a negative margin on a `.cm-line`
+ * makes the line box wider than `.cm-content` and gives every note containing a
+ * code block a phantom 16px horizontal scroll.  The non-overhanging model lands
+ * the box exactly: 1506 pane - 8 scrollbar - 64 insets = 1434.  (Was "the
+ * measured 1432 ... - 66 insets"; spike Q moved the inset 33 -> 32, and the
+ * 1432 tagged [M] is an INK-to-ink reading across this 1434px box.)
+ *
+ * No syntax highlighting anywhere in a code block (§9 E4, settled). */
+.nc-cb {
+  background-color: var(--bg-primary-alt);  /* #212121 [M] */
+  margin: 0;                                /* NOT 0 -16px */
+  font-family: var(--font-mono);
+  font-size: var(--fs-code);                /* 14px [M]; spec-03's 13.8px is STRUCK */
+  line-height: var(--lh-code);              /* the INTEGER 21px [M], never 1.5 (X4) */
+  color: var(--text-normal);                /* #dadada — fences included */
+  border: 0;                                /* [M] no ring around the fill */
+}
+/* THE 16px LIVES IN A (0,4,0) RULE AND NOT IN THE BLOCK ABOVE.  §5.3's reset is
+ * `.cm-scroller .cm-content .cm-line { padding: 0 }` at (0,3,0) — it has to be,
+ * to beat CM6's base theme — so a bare `.nc-cb { padding: 0 16px }` at (0,1,0)
+ * would be zeroed by this sheet's own reset and the code box would sit flush
+ * against the text column.  One more class off the same real chain wins it back
+ * without depending on which of the two rules comes first.
+ * Font, size, pitch, fill and radius stay at (0,1,0) above: the reset touches
+ * none of them, and neither does CM6. */
+.cm-scroller .cm-content .cm-line.nc-cb { padding: 0 16px; }  /* [M] horizontal only; vertical is 0 */
+.nc-cb-first { border-radius: var(--radius-s) var(--radius-s) 0 0; }
+.nc-cb-last  { border-radius: 0 0 var(--radius-s) var(--radius-s); }
+.nc-cb-only  { border-radius: var(--radius-s); }
+
+/* ---- 3. headings (§5.4, M35) -------------------------------------------
+ * `--font-weight` is declared alongside the literal `font-weight`, not instead
+ * of it.  Obsidian writes only `font-weight: var(--font-weight)` (app.css:11785
+ * and its five siblings, 1.12.7); the custom property is what `.cm-strong`'s
+ * `calc(var(--font-weight) + var(--bold-modifier))` reads, which is how bold
+ * inside an H1 lands at 900 and bold in body copy at 600.  The literal is kept
+ * because `editor.test.mjs`'s pinned ladder asserts a COMPUTED weight and its
+ * DOM model resolves custom properties from one flat map, so it cannot see a
+ * property a rule defines for itself.  Two declarations, one value, and the
+ * duplication is the test's price, not a hedge.
+ * Sizes and weights are tokens (tokens.css, owner 01).  ~~`--hN-space-after` is
+ * applied as `padding-bottom` ON THE HEADING LINE~~ — §0.30 E74 DELETED that
+ * token and its rule: Obsidian's heading has no padding-bottom and its base
+ * `.cm-line` is `padding: 0`, so the space below a heading is zero.  The space
+ * ABOVE is `--heading-space-before` (§0.30 E73) and is the one Obsidian
+ * declares.  spec-03's "No margins on heading lines" survives in its literal
+ * form and for a new reason: everything here is padding, because CM6's height
+ * map cannot see a margin.
+ * Heading colour is --text-normal, inherited; no rule is written.
+ * MUST come after the `.cm-line` reset above.
+ *
+ * ── WHY PADDING AND NOT MARGIN.  READ THIS BEFORE "TIDYING" IT BACK. ───────
+ * CM6 measures every block it lays out as `child.dom.getBoundingClientRect()`
+ * (`@codemirror/view` 6.43, `measureVisibleLineHeights`), which is a BORDER
+ * BOX and therefore EXCLUDES margins.  A margin on a `.cm-line` is real to the
+ * layout and invisible to the height map, so the map runs SHORT by that margin
+ * for every line below it — and `posAtCoords` picks the block from the map.
+ * Measured 2026-09-10, 1400x900: with `margin-bottom`, a note with two
+ * headings put the caret 2 lines below the pointer, and the drift was exactly
+ * the sum of the margins above the click (title 12.944 + H1 10 + H2 9).
+ * Padding is inside the border box, so the map and the layout agree.
+ * Obsidian hit the same wall and answered it the same way: its heading spacing
+ * is `.cm-s-obsidian .cm-line.HyperMD-header { padding-top: var(--p-spacing) }`
+ * (app.css:11773), a PADDING on the line — never a margin.
+ *
+ * (0,4,0), for the reason `.nc-cb`'s 16px states three rules above: §5.3's
+ * reset is `.cm-scroller .cm-content .cm-line { padding: 0 }` at (0,3,0), so a
+ * bare `.nc-hN { padding-bottom }` at (0,1,0) would be zeroed by this sheet's
+ * own reset and every heading would sit flush against the line below it. */
+.nc-h1 { --font-weight: var(--h1-weight); font-size: var(--h1-size); font-weight: var(--h1-weight); line-height: var(--h1-lh); letter-spacing: var(--h1-ls); }
+.nc-h2 { --font-weight: var(--h2-weight); font-size: var(--h2-size); font-weight: var(--h2-weight); line-height: var(--h2-lh); letter-spacing: var(--h2-ls); }
+.nc-h3 { --font-weight: var(--h3-weight); font-size: var(--h3-size); font-weight: var(--h3-weight); line-height: var(--h3-lh); letter-spacing: var(--h3-ls); }
+.nc-h4 { --font-weight: var(--h4-weight); font-size: var(--h4-size); font-weight: var(--h4-weight); line-height: var(--h4-lh); letter-spacing: var(--h4-ls); }
+.nc-h5 { --font-weight: var(--h5-weight); font-size: var(--h5-size); font-weight: var(--h5-weight); line-height: var(--h5-lh); letter-spacing: var(--h5-ls); }
+.nc-h6 { --font-weight: var(--h6-weight); font-size: var(--h6-size); font-weight: var(--h6-weight); line-height: var(--h6-lh); letter-spacing: var(--h6-ls); }
+/* §0.30 E73 — THE SPACE ABOVE A HEADING, which Cairn did not have at all.
+ * `.cm-s-obsidian .cm-line.HyperMD-header { padding-top: var(--p-spacing) }`
+ * (app.css:12871), transcribed onto the shared `nc-h` class livepreview.ts now
+ * writes beside the level class.  Reported by the user off two screenshots of
+ * the same note: the H1's ink sat 20 device px high at dpr 1.25 — 16 CSS px,
+ * which is `--p-spacing` exactly, and the title's ink was identical in both.
+ *
+ * (0,4,0), same reason as the six rules below: §5.3's reset is
+ * `.cm-scroller .cm-content .cm-line { padding: 0 }` at (0,3,0), and a bare
+ * `.nc-h { padding-top }` would be zeroed by it.
+ *
+ * PADDING, NEVER MARGIN — §0.26 E62, and Obsidian's own answer to the same
+ * wall: a margin on a `.cm-line` is invisible to CM6's height map and moves the
+ * caret. This one is 16px per heading, so it is the largest such trap the app
+ * has ever had.
+ *
+ * TWO OF OBSIDIAN'S THREE RULES ARE HERE; the third is a no-op in Cairn and is
+ * NOT transcribed, deliberately.  It is
+ *   `.HyperMD-header + .cm-line:not(.HyperMD-header)… { padding-top: 0rem }`
+ * and it exists to cancel a base `.cm-line` top padding that Cairn does not
+ * have (nothing in this sheet gives an ordinary line one) — so writing it would
+ * be a rule that can never change a pixel. */
+.cm-scroller .cm-content .cm-line.nc-h { padding-top: var(--heading-space-before); }
+/* …and the one exception Obsidian carves out of it: a heading separated from the
+ * heading above it by exactly ONE blank line takes no top padding, because the
+ * blank line is already a full line of space.  `:has(> br:only-child)` is
+ * Obsidian's own test for an empty CM6 line and it is reproduced verbatim. */
+.cm-scroller .cm-content .cm-line.nc-h
+  + .cm-line:has(> br:only-child)
+  + .cm-line.nc-h { padding-top: 0; }
+/* §0.30 E74 — THERE IS NO SPACE BELOW A HEADING, and the six
+ * `padding-bottom: var(--hN-space-after)` rules that used to stand here are
+ * DELETED with their tokens.  Obsidian's heading declares no padding-bottom
+ * anywhere, its base `.cm-line` is `padding: 0` (app.css:3888), and the rule it
+ * writes for the line after a heading sets `padding-top: var(--p-spacing-empty)`
+ * = 0 — so the gap is the two line boxes touching, and nothing else.
+ * Measured on the same DOM in the pinned engine: Obsidian 0px, Cairn 10px on an
+ * H1, every other number in the pair identical.  The user saw the 10 as the gap
+ * between `Memory Index` and the list under it. */
+
+/* §5.4.1 rule 2 — the marker revealed on the caret line.  COLOUR ONLY: it is a
+ * mark decoration INSIDE an `.nc-hN` line and inherits the heading's own
+ * font-size and weight, which is exactly what the ruling requires.  No
+ * background, and no transition (§5.1 rule 5) — a revealed marker must not fade
+ * in.  Reveal OCCUPIES LAYOUT: the heading's text shifts right by the marker's
+ * advance while the caret is on it, as Obsidian does. */
+.nc-md-marker { color: var(--text-faint); }
+
+/* ---- 4. the inline title (§5.4.2, X18) ---------------------------------
+ * A CM6 BLOCK WIDGET at document position 0, not an <h1> and not in state.doc.
+ * It consumes the H1 tokens but is NOT styled by the heading rules above:
+ *   box top      content y 72   = editor pane top 40 + --editor-inset-y 32
+ *   box height   31.0656        = --h1-size 25.888 x --h1-lh 1.2
+ *   + margin     12.944         = --inline-title-space-after  [M]
+ *   => .cm-content's first line box top 103.0656 + 12.944 = 116.0096.
+ * The margin was 10 (--h1-space-after) until 2026-09-09 and is now the
+ * MEASURED --inline-title-margin-bottom of Obsidian 1.13.7, read off the live
+ * app over CDP alongside three ladder values that came back exactly right.
+ * Horizontally it sits in the same 1434px line box as body text, origin 444.
+ * MUST come after the `.cm-line` reset, for the same margin reason as §3.
+ *
+ * RE-DERIVED 2026-09-07, spike Q.  This block previously read 69 / 34.8 / 113.8
+ * / 1432 / 445 off --h1-size 29 and --editor-inset-y 30, and CITED the measured
+ * bands "cap top 119.98 = measured sy 151 exactly" as confirmation.  It was not
+ * confirmation: spec-01-visual.md:709 designates --editor-inset-y and
+ * --h1-space-after as the two knobs to TUNE against those exactly two ink
+ * targets, so the fit had zero residual freedom and could not have failed.
+ * The ink figures it quoted were also Inter's, and are stale since 501abc7.
+ * NO INK BAND IS QUOTED HERE ANY MORE -- the ones that would go here have not
+ * been re-measured against the current font stack.  See spike Q §4(b). */
+.nc-title {
+  --font-weight: var(--h1-weight);
+  font-size: var(--h1-size);
+  font-weight: var(--h1-weight);
+  line-height: var(--h1-lh);
+  letter-spacing: var(--h1-ls);   /* [M] app.css:4432 puts -0.015em on .inline-title as a LITERAL */
+  /* [M] 12.944, NOT --h1-space-after's 10.  Corroborated independently on
+     2026-09-10 (§0.24): `app.css:2373`'s `--inline-title-margin-bottom: 0.5em`
+     against the title's own 25.888px is the same number, and the error it was
+     causing measured 4px off two same-scale screenshots — Cairn's "Properties"
+     ink at 201 against Obsidian's 205. */
+  margin-bottom: var(--inline-title-space-after);
+  color: var(--text-normal);
+  /* One click here opens the rename field, so this IS text you can type into
+     and it says so.  Obsidian reaches the same picture by a different route:
+     its `.inline-title` is a permanent `contenteditable`, so the UA gives it an
+     I-beam for free.  Cairn's is a widget inside `.cm-content`'s
+     `contenteditable="false"` subtree, where the UA gives a text node no
+     I-beam, so the one place that needs the declaration gets it -- which is the
+     shape base.css asks for now that `body` pins no cursor at all. */
+  cursor: text;
+}
+
+/* Clicking the title renames the note.  The editor is an <input> of the same
+ * metrics, pre-filled with the basename WITHOUT `.md` and fully selected. */
+.nc-title-edit {
+  font: inherit;
+  line-height: inherit;
+  /* letter-spacing is NOT a `font` sub-property, and Chromium's UA sheet resets
+   * it to `normal` on form controls -- the same reason `line-height` is spelled
+   * out above.  Without this the title renders at --h1-ls (-0.38832px) and the
+   * <input> that replaces it on click renders at `normal`, so every glyph shifts
+   * the moment you click to rename.  Added with --h1-ls (spike Q); the sibling
+   * line-height had been carrying this lesson alone since the input-swap shipped. */
+  letter-spacing: inherit;
+  color: inherit;
+  background: var(--bg-form-field);
+  border: 1px solid var(--border-focus);
+  border-radius: var(--radius-s);
+  padding: 0;
+  margin: 0;
+  width: 100%;
+  box-sizing: border-box;
+  outline: none;
+}
+/* The TOKEN, X3 — never the raw #e05252 literal.  Flashed for 200ms when a
+ * rejected character is dropped by the `beforeinput` filter (§7.3 case 11). */
+.nc-title-edit.bad { border-color: var(--text-error); }
+
+/* `invalidName` / `alreadyExists` keep the editor OPEN with the message inline:
+ * nothing is silently accepted-then-rejected (§7.3 case 11). */
+.nc-title-error {
+  font-family: var(--font-ui);
+  font-size: var(--fs-ui-small);
+  font-weight: 400;
+  line-height: var(--lh-text);
+  /* letter-spacing INHERITS and its computed value is an absolute px resolved on
+   * the parent -- this node is appended INSIDE .nc-title (editor.ts), so without
+   * this it would render 13px text at the H1's -0.38832px tracking (~-3%).  Same
+   * isolate-from-the-parent reason as the `font-weight: 400` above. */
+  letter-spacing: normal;
+  color: var(--text-error);
+}
+.nc-title-error[hidden] { display: none; }
+
+/* ---- 5. THE v2 LIVE PREVIEW (§5.4.4, 2026-09-09) -----------------------
+ * Owner: 03.  Sources: `src/livepreview.ts` §3/§4, and Obsidian **1.12.7**'s
+ * own `app.css` (the asar at /opt/Obsidian), read rather than derived, per
+ * §0.17.  Line numbers below are 1.12.7's.
+ *
+ * WHAT IS AND IS NOT HERE.  Every rule is a construct Cairn's scanner emits:
+ * bold, italic, strikethrough, `==highlight==`, inline code, `[text](url)`,
+ * bullet and ordered lists, task boxes, blockquotes, thematic breaks.  There
+ * is deliberately NO rule for a wikilink, an embed, a tag, a footnote, a
+ * table, a callout, math or inline HTML — the scanner emits no construct for
+ * any of them, and a stylesheet that dressed a construct nobody produces is
+ * exactly the dead CSS this file found in Obsidian's own bundle
+ * (`.hmd-inactive-line` is styled eight times there and matched zero times:
+ * it belongs to the CodeMirror 5 editor Obsidian retired).
+ *
+ * MUST come after the `.cm-line` reset in §2, for the same reason §3 does. */
+
+/* -- inline bodies ------------------------------------------------------ */
+/* app.css:13082 `.cm-strong { font-weight: calc(var(--font-weight) + var(--bold-modifier)) }`.
+ * `--font-weight` is whatever the surrounding text sets — 400 in body copy,
+ * `--h2-weight` inside an H2 — so bold inside a heading is heavier than bold
+ * in a paragraph, which is the behaviour a flat `font-weight: 700` loses. */
+.nc-strong { font-weight: calc(var(--font-weight) + var(--bold-modifier)); }
+/* app.css:13087.  --italic-weight is `inherit`, so it is not restated. */
+.nc-em     { font-style: italic; }
+/* app.css:3360 — text-decoration only; the ink is unchanged. */
+.nc-strike { text-decoration: line-through; }
+/* app.css:10733 `span.cm-highlight { background-color: var(--text-highlight-bg) }`
+ * WITH `color: var(--text-normal)`: the highlight is opaque enough that
+ * inheriting a muted ink would be unreadable on it. */
+.nc-hl     { background-color: var(--highlight-bg); color: var(--text-normal); }
+
+/* app.css:10486 + 10503 + 10507.  `--code-size` is RELATIVE (0.875em) and the
+ * padding/radius are relative too, so a code span scales with whatever line it
+ * is on.  `box-decoration-break: clone` gives a wrapped span its radius on both
+ * fragments instead of one long ribbon.  No border: --code-border-width is 0px
+ * (app.css:2167), so the property is not written at all. */
+.nc-code {
+  color: var(--text-normal);              /* --code-normal -> --text-normal     */
+  font-family: var(--font-mono);
+  font-size: var(--code-size);
+  background-color: var(--bg-primary-alt); /* --code-background                 */
+  border-radius: var(--code-radius);
+  padding: 0.15em 0.3em;
+  vertical-align: baseline;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+
+/* app.css:12404 + 12425.  The underline is on the TEXT alone — livepreview.ts
+ * stops the `nc-link` mark at the markers for exactly this reason. */
+.nc-link {
+  color: var(--link-color);
+  text-decoration-line: underline;
+  text-decoration-thickness: var(--link-decoration-thickness);
+  cursor: pointer;
+}
+
+/* §0.36 E83 — THE WIKILINK AND THE BARE URL, and they are two rules because
+ * Obsidian has two.  Reported as *"Can you render links?"* over two screenshots
+ * of one note: `https://github.com/medplum/medplum` and
+ * `[[feedback_pr_review_workflow]]` were accent-coloured and underlined in
+ * Obsidian and raw source in Cairn.
+ *
+ * [S] `.markdown-source-view.mod-cm6 .cm-hmd-internal-link .cm-underline`
+ * (app.css:13511-13513 + :13423) — the internal link's own colour is
+ * `--link-color` on `.cm-hmd-internal-link`, the underline and the pointer
+ * come from the `.cm-underline` span inside it, and Cairn draws both on one
+ * mark because it has one span.
+ *
+ * `--link-weight` is NOT written: it is `var(--font-weight)` (app.css:2429),
+ * i.e. the body weight, everywhere except inside a heading — and a heading's
+ * own rule already sets the weight of everything on the line. */
+.nc-ilink {
+  color: var(--link-color);
+  text-decoration-line: underline;
+  text-decoration-thickness: var(--link-decoration-thickness);
+  cursor: pointer;
+}
+
+/* [S] `.cm-s-obsidian span.cm-url` (app.css:13446-13452).
+ *
+ * TWO THINGS DIFFER FROM `.nc-ilink` AND BOTH ARE DELIBERATE.
+ *
+ * `word-break: break-all` is Obsidian's, and it is VISIBLE in the report's own
+ * screenshots: Obsidian breaks `https://github.co / m/medplum/medplum` mid-word
+ * at the wrap, where Cairn pushed the whole url to the next line and left a
+ * ragged gap.  A url is one unbreakable "word" to the line breaker otherwise.
+ *
+ * NO `cursor: pointer`, and that is not an omission.  Obsidian puts the link
+ * cursor on `.cm-underline` (app.css:13511), and its live-preview decorator
+ * adds that span for `S = E || M` — the text of a `[text](url)` and the text of
+ * a wikilink — while a bare url is its `L` branch, which is outside `S`.  Its
+ * own click handler agrees: `if (!matchParent(".cm-underline")) return false`,
+ * so a plain click on a bare url is refused there too and only a mod-click
+ * opens it.  A pointer here would promise a behaviour NEITHER app has
+ * (`KNOWN-ISSUES.md` LP-1). */
+.nc-url {
+  color: var(--link-external-color);
+  text-decoration-line: underline;
+  word-break: break-all;
+}
+
+/* §0.40 E87 — THE TABLE.  Every value below was read out of Obsidian's own
+ * stylesheet by rendering a `<table>` inside `.markdown-rendered` in the pinned
+ * engine and taking the COMPUTED style, rather than by resolving the token
+ * chain by hand — `--table-header-weight` is `calc(var(--font-weight) +
+ * var(--bold-modifier))` and `--table-border-color` goes through
+ * `--background-modifier-border`, and a chain read by eye is how §0.24.9 E58
+ * happened.  Measured:
+ *
+ *   table   border-collapse: collapse · line-height 20.8px (1.3) · margin 16px
+ *           0 16px · word-break: normal
+ *   th, td  padding 4px 8px · border 1px solid rgb(51,51,51) · min-width 6ch
+ *           max-width none · vertical-align top · white-space break-spaces
+ *           text-align start · overflow hidden
+ *   th      font-weight 600 · color rgb(218,218,218) · 16px
+ *   td      font-weight 400 · colour inherited
+ *   thead tr  background transparent  (`--table-header-background`)
+ *
+ * The margin is `--p-spacing` on both sides, which §0.30 E73 already brought in
+ * for headings, so the table sits in the same rhythm as a paragraph.
+ *
+ * NO `margin` ON THE WRAPPER, and this is §0.26 E62's rule, not a preference:
+ * a margin inside `.cm-content` is invisible to CM6's height map, which
+ * measures BORDER boxes — so the block widget's own spacing is the TABLE's
+ * margin, inside the wrapper's border box, and the wrapper's `.nc-block`
+ * (§1b, `display: flow-root`) is what keeps it there instead of letting it
+ * collapse out.  `.nc-table-block` therefore declares NOTHING of its own and
+ * exists to be findable; the empty rule is the record that it was checked. */
+.nc-table-block { /* no box of its own — .nc-block is the box */ }
+.nc-table {
+  border-collapse: collapse;
+  line-height: var(--line-height-tight);
+  margin: var(--p-spacing) 0;
+  word-break: normal;
+}
+.nc-table th,
+.nc-table td {
+  padding: 4px 8px;                      /* --size-2-2 --size-4-2              */
+  border: 1px solid var(--bg-modifier-border);
+  min-width: 6ch;                        /* --table-column-min-width           */
+  max-width: none;
+  vertical-align: top;
+  white-space: break-spaces;             /* --table-white-space                */
+  text-align: start;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  font-size: var(--fs-text);             /* --table-text-size                  */
+}
+.nc-table th {
+  font-weight: calc(var(--font-weight) + var(--bold-modifier));
+  color: var(--text-normal);             /* --table-header-color               */
+  line-height: var(--line-height-tight); /* restated, as Obsidian restates it
+                                            on th                             */
+}
+/* `--table-header-background` is `--table-background` is `transparent`, and the
+ * empty rule says the absence was checked rather than missed. */
+.nc-table thead tr { background-color: transparent; }
+
+/* -- the markers -------------------------------------------------------- */
+/* §5.4.1's revealed marker.  `nc-md-marker` is --text-faint and is used where
+ * Obsidian HAS a colour rule (`.cm-formatting-header` 11770,
+ * `.cm-formatting-quote` 10303, `.cm-formatting-link` 12368,
+ * `.cm-formatting-list` 12122).  `nc-md-marker-plain` is used where it has
+ * NONE — a revealed `**` renders bold in body ink, because it sits inside the
+ * `.nc-strong` that covers it.  The empty rule is deliberate: it documents
+ * that the absence was checked, and it is 30 bytes. */
+.nc-md-marker-plain { /* no colour: Obsidian gives cm-formatting-em/strong none */ }
+
+/* §0.31.6 E76 — `text-indent: 0` ON EVERY DIRECT CHILD OF A LINE, and it is the
+ * companion to E75's hanging indent rather than an independent rule.
+ *
+ * [S] `.markdown-source-view.mod-cm6 .cm-line > * { text-indent: 0 }`
+ * (app.css:3621).  It was read during E75 and left out as unrelated; it is not.
+ *
+ * `text-indent` INHERITS.  E75 writes `text-indent: -k` on the line, and
+ * `.nc-bullet` is `display: inline-flex`, so the negative indent reaches the
+ * ANONYMOUS FLEX ITEM inside it — a block container — and takes that item's
+ * max-content width to `max(0, advance - k)`.  Measured live at k = 22: the
+ * `-`'s content stayed 6.797px wide and the span's border box collapsed to 12,
+ * which is its padding alone.  The dot then centred at 12.0 from the line's
+ * left where Obsidian centres it at 15.38, and the user saw it as *"the first
+ * line of each bullet"* being wrong while the wrapped body lines were right.
+ *
+ * So this rule is what makes a NEGATIVE text-indent safe to put on a line at
+ * all.  The two ship together; neither is correct alone. */
+.cm-scroller .cm-content .cm-line > * { text-indent: 0; }
+
+/* -- lists -------------------------------------------------------------- */
+/* app.css:12134 `.mod-cm6 .HyperMD-list-line.cm-line { padding-top/-bottom:
+ * var(--list-spacing) }`.  This is the ONLY place a `.cm-line` gets vertical
+ * padding back after §2's reset, and it is why consecutive list items sit
+ * closer than paragraphs. */
+.cm-scroller .cm-content .cm-line.nc-li {
+  padding-top: var(--list-spacing);
+  padding-bottom: var(--list-spacing);
+  /* [S] §0.51 E99 — `.cm-line.HyperMD-list-line { tab-size: var(--list-indent) }`
+     (app.css:13228).  It is NOT what sizes an indent group — `min-width` is —
+     and it was left out on that reasoning until the live DOM showed the one
+     shape that reaches it: a tab that ENDS a partial run of spaces is left bare
+     by Obsidian's own loop (see `indentGroups`), and a bare tab advances to the
+     next tab stop.  Measured in the live 1.13.7, `"  \t  "`: the tab runs
+     7.05 -> 36.0, which is this token and not the default 8 characters.
+
+     THE COMPUTED VALUE READS BACK AS `45px` AT dpr 1.25 AND THE USED VALUE IS
+     36.  Chromium reports `tab-size` in DEVICE pixels (36 x 1.25 = 45) while
+     laying it out in CSS px; the tab stop above is the receipt.  Do not "fix"
+     the token to 45 to make a getComputedStyle read match. */
+  tab-size: var(--list-indent);
+}
+/* §0.35.1 E82 — A CONTINUATION LINE TAKES THE BOTTOM HALF ONLY.
+ *
+ * [S] `.cm-s-obsidian .HyperMD-list-line.HyperMD-list-line-nobullet {
+ * padding-top: initial }` (app.css:13325).  Obsidian's stream mode emits
+ * `line-HyperMD-list-line` for a continuation too, so it takes `--list-spacing`
+ * on BOTH sides from the rule above and then gives the top back — the item's own
+ * top spacing has already opened the gap above it, and paying twice would show.
+ *
+ * Reported by the user as *"Obsidian has more spacing (vertically) among them"*:
+ * the pitch between two consecutive continuations measured **30, 30, 30** device
+ * px in Cairn against **31, 32, 32** in Obsidian, while the paragraph→bullet
+ * (31/31) and bullet→continuation (32/32) pitches already agreed — which is
+ * exactly the signature of a rule that applies to a continuation and not to an
+ * item.  A/B on the same DOM in the pinned engine, dpr 1: Obsidian's line is
+ * 25.188 tall with `0px` / `1.2px`, Cairn's was 24 with neither.
+ *
+ * (0,5,0), one class more specific than the rule above, so it wins by
+ * SPECIFICITY and not by source order — the two would otherwise be tied at
+ * (0,4,0) and a reorder of this file would silently swap them. */
+.cm-scroller .cm-content .cm-line.nc-li.nc-li-cont { padding-top: 0; }
+/* §0.35 E81 + §0.51 E99 — THE LEADING INDENT RUN OF A LIST LINE.
+ *
+ * WHAT THE USER REPORTED (§0.51): two screenshots of one note, Cairn's nested
+ * bullets sitting right of Obsidian's.  Measured off the crops by
+ * cross-correlating the glyph ink of the nested rows against the unindented
+ * rows above and below them — 19.999 device px at dpr 1.25, which is 16.000 CSS
+ * px — and then in both DOMs, where it was 16.000 exactly.
+ *
+ * THE CAUSE WAS A CLASSIFICATION, NOT A NUMBER.  `listIndentAt`'s predecessor
+ * asked "is there an open list item above this indented line", which a NESTED
+ * ITEM answers yes to just as a continuation does, so every nested bullet was
+ * dressed as a continuation: it took the 1em below, and it took
+ * `.nc-li-cont`'s `padding-top: 0` with it (25.2 tall against Obsidian's 26.4).
+ * One predicate, both symptoms.
+ *
+ * OBSIDIAN'S CHAIN, three parts, read out of `app.js` and `app.css` and then
+ * MEASURED IN THE LIVE 1.13.7 (which is what caught the third):
+ *   1. its stream mode tags a continuation `HyperMD-list-line-nobullet` and the
+ *      leading run of any list line `hmd-list-indent`;
+ *   2. a ViewPlugin (`Bq`) splits that run into `.cm-indent` per whole tab or
+ *      four whole spaces and `.cm-indent-spacing` for the partial leftover —
+ *      `livepreview.ts`'s `indentGroups` is that loop;
+ *   3. two rules move them:
+ *
+ *        .markdown-source-view.mod-cm6 .cm-indent {              (app.css:8185)
+ *          min-width: var(--list-indent); display: inline-block;
+ *        }
+ *        .cm-s-obsidian .HyperMD-list-line.HyperMD-list-line-nobullet
+ *          > .cm-hmd-list-indent > .cm-indent-spacing:last-child {
+ *            padding-inline-start: calc(var(--list-indent-editing) + var(--list-marker-space));
+ *        }                                                      (app.css:13328)
+ *
+ *      = 36px, and 0.75em + 0.25em = 1em = 16px.
+ *
+ * THE A/B, live Obsidian 1.13.7 against Cairn, same note, same engine, sidebar
+ * 221, dpr 1.25 — the indent run's rendered width:
+ *
+ *                          Obsidian    Cairn before    Cairn after
+ *   `   - nested item`       10.563       26.563          10.563
+ *   `  - nested item`         7.050       23.050           7.050
+ *   `\t- nested item`        36.000       30.087          36.000
+ *   `  continuation`         23.050       23.050          23.050
+ *   `    continuation`       36.000       30.087          36.000
+ *
+ * …and the line box: 26.4 for an item (1.2px top AND bottom), 25.2 for a
+ * continuation (0 and 1.2px).  Cairn gave every nested item 25.2.
+ *
+ * `display: inline-block` + `white-space: pre` are Obsidian's own
+ * `.cm-hmd-list-indent` (app.css:13331): without the first the padding does not
+ * apply to an inline box's start on a wrapped line, and without the second the
+ * run of spaces collapses.  They go on the GROUPS here, because Cairn emits no
+ * wrapper — see `livepreview.ts`'s note on why, and on why `nc-indent-pad` is a
+ * class the builder decides rather than the `:last-child` above. */
+.cm-scroller .cm-content .nc-indent,
+.cm-scroller .cm-content .nc-indent-sp {
+  display: inline-block;
+  white-space: pre;
+}
+.cm-scroller .cm-content .nc-indent { min-width: var(--list-indent); }
+.cm-scroller .cm-content .nc-indent-pad {
+  padding-inline-start: calc(var(--list-indent-editing) + var(--list-marker-space));
+}
+
+/* app.css:12164 — the `-` is kept, painted transparent, and the dot is drawn
+ * by an absolutely-positioned ::after on top of it.  Replacing the character
+ * with a widget instead would change the line's advance, which is why
+ * Obsidian does not, and why livepreview.ts marks one character rather than
+ * replacing the whole `- `. */
+.nc-bullet {
+  color: transparent;
+  position: relative;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  padding-inline-start: var(--list-indent-editing);
+}
+.nc-bullet::before { content: '\200B'; }
+.nc-bullet::after {
+  position: absolute;
+  content: '\200B';
+  pointer-events: none;
+  width: var(--list-bullet-size);
+  height: var(--list-bullet-size);
+  border-radius: 50%;
+  background-color: var(--list-marker-color);
+}
+/* Selecting a list line must not paint a box over the dot (app.css:12188). */
+.nc-bullet::selection { background-color: transparent; }
+/* app.css:12114 — the ordered marker keeps its digits and is only re-tracked.
+ * `tabular-nums` stops `9.` and `10.` sitting at different widths. */
+.nc-num {
+  color: var(--list-marker-color);
+  font-variant-numeric: tabular-nums;
+  padding-inline-start: var(--list-indent-editing);
+}
+
+/* -- tasks -------------------------------------------------------------- */
+/* app.css:12912 + 12944 + 12959, transcribed.  The tick is a -webkit-mask over
+ * a solid fill, not a glyph and not an SVG child, so it takes --checkbox-
+ * marker-color from the box and cannot be selected as text. */
+/* app.css:14147.  A TICKED task's whole line is struck through and muted:
+ *
+ *   .markdown-source-view.mod-cm6 .HyperMD-task-line[data-task="x"],
+ *   .markdown-source-view.mod-cm6 .HyperMD-task-line[data-task="X"] {
+ *     text-decoration: var(--checklist-done-decoration);
+ *     color: var(--checklist-done-color);
+ *   }
+ *
+ * BOTH TOKENS WERE ALREADY IN `tokens.css` WITH THEIR app.css LINE NUMBERS
+ * BESIDE THEM (`--checklist-done-decoration` :2163, `--checklist-done-color`
+ * :2164) AND NOTHING CONSUMED EITHER. They were transcribed with the rest of
+ * the `--checkbox-*` group and the rule that spends them was never written, so
+ * a finished task looked exactly like an open one. That is the same shape as
+ * §0.45 E93's caret — a value carried in the tree, correct, and never reaching
+ * a pixel — which is why the test asserts the COMPUTED style of a real done
+ * line rather than the presence of this rule.
+ *
+ * `text-decoration` on a line box propagates to every in-flow descendant and
+ * inline elements do not stop it, so `**bold**` inside a done task is struck
+ * too. Obsidian's rule does the same thing for the same reason. */
+.nc-li-done {
+  text-decoration: var(--checklist-done-decoration);
+  color: var(--checklist-done-color);
+}
+.nc-task { display: inline; }
+.nc-task input[type=checkbox] {
+  -webkit-appearance: none;
+  appearance: none;
+  border-radius: var(--checkbox-radius);
+  border: 1px solid var(--checkbox-border-color);
+  flex-shrink: 0;
+  padding: 0;
+  margin: 0;
+  margin-inline-start: var(--checkbox-margin-inline-start);
+  margin-inline-end: 0.25em;
+  width: var(--checkbox-size);
+  height: var(--checkbox-size);
+  position: relative;
+  top: -0.1em;
+  vertical-align: middle;
+  transition: box-shadow 0.15s ease-in-out;
+}
+.nc-task input[type=checkbox]:hover { border-color: var(--checkbox-border-color-hover); }
+.nc-task input[type=checkbox]:checked {
+  background-color: var(--checkbox-color);
+  border-color: var(--checkbox-color);
+}
+.nc-task input[type=checkbox]:checked::after {
+  content: "";
+  top: -1px;
+  inset-inline-start: -1px;
+  position: absolute;
+  width: var(--checkbox-size);
+  height: var(--checkbox-size);
+  display: block;
+  background-color: var(--checkbox-marker-color);
+  -webkit-mask-position: 52% 52%;
+  -webkit-mask-size: 65%;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-image: url("data:image/svg+xml; utf8, <svg width=\22 12px\22  height=\22 10px\22  viewBox=\22 0 0 12 8\22  xmlns=\22 http://www.w3.org/2000/svg\22 ><g fill=\22 %23000000\22  transform=\22 translate%28-4,-6%29\22 ><path d=\22 M8.1043257,14.0367999 L4.52468714,10.5420499 C4.32525014,10.3497722 4.32525014,10.0368095 4.52468714,9.8424863 L5.24777413,9.1439454 C5.44721114,8.95166768 5.77142411,8.95166768 5.97086112,9.1439454 L8.46638057,11.5903727 L14.0291389,6.1442083 C14.2285759,5.95193057 14.5527889,5.95193057 14.7522259,6.1442083 L15.4753129,6.84377194 C15.6747499,7.03604967 15.6747499,7.35003511 15.4753129,7.54129009 L8.82741268,14.0367999 C8.62797568,14.2290777 8.3037627,14.2290777 8.1043257,14.0367999\22 /></g></svg>");
+}
+
+/* -- blockquotes -------------------------------------------------------- */
+/* app.css:10309 — the rule is a ::before with `content: "\200b"`, absolutely
+ * positioned from top 0 to bottom 0, drawn as a LEADING BORDER on a 1px box.
+ * That is what makes it span the whole line box however tall the line is,
+ * without the line itself owning a border. */
+.nc-quote { position: relative; }
+.nc-quote::before,
+.nc-quote-border::before {
+  content: "\200B";
+  display: block;
+  width: 1px;
+  border-inline-start: var(--quote-border-w) solid var(--quote-border-color);
+  color: transparent;
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  pointer-events: none;
+}
+.nc-quote::before { inset-inline-start: 0; }
+/* app.css:10328 — `display: inline-block`, and NOT `position: relative`.  That
+ * is the whole trick and it is easy to get wrong: the ::before is positioned
+ * against the LINE (`.nc-quote`, which is the positioned ancestor), so
+ * `top: 0; bottom: 0` gives it the line's full height, while the inline-block
+ * fixes its static horizontal position at the `>` it replaces.  Making the span
+ * itself `position: relative` — which is the obvious thing to write — resolves
+ * `top`/`bottom` against a bare inline box instead, and the nested rule then
+ * renders with no height at all.  It did, and the capture is what caught it. */
+.nc-quote-border { display: inline-block; }
+/* app.css:3546 — the `>` keeps its advance and loses its ink.  When the caret
+ * is on the line livepreview.ts swaps this for `nc-md-marker`, which is
+ * --text-faint: exactly `.cm-formatting-quote` (10303) against
+ * `.hmd-inactive-line span.cm-formatting-quote` (10306). */
+.nc-quote-mark { color: transparent; }
+
+/* -- thematic break ----------------------------------------------------- */
+/* app.css:11916 `hr { border: none; border-top: var(--hr-thickness) solid;
+ * border-color: var(--hr-color) }`.  Obsidian's widget is a BLOCK one and this
+ * one is inline (livepreview.ts says why), so the `<hr>` is given the line's
+ * width explicitly instead of inheriting a block context. */
+.nc-hr-rule { display: inline-block; width: 100%; vertical-align: middle; }
+.nc-hr-rule hr {
+  border: none;
+  border-top: var(--hr-thickness) solid;
+  border-color: var(--hr-color);
+  margin: 0;
+}
+
+/* ---- 6. THE PROPERTIES BLOCK (§5.4.5, 2026-09-09) ----------------------
+ * Owner: 03.  Source: `src/properties.ts`, and Obsidian 1.12.7's `app.css`
+ * lines 11161-11485.  Class names here are OBSIDIAN'S OWN, not `nc-`-prefixed,
+ * and that is deliberate and is the exception in this file: the block is a
+ * faithful copy of one Obsidian component down to its DOM shape, so keeping its
+ * selectors makes the two auditable side by side with a single grep.  Every
+ * other class Cairn invents is `nc-`.
+ *
+ * WHAT IS NOT DRAWN, and it is a ruling not an omission: there is no
+ * "+ Add property" button, no type-picker, no drag handle and no key `<input>`.
+ * The block is READ-ONLY (properties.ts says why), and §9 E4 forbids drawing a
+ * control that does nothing.  A disabled input that looks like Obsidian's and
+ * cannot be typed into is exactly the inert decoration that ruling is about. */
+
+.metadata-container {
+  padding: var(--metadata-padding);
+  color: var(--text-muted);
+  position: relative;
+  margin-block-end: 2rem;
+  /* app.css:11175 — the block sits 4px to the LEFT of the text column, so its
+     property rows' hover fills line up with the note's own left edge rather
+     than with the label text.  `--size-4-1 * -1`. */
+  transform: translateX(-4px);
+  font-family: var(--font-ui);
+  /* Not in Obsidian's rule: CM6 gives `.cm-content` `white-space: pre-wrap`,
+     which a widget inherits — and a `pre-wrap` label column turns every
+     collapsed space in a value into a rendered one.  The block is normal flow
+     text, so it says so. */
+  white-space: normal;
+}
+/* app.css:11188 IS DELIBERATELY NOT COPIED — `properties.ts`'s fold header says
+ * why in full.  Short version: that rule hides the rows on the frame the fold
+ * starts, which leaves Obsidian's own `kl` animating only the leftover height.
+ * The wrapper's `display: none` at the end of the collapse removes them anyway,
+ * which is what `kl` is for. */
+
+/* app.css:11210 + 11234 + 11239.  The triangle hangs in the left margin at
+ * -22px, which is why the heading is `inline-block` and `position: relative`. */
+.metadata-properties-heading {
+  display: inline-block;
+  padding: 4px;
+  margin-bottom: 8px;
+  position: relative;
+  line-height: 1.2;
+  cursor: var(--cursor, default);
+}
+/* app.css:11234 — position only.  `height: 100%` is NOT here: Obsidian gives
+ * the indicator no height and lets `.collapse-icon:before`'s zero-width space
+ * establish the line box, which is what puts the glyph on the text's own
+ * centre line rather than on the heading box's. */
+.metadata-properties-heading .collapse-indicator {
+  position: absolute;
+  inset-inline-start: -22px;
+  padding: 0 6px;
+  cursor: var(--cursor, default);
+}
+/* app.css:7263 — `.collapse-icon` is the SECOND class on the same element, and
+ * it is what makes the box a flex line. */
+.collapse-icon { display: flex; align-items: center; }
+.collapse-icon::before { content: "\200B"; }
+
+/* THE THREE THINGS THE FIRST DRAFT GOT WRONG, all of them read out of
+ * app.css rather than derived, and all three visible side by side with
+ * Obsidian at a glance.
+ *
+ * 1. IT IS HIDDEN UNTIL YOU HOVER THE HEADING (app.css:7238 `opacity: 0`,
+ *    :7260 `.metadata-properties-heading:hover .collapse-indicator` and :7253
+ *    `.is-collapsed .collapse-indicator` back to 1).  A permanently visible
+ *    arrow is a different control from one that appears under the pointer.
+ * 2. COLLAPSED, IT IS THE ACCENT COLOUR (app.css:2185-2186 —
+ *    `--collapse-icon-color: var(--text-faint)` and
+ *    `--collapse-icon-color-collapsed: var(--text-accent)`, selected by
+ *    :7281/:7285's `.view-content [.is-collapsed] .collapse-indicator
+ *    svg.svg-icon`).  Grey in both states was simply wrong.
+ * 3. THE SVG ROTATES, NOT THE BOX (app.css:7277).  The box is
+ *    `position: absolute` with 6px of side padding, so rotating IT pivots
+ *    around a point 6px off the glyph's centre and the arrow lands somewhere
+ *    Obsidian's never is. */
+.metadata-properties-heading .collapse-indicator { opacity: 0; }
+.metadata-properties-heading:hover .collapse-indicator,
+.metadata-container.is-collapsed .collapse-indicator { opacity: 1; }
+
+.metadata-properties-heading .collapse-indicator svg {
+  color: var(--collapse-icon-color);
+  /* app.css:7274, and the `!important` is what makes it reach the screen:
+   * `base.css:51`'s `*, *::before, *::after { transition: none !important }`
+   * outranks any normal declaration, so this rotation SNAPPED — written to
+   * match Obsidian, dead on arrival, and invisible until the fold animation was
+   * measured. See base.css for the exemption list. */
+  transition: transform 100ms ease-in-out !important;
+}
+.metadata-container.is-collapsed .collapse-indicator svg {
+  color: var(--collapse-icon-color-collapsed);
+}
+/* app.css:7277 — `rotate(calc(var(--direction) * -1 * 90deg))`, and
+ * `--direction` is 1 in LTR.  Obsidian's `right-triangle` points DOWN at rest,
+ * the opposite of the file tree's chevron convention; that is Obsidian's, so it
+ * is copied and not harmonised. */
+.collapse-icon.is-collapsed svg { transform: rotate(-90deg); }
+.metadata-properties-title {
+  user-select: none;
+  font-size: max(var(--fs-ui-small), 1em);
+  color: var(--metadata-heading-color);
+  font-weight: var(--metadata-heading-weight);
+}
+
+/* app.css:11195 */
+.metadata-properties {
+  display: flex;
+  flex-direction: column;
+  gap: var(--metadata-gap);
+}
+
+/* app.css:11290 */
+.metadata-property {
+  position: relative;
+  display: flex;
+  align-items: start;
+  border-radius: var(--metadata-property-radius);
+  overflow: hidden;
+}
+
+/* app.css:11348 — a FIXED 9em column is what makes the rows read as a table
+ * without a single rule or divider being drawn. */
+.metadata-property-key {
+  display: flex;
+  align-self: stretch;
+  align-items: flex-start;
+  flex-direction: row;
+  flex-shrink: 0;
+  width: var(--metadata-label-width);
+  min-width: var(--metadata-label-width);
+}
+/* app.css:11321 + 11330.  The `\200B` ::before is a 4px spacer that cannot be
+ * selected and does not collapse — a margin would collapse against the icon. */
+.metadata-property-icon {
+  /* app.css:11321 is `color: var(--icon-color)`, and `--icon-color` is
+   * `--text-muted` (:2346).  NOT `--text-faint`: that is the LIST MARKER's
+   * colour and the fold arrow's, and using it here made every property glyph
+   * half as bright as Obsidian's. */
+  color: var(--icon-color);
+  /* `flex-shrink: 0` IS NOT IN app.css, AND IT IS HERE TO REPRODUCE A MEASURED
+   * BOX.  The user's DevTools give Obsidian's `span.metadata-property-icon` as
+   * 22 x 28 — which is the `::before`'s 4px plus an 18px glyph, unshrunk.
+   * Cairn's measured 18.77 x 28, with the `::before` at 3.41 and the glyph at
+   * 15.36: both scaled by the same 0.8535, i.e. FLEX-SHRUNK.
+   *
+   * The mechanism: the key column is a fixed 9em (144px) row flex container
+   * holding this span and an input whose `width: 100%` makes its flex base
+   * 144px, so the line overflows by the icon's own width and both items shrink.
+   * `min-width: auto` does not protect the span, because for a ROW flex
+   * container the content-based minimum is computed through the flex algorithm
+   * and an `<svg>` contributes ZERO: the UA sheet gives an outermost `<svg>`
+   * `overflow: hidden`, which makes it a scroll container, whose automatic
+   * minimum size is 0.
+   *
+   * Why Obsidian's does not shrink under the same cascade I could not
+   * establish — there is no `flex-shrink` on `.metadata-property-icon`, on
+   * `.svg-icon`, or on any ancestor in its sheet. So this is a declaration
+   * chosen to reproduce Obsidian's MEASURED geometry rather than one copied
+   * from it, and it is marked as such. It is also the right shape either way:
+   * the input beside it carries `overflow: hidden` and `text-overflow:
+   * ellipsis`, which is what an element that is MEANT to absorb the shrink
+   * looks like. */
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  padding: 4px 0;
+  height: var(--metadata-input-height);
+  user-select: none;
+}
+.metadata-property-icon::before { content: "\200B"; width: 4px; }
+/* app.css:12432.  Obsidian dims the type glyph while the row has no key name —
+ * `aria-disabled` is written by the row constructor from `!entry.key`, updated
+ * on the input's own `input` event, and cleared by `handleUpdateKey` once a
+ * write lands.  `color: var(--text-muted)` is already this element's resting
+ * colour through `--icon-color` (:2346), so the 0.4 is the whole of the effect
+ * and the `color` is restated only to keep the transcription honest. */
+.metadata-property-icon[aria-disabled="true"] {
+  color: var(--text-muted);
+  opacity: 0.4;
+}
+/* app.css:3228, Obsidian's `um()` flash — 750 ms of `is-flashing` on the row a
+ * refused rename would have collided with (KNOWN-ISSUES PR-1).  `--highlight-bg`
+ * is Cairn's name for `--text-highlight-bg`, and `lighten` is `.theme-dark`'s
+ * own `--highlight-mix-blend-mode` (app.css:2960) — Cairn is dark-only, so the
+ * literal is the token resolved rather than a choice.
+ *
+ * Obsidian's own rule opens with `transition: color .25s ease, background-color
+ * .25s ease` and IT CANNOT FIRE THERE EITHER: the declaration lives on
+ * `.is-flashing`, so adding the class has no before-change transition to start
+ * one from and removing it has no after-change transition to start one with.
+ * The flash is a step in both apps, which is why this is NOT a fourth exemption
+ * to §5.1 rule 5 and KNOWN-ISSUES X-1's list does not grow. The `!important` is
+ * Obsidian's, and it is load-bearing for the same reason theirs is: the row's
+ * own background wins on specificity otherwise. */
+.is-flashing {
+  background-color: var(--highlight-bg) !important;
+  color: var(--text-normal);
+  mix-blend-mode: lighten;
+  border-radius: var(--radius-s);
+}
+/* app.css:11367.  It IS an `<input>` now — the block edits — so the reset that
+ * a form control needs comes with it: Chromium's UA sheet gives an input its
+ * own font, border, background and `letter-spacing: normal`, and none of those
+ * inherit.  Same lesson as `.nc-title-edit`, one control further on. */
+.metadata-property-key-input {
+  font: inherit;
+  letter-spacing: inherit;
+  border: none;
+  outline: none;
+  background: transparent;
+  -webkit-user-select: text;
+  user-select: text;
+  flex-grow: 1;
+  color: var(--metadata-label-color);
+  font-size: var(--metadata-label-font-size);
+  padding: var(--metadata-input-padding);
+  height: var(--metadata-input-height);
+  display: flex;
+  align-items: center;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  width: 100%;
+}
+
+/* app.css:11409 */
+.metadata-property-value {
+  display: flex;
+  flex: 1 1 auto;
+  gap: 4px;
+  align-items: center;
+  align-self: stretch;
+  overflow: hidden;
+  min-height: var(--metadata-input-height);
+  color: var(--text-normal);
+  /* NO `font-size` HERE, AND THAT IS THE WHOLE POINT.  app.css:11409's rule
+   * sets none, so the cell stays at the inherited 16px and every value child
+   * applies `--metadata-input-font-size` (0.875em) against THAT, landing on 14.
+   * Setting it here as well made the `em` compound — 0.875 x 0.875 x 16 =
+   * 12.25px — which is what the user saw as "this text is bigger in Obsidian".
+   * A relative unit declared twice down one chain is applied twice; the fix is
+   * to declare it once, where Obsidian declares it. */
+}
+/* app.css:11200 + 36393 — a text value is a DIV, not an input, because it
+ * wraps: `-webkit-line-clamp` over `-webkit-box` caps it at three lines. */
+/* app.css:11572 — the value's OWN size, colour and growth, none of which the
+ * cell above may carry (see the note there). */
+.metadata-input-longtext {
+  flex-grow: 1;
+  font-size: var(--metadata-input-font-size);
+  color: var(--text-normal);          /* --metadata-input-text-color */
+  max-height: 300px;
+  padding: var(--metadata-input-padding);
+  width: 100%;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: var(--metadata-longtext-lines);
+  overflow: hidden;
+}
+.metadata-input-longtext:not(:empty) { display: -webkit-box; }
+/* It is `contentEditable` now.  `body` is `user-select: none` (base.css), which
+ * a contenteditable does NOT override on its own, so a value you can type into
+ * but not select would be the result. */
+.metadata-input-longtext[contenteditable] {
+  -webkit-user-select: text;
+  user-select: text;
+  cursor: text;
+  outline: none;
+  white-space: pre-wrap;
+}
+/* `-webkit-line-clamp` collapses an empty box to nothing, and an empty value
+ * you cannot click is a property you cannot fill in.  Obsidian keeps its height
+ * with `min-height: var(--input-height)` on the row; this keeps the box itself
+ * clickable across the whole cell. */
+.metadata-input-longtext:empty { display: block; min-height: var(--metadata-input-height); }
+/* app.css:11478 — the row for a value whose type Obsidian cannot name. */
+.metadata-property-value .mod-unknown {
+  color: var(--text-warning);
+  padding: var(--metadata-input-padding);
+  font-size: var(--metadata-input-font-size);
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+}
+/* app.css:8368 + 11457 — a list is a wrapping row of pills, and inside a
+ * property value every pill is stripped of its border and padding, so what is
+ * left is the items with one 6px gap between them. */
+/* app.css:11490 puts the size on the CONTAINER for a list, not on each pill. */
+.metadata-property-value .multi-select-container,
+.metadata-property-value input {
+  font-size: var(--metadata-input-font-size);
+}
+.multi-select-container {
+  display: inline-flex;
+  vertical-align: top;
+  flex-wrap: wrap;
+  flex: 1 1 auto;
+  gap: var(--pill-gap);
+  min-height: var(--metadata-input-height);
+  align-items: center;
+  padding: var(--metadata-input-padding);
+}
+.multi-select-pill {
+  display: flex;
+  align-items: center;
+  color: var(--text-normal);
+  line-height: 1;
+  max-width: 100%;
+}
+.multi-select-pill-content { word-break: break-word; overflow: hidden; }
+/* The checkbox reuses §5's task-box rules, which are already Obsidian's own
+ * `input[type=checkbox]`.  It TOGGLES now, so the affordance is real and
+ * `pointer-events: none` is gone. */
+.metadata-input-checkbox { cursor: pointer; }
+
+/* app.css:7455 + :7479 + :7484 + :11181 — the "+ Add property" button.  It is
+ * a DIV in Obsidian too, not a `<button>`: `.text-icon-button` is a shared
+ * shape and the metadata rule only re-sizes its type. */
+.text-icon-button {
+  display: inline-flex;
+  overflow: hidden;
+  align-items: center;
+  color: var(--text-muted);
+  font-size: var(--fs-ui-small);
+  border-radius: var(--radius-s);
+  padding: 4px;                       /* --size-2-2 */
+  cursor: default;
+  font-family: inherit;
+  gap: 4px;
+  user-select: none;
+  white-space: nowrap;
+}
+.text-icon-button .text-button-icon { display: flex; align-items: center; justify-content: center; }
+.text-icon-button .text-button-label { overflow: hidden; text-overflow: ellipsis; padding-inline-end: 2px; }
+/* app.css:7510 — hover is a fill plus a lift to --text-normal, NOT a colour
+ * change alone; the `.text-button-icon` follows on :7517. */
+.text-icon-button:hover { background-color: var(--bg-modifier-hover); color: var(--text-normal); }
+.text-icon-button:hover .text-button-icon { color: var(--text-muted); }
+/* app.css:11181 — the metadata block re-sizes it and pulls it in by --size-2-3. */
+.metadata-container .metadata-add-button {
+  padding-inline-start: 6px;
+  margin-top: 0.5em;
+  font-size: var(--metadata-label-font-size);
+  font-family: var(--font-ui);
+}
+
+/* §5.4.5's OTHER half: frontmatter that does not parse is NOT hidden.  It stays
+ * in the document, in `--text-error`, so a broken block reads as broken instead
+ * of silently vanishing (app.css:11565's `.cm-hmd-frontmatter .is-invalid`, and
+ * app.js's `hide = false` on a parse error). */
+.nc-fm-invalid { color: var(--text-error); }
+
+/* ---- the `totp` block (§0.46 E94) --------------------------------------
+ * Not a transcription: Obsidian ships nothing like this, and the user's ruling
+ * was that identity is NOT the goal here. Every value below is Cairn's own,
+ * taken from tokens.css so the block sits in the app's palette rather than
+ * beside it.
+ *
+ * §5.1 RULE 5 IS NOT ENGAGED AND NEEDS NO EXEMPTION. There is no `transition`
+ * and no `animation` here. The countdown bar's width is written once a second
+ * from JS, so it STEPS rather than sweeps — which is what a discrete
+ * seconds-remaining readout should do anyway, and it means this block adds
+ * nothing to the per-frame paint §5.12.6 protects.
+ *
+ * The seed is NEVER in this DOM (§0.46's divergence 3): the widget replaces the
+ * fence, so there is no rule here that could style one. */
+.nc-totp {
+  border: 1px solid var(--bg-modifier-border);
+  border-radius: var(--radius-m);
+  background: var(--bg-secondary);
+  margin-block: var(--heading-space-before);
+  font-size: var(--fs-ui-small);
+  /* The block is chrome, not prose: it must not inherit the note's 16px text
+     metrics or the rows grow with the reader's font size. */
+  line-height: 1.4;
+}
+
+.nc-totp-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--bg-modifier-border);
+}
+.nc-totp-title { color: var(--text-faint); }
+
+.nc-totp-add,
+.nc-totp-save,
+.nc-totp-cancel {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: inherit;
+  color: var(--text-muted);
+  background: var(--bg-form-field);
+  border: 1px solid var(--bg-modifier-border);
+  border-radius: var(--radius-s);
+  padding: 3px 8px;
+  cursor: pointer;
+}
+.nc-totp-add:hover,
+.nc-totp-save:hover,
+.nc-totp-cancel:hover { background: var(--bg-modifier-hover); color: var(--text-normal); }
+.nc-totp-add[hidden] { display: none; }
+.nc-totp-plus { display: inline-flex; width: 14px; height: 14px; }
+
+.nc-totp-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 12px;
+}
+.nc-totp-row + .nc-totp-row { border-top: 1px solid var(--bg-modifier-border); }
+/* The name block takes the slack so the buttons stay in one column down the
+   block — a ragged button column is unreadable at a glance. */
+.nc-totp-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.nc-totp-label {
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* The free-form note (user feature, 2026-09-16): rendered, never a secret. */
+.nc-totp-comment {
+  color: var(--text-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* CLICK-TO-COPY (user feature, 2026-09-17) — the row is the control, so
+ * there is no Copy button.  What stood here: `.nc-totp-copy`, whose `min-width`
+ * kept the row's right edge from jumping between `Copy` and `Copied` (and
+ * before it, §0.46.6's countdown rail, deleted by user ruling).  The transient
+ * pill below replaces the button and is hidden otherwise, so there is nothing
+ * left to hold a floor for. */
+.nc-totp-row.is-copyable { cursor: pointer; }
+.nc-totp-row.is-copyable:hover { background: var(--bg-modifier-hover); }
+/* The confirmation: hidden until a copy puts it on screen for ~1.2s. */
+.nc-totp-copied {
+  display: none;
+  flex: 0 0 auto;
+  color: var(--accent);
+}
+.nc-totp-copied.is-on { display: inline; }
+.nc-totp-copied.is-bad { color: var(--text-error); }
+
+.nc-totp-row.is-bad .nc-totp-label { color: var(--text-faint); }
+.nc-totp-error { flex: 0 0 auto; color: var(--text-error); }
+.nc-totp-empty { padding: 10px 12px; color: var(--text-faint); }
+
+.nc-totp-form { padding: 8px 12px; border-top: 1px solid var(--bg-modifier-border); }
+.nc-totp-form[hidden] { display: none; }
+.nc-totp-formrow { display: flex; align-items: center; gap: 8px; }
+.nc-totp-input {
+  font: inherit;
+  color: var(--text-normal);
+  background: var(--bg-form-field);
+  border: 1px solid var(--bg-modifier-border);
+  border-radius: var(--radius-s);
+  padding: 3px 8px;
+  min-width: 0;
+}
+.nc-totp-input { flex: 0 1 11em; }
+.nc-totp-seed  { flex: 1 1 auto; font-family: var(--font-mono); }
+.nc-totp-msg:not(:empty) { display: block; padding-top: 6px; color: var(--text-error); }
+
+/* ---- the secret file (user feature, 2026-09-16) ---------------------------
+ * Not a transcription: Obsidian ships nothing like this, and like the `totp`
+ * block above every value here is Cairn's own, taken from tokens.css. §5.1
+ * rule 5 is not engaged (no transition, no animation).
+ *
+ * The viewer is a sibling of `#ed` inside `.editor`, shown only while a note
+ * with the `cairn-type: secrets` marker is open. It is the pane's scroller
+ * while it is visible — §5.12.4 counts TWO scrollers in the document, and
+ * this is a THIRD, but only in secret mode: no gate run ever opens a secret
+ * file, so no gate row can see it. A credentials list that could not scroll
+ * would be the worse trade.
+ *
+ * The secret is NEVER in this DOM as markup: rows and values are set through
+ * `textContent`, so there is no rule here that could unmask one. */
+.nc-secrets {
+  height: 100%;
+  overflow-y: auto;
+  box-sizing: border-box;
+  padding: 24px 32px;
+  font-size: var(--fs-ui-small);
+  line-height: 1.4;
+}
+.nc-secrets[hidden] { display: none; }
+
+.nc-secrets-section {
+  border: 1px solid var(--bg-modifier-border);
+  border-radius: var(--radius-m);
+  background: var(--bg-secondary);
+  margin-bottom: 16px;
+}
+
+.nc-secrets-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--bg-modifier-border);
+}
+.nc-secrets-title { color: var(--text-faint); }
+
+.nc-secrets-add,
+.nc-secrets-save,
+.nc-secrets-cancel,
+.nc-secrets-show,
+.nc-secrets-edit,
+.nc-secrets-delete {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: inherit;
+  color: var(--text-muted);
+  background: var(--bg-form-field);
+  border: 1px solid var(--bg-modifier-border);
+  border-radius: var(--radius-s);
+  padding: 3px 8px;
+  cursor: pointer;
+}
+.nc-secrets-add:hover,
+.nc-secrets-save:hover,
+.nc-secrets-cancel:hover,
+.nc-secrets-show:hover,
+.nc-secrets-edit:hover,
+.nc-secrets-delete:hover { background: var(--bg-modifier-hover); color: var(--text-normal); }
+.nc-secrets-add[hidden] { display: none; }
+.nc-secrets-plus { display: inline-flex; width: 14px; height: 14px; }
+/* The destructive row action reads as such without a second error colour in
+   the row: Delete is --text-error only here, nowhere else. */
+.nc-secrets-delete { color: var(--text-error); border-color: var(--bg-modifier-border); }
+
+.nc-secrets-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 12px;
+}
+.nc-secrets-row + .nc-secrets-row { border-top: 1px solid var(--bg-modifier-border); }
+/* CLICK-TO-COPY (user feature, 2026-09-17): a healthy row is the copy
+ * control.  The hover wash plus the pointer is the affordance §9 E4 demands
+ * of anything clickable; the tooltip on the row names the action. */
+.nc-secrets-row.is-copyable { cursor: pointer; }
+.nc-secrets-row.is-copyable:hover { background: var(--bg-modifier-hover); }
+/* Keyboard parity with the click: the row is tabbable, so a focused row
+ * needs a visible edge in an app that styles none of its own. */
+.nc-secrets-row.is-copyable:focus-visible { outline: 1px solid var(--accent); outline-offset: -1px; }
+/* The confirmation: hidden until a copy puts it on screen for ~1.2s.  Last
+ * child, so appearing never shifts Show/Edit/Delete. */
+.nc-secrets-copied {
+  display: none;
+  flex: 0 0 auto;
+  color: var(--accent);
+}
+.nc-secrets-copied.is-on { display: inline; }
+.nc-secrets-copied.is-bad { color: var(--text-error); }
+/* The name block takes the slack so Show/Edit/Delete stay in one column
+   down the section. */
+.nc-secrets-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.nc-secrets-label {
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* The free-form note (user feature, 2026-09-16): rendered, never a secret. */
+.nc-secrets-comment {
+  color: var(--text-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.nc-secrets-value {
+  flex: 0 1 auto;
+  min-width: 0;
+  font-family: var(--font-mono);
+  color: var(--text-faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 24em;
+}
+.nc-secrets-value.is-shown {
+  color: var(--text-normal);
+  user-select: text;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.nc-secrets-row.is-bad .nc-secrets-label { color: var(--text-faint); }
+.nc-secrets-error { flex: 0 0 auto; color: var(--text-error); }
+.nc-secrets-empty { padding: 10px 12px; color: var(--text-faint); }
+
+.nc-secrets-form { padding: 8px 12px; border-top: 1px solid var(--bg-modifier-border); }
+.nc-secrets-form[hidden] { display: none; }
+.nc-secrets-formrow { display: flex; align-items: flex-start; gap: 8px; }
+.nc-secrets-input {
+  font: inherit;
+  color: var(--text-normal);
+  background: var(--bg-form-field);
+  border: 1px solid var(--bg-modifier-border);
+  border-radius: var(--radius-s);
+  padding: 3px 8px;
+  min-width: 0;
+}
+.nc-secrets-input { flex: 0 1 11em; }
+.nc-secrets-seed  { flex: 1 1 auto; font-family: var(--font-mono); }
+.nc-secrets-area { flex: 1 1 auto; font-family: var(--font-mono); resize: vertical; }
+.nc-secrets-msg:not(:empty) { display: block; padding-top: 6px; color: var(--text-error); }

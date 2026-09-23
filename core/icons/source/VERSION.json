@@ -1,0 +1,85 @@
+{
+  "version": "v4_final_white",
+  "description_vi": "Trắng sáng nhất — bản đã chốt",
+  "source_filename": "luminous_ice_crystal_app_icon.png",
+  "source_dimensions": [
+    1254,
+    1254
+  ],
+  "source_sha256": "433d8e55d4d41aeda78c45e1aecc69739b4e4f75cbb84ff6a18105ae7631451b",
+  "original_unchanged": true,
+  "generative_redrawing_used": false,
+  "exports": {
+    "general_icon_sizes_px": [
+      16,
+      24,
+      32,
+      48,
+      64,
+      96,
+      128,
+      192,
+      256,
+      384,
+      512,
+      768,
+      1024
+    ],
+    "logo_sizes_px": [
+      64,
+      128,
+      256,
+      512,
+      1024
+    ],
+    "windows_ico_sizes_px": [
+      16,
+      20,
+      24,
+      32,
+      40,
+      48,
+      64,
+      96,
+      128,
+      256
+    ],
+    "ios_png_sizes_px": [
+      20,
+      29,
+      40,
+      58,
+      60,
+      76,
+      80,
+      87,
+      120,
+      152,
+      167,
+      180,
+      1024
+    ],
+    "android_legacy_sizes_px": [
+      48,
+      72,
+      96,
+      144,
+      192
+    ],
+    "android_layer_sizes_px": [
+      108,
+      162,
+      216,
+      324,
+      432
+    ]
+  },
+  "notes": [
+    "Only original-tile exports preserve the full opaque original framing.",
+    "Transparent logos are raster cutouts; the surrounding dark tile and broad glow are removed.",
+    "Full-bleed icons extend only the outer background; crystal pixels remain unchanged before downsampling.",
+    "Adaptive and maskable variants re-center/re-scale the same cutout to keep it inside the safe area.",
+    "No SVG or native layered Icon Composer file is claimed.",
+    "No image is enlarged beyond the original raster resolution."
+  ]
+}

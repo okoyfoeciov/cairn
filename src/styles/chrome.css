@@ -1,0 +1,995 @@
+/* ==========================================================================
+ * src/styles/chrome.css
+ * Owner: 01.  Spec: CONTRACT.md §5.6/§5.7 (macOS chrome + the drag region),
+ * §0.12 E14 (there is NO nav toolbar), §5.10 R2 (the vault bar), §3.3 (the cap
+ * banners), §5.5 (window geometry), §7.4 (the empty state's element).
+ *
+ * The 39px title strip, the tab, the sidebar frame, the vault bar and the three
+ * banners (§7.3 case 8's vault-lost, §7.3 case 16's watcher-degraded and §3.3's
+ * truncation caps).  DECLARES NO CUSTOM PROPERTY (CONTRACT §5.1).
+ *
+ * Every absolute number below is a content coordinate at the 1918x958 GATE
+ * window (CONTRACT §5.5) and is asserted by tools/verify-geometry.js.  The
+ * shipped default is 1280x700 (min 900x520); only the sidebar's 412px is fixed.
+ * ======================================================================== */
+
+/* ---- 1. title / tab strip — border box y 0..39, height 40 [M+S, §0.6 E8] --
+ * One continuous strip across the WHOLE window: the sidebar's #282828 starts
+ * BELOW it, at y = 40.
+ *
+ * 40, NOT 39.  The strip is 39px of #333333 fill PLUS a 1px rule, border-box,
+ * and the fill run is what the old [M] 39 measured.  Obsidian draws the same
+ * two things in the same order (app.css:6642-6651).  The rule is the visible
+ * boundary between the strip and both panes below it — and note it is a
+ * DIFFERENT decision from spec-01 §2's "no border-right between the panes":
+ * that boundary is vertical, between two fills, and this one is horizontal,
+ * between the chrome and the content.  Obsidian draws one and not the other. */
+.titlebar {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: var(--titlebar-h);
+  border-bottom: 1px solid var(--tab-outline);
+  background: var(--bg-titlebar);
+  display: flex;
+  align-items: center;
+}
+
+/* Exactly --sidebar-w wide, so it ends on the sidebar's right edge.
+ * §9 E4a: the `panel-left` button spec-01 §8.1 drew at content x 374..404 is
+ * OMITTED — nothing in CONTRACT.md ever bound it, §5.5 fixes the sidebar at
+ * 412px with no splitter, and E4's principle is "no inert decoration".  Omitting
+ * it moves NOTHING, because the button sat at the end of a flex spacer inside a
+ * width-fixed box: the tab strip's origin, the 88px traffic-light reserve and
+ * both remaining buttons (search at 103, folder-open at 141) are unchanged, and
+ * no gate row moves.  chrome.ts removes the element; `.at-edge` went with it. */
+.titlebar-left {
+  width: var(--sidebar-w);
+  flex: 0 0 var(--sidebar-w);
+  height: 100%;
+  display: flex;
+  align-items: center;
+  /* [D] §5.6 — the traffic-light reserve.  88, not 89: the discs span content
+     x 21..73 (right edge 73) and hit targets x 20..74, so an 88px reserve leaves
+     16px and puts the search button's centre on content x 103 exactly. */
+  padding-left: var(--macos-tl-inset);
+  gap: 8px;                              /* [M] 30px buttons on a 38px pitch */
+}
+.titlebar-left .spacer { flex: 1 1 auto; }
+
+.tab-strip {
+  flex: 1 1 auto;
+  height: 100%;
+  display: flex;
+  align-items: flex-end;
+  padding-left: var(--tab-x);            /* [M] tab left edge = 412 + 18 = 430 */
+  gap: 0;                              /* [S] Obsidian's tabs sit FLUSH — no
+                                          `gap` and no `margin` on
+                                          `.workspace-tab-header` or its flex
+                                          container anywhere in app.css, so
+                                          adjacent tabs are 0px apart and the
+                                          active tab's shoulder shadows paint
+                                          over the neighbour.  The 6px that
+                                          stood here was §0.10's tuning FOR THE
+                                          DELETED `+` BUTTON ("Obsidian's + ink
+                                          centre sits 19.60 past the tab's
+                                          right edge") — a tab-to-`+` distance,
+                                          never a tab-to-tab one — and with `+`
+                                          gone (§0.30 E71) it wedged strip
+                                          background between the two tabs. */
+  min-width: 0;
+}
+
+/* The active tab.  One tab is ALWAYS .is-active and the inactive style lives
+ * below (the fixed `Memoir` tab, 2026-09-15).  Fill #1c1c1c is IDENTICAL to
+ * the editor, so tab and pane read as one surface. */
+.tab {
+  position: relative;
+  width: var(--tab-w);                   /* [M] sx 431..630 = 200px            */
+  flex: 0 0 var(--tab-w);
+  /* §0.6 E8 — 34px, inset 6px from the strip's top, NOT the full 39 it used to
+     be.  `.tab-strip` is `align-items: flex-end` and 39px tall (the strip's
+     CONTENT box), so flex-end puts the tab's bottom on 39 and the -1px margin
+     bleeds it to 40 — over the strip's own rule, which is how tab and pane read
+     as one surface with no line between them.  Obsidian's `margin: 6px -5px -1px`
+     (app.css:6661) is the same three numbers. */
+  /* THE TAB IS ANCHORED FROM THE TOP, AND ITS HEIGHT IS DERIVED — §0.26.2.
+     It was `height: var(--tab-h)` against the strip's `align-items: flex-end`,
+     i.e. anchored from the BOTTOM, and that is exact only while the strip's
+     content height is an integer.  It is not at a fractional scale: Chromium
+     snaps `.titlebar`'s 1px `border-bottom` to 0.8 CSS px at dpr 1.25, so the
+     strip's content box is 39.2 and a bottom-anchored 33px tab starts at 7.2
+     instead of 7.  Obsidian never sees that, because it lays its tab out from
+     the TOP — `.workspace-tab-header-container-inner { margin: 6px …; padding:
+     1px 15px 0 }` puts the header at 6 + 1 = 7 whatever the border does — and
+     lets the height fall out of the container, which is why its tab measures
+     33.2 here and 33 at dpr 1.
+     `align-self: stretch` + `margin-top` reproduces both numbers at every
+     scale: top = --tab-top exactly, height = strip content − 7 + 1.  The 1px
+     of bleed over the strip's own rule is unchanged and is still what makes
+     tab and pane read as one surface. */
+  align-self: stretch;
+  margin-top: var(--tab-top);
+  margin-bottom: -1px;
+  background: var(--bg-primary);
+  border-radius: var(--tab-radius) var(--tab-radius) 0 0;   /* [S] 6px, not 8  */
+  /* The ring, all four sides, exactly as Obsidian writes it.  The BOTTOM side
+     lands at y 40..41, below the strip — and it is never seen, because `.app`
+     is the later of two positioned siblings with `z-index: auto` and therefore
+     paints over it (index.html order; base.css:66-71 insets `.app` by
+     --titlebar-h).  Obsidian hides the same 1px with `overflow: auto` on an
+     inner scroller, which is NOT available here: §5.12.4.3 forbids a third
+     scroller outright and chrome-ui.test.mjs greps this file for it. */
+  box-shadow: 0 0 0 1px var(--tab-outline);
+  display: flex;
+  align-items: center;
+  /* §0.9 — THE VERTICAL PADDING IS ASYMMETRIC, and that is the whole fix.
+     Obsidian's `.workspace-tab-header { padding: 1px 4px 3.5px }` (app.css:6706)
+     puts 1px above the content and 3.5px below, which lifts everything inside
+     the tab (3.5 - 1) / 2 = 1.25px above the tab's geometric centre.  Cairn had
+     no vertical padding, so its label sat 1.6px LOW against the
+     reference — measured, and the user saw it.
+     The HORIZONTAL padding is Obsidian's mod-root composition (app.css:6989 +
+     inner, below): header 3px each side, inner 6px start / 3px end, so the
+     label ink sits 3 + 6 = 9 left — exactly the [M] inset this rule used to
+     carry flat (label ink at content 439).  Nothing moved; the terms are spelled
+     out so the hover pill below can be inset from them. */
+  padding: 1px 3px 3.5px;              /* §0.9 vertical; horizontal per above   */
+  gap: 0;
+}
+
+/* THE INNER PILL (2026-09-16) — Obsidian's `.workspace-tab-header-inner`.
+ * The header above is the SLOT; this is what the user sees on an inactive
+ * tab.  At rest it is transparent (the tab reads as bare text on the strip);
+ * on hover it takes `--background-modifier-hover` (app.css:6710-6714) inset
+ * 3px from the slot on each side — and THAT inset is the separation the user
+ * photographed: strip background between the active tab's edge and the
+ * hovered pill, deepened at the bottom by the active tab's concave shoulder.
+ * The previous revision painted the hover fill on the whole `.tab` and the
+ * pill touched the active tab edge to edge; that "deliberate deviation" was
+ * wrong and is withdrawn.  `.tab-inner` fills the header's content box
+ * exactly (stretch + 100% cross size under border-box), so the label ink sits
+ * where the flat rule put it, to the pixel.
+ * Radius is `--tab-pill-radius`: 8px on macOS, 4px elsewhere — Obsidian's own
+ * platform split (base `body` 4px, `.mod-macos` 8px), NOT the active tab's 6px,
+ * which no platform copies.  Shipping the 8px globally put a macOS pill on
+ * Linux; corrected 2026-09-16 after the user photographed it. */
+.tab-inner {
+  flex: 1 1 auto;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  gap: 0;
+  min-width: 0;
+  padding: 0 3px 0 6px;
+  border-radius: var(--tab-pill-radius);
+}
+
+/* THE SHOULDERS (§0.6 E8, spike N §9.2) — the outward curve where the tab meets
+ * the strip.  Transcribed from Obsidian app.css:6721-6746 and verified against
+ * the reference: a 12x12 circle parked just outside each bottom corner, given a
+ * 24px-spread shadow in the TAB's own fill, then clipped to the one quadrant
+ * that faces the tab.  Inside the circle stays strip-coloured, outside it turns
+ * tab-coloured — which is the concave quarter-round.
+ *
+ * The measurement that says the model is right: predicted outward extension at
+ * 3.57 / 4.6 / 5.63 px above the tab's bottom is 1.18 / 2.15 / 3.93 px, and the
+ * reference measures 1.03 / 2.06 / 3.09.  A square corner would measure 0.
+ *
+ * `inset 0 0 0 1px` continues the ring around the curve.  NO `will-change`, no
+ * `transform`, no `filter`: G5d counts compositing layers and this must not
+ * earn one (§5.12.6). */
+.tab::before,
+.tab::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  width: calc(var(--tab-curve) * 2);
+  height: calc(var(--tab-curve) * 2);
+  border-radius: 100%;
+  box-shadow: inset 0 0 0 1px var(--tab-outline),
+              0 0 0 calc(var(--tab-curve) * 4) var(--bg-primary);
+}
+.tab::before {
+  left: calc(var(--tab-curve) * -2);
+  clip-path: inset(50% calc(var(--tab-curve) * -1) 0 50%);
+}
+.tab::after {
+  right: calc(var(--tab-curve) * -2);
+  clip-path: inset(50% 50% 0 calc(var(--tab-curve) * -1));
+}
+.tab-label {
+  flex: 1 1 auto;
+  /* [S] 13px — `--tab-font-size: var(--font-ui-small)` (app.css:2691 + :2247),
+     with `--tab-font-weight: inherit` (:2692) resolving to 400 because
+     Obsidian's `body` sets no weight (:3134).
+     ── IT WAS 12 UNTIL 2026-09-10, AND THE 12 WAS DERIVED THE WAY §0.19 E24's
+     29px H1 WAS.  §0.11 inverted a cap-height band out of the reference PNG
+     through **Inter's** 0.7275 cap ratio — and §0.18 E23 established that
+     Obsidian does not render in Inter, which is the same refutation that took
+     `--h1-size` from 29 to 25.888.  CLAUDE.md's open-items list said this one
+     "needs a 1.12.7 asar"; `/opt/Obsidian/resources/obsidian.asar` on this
+     machine IS 1.12.7, so it is a grep and not a measurement any more.
+     Confirmed against the user's two same-scale screenshots (2026-09-10): the
+     same tab, the same string, Obsidian truncating at `publisha…` where Cairn
+     reached `publishable…`, and Obsidian's glyph advances 1.08x Cairn's — the
+     ellipsis pitch is 5.5 device px against 5.0, and 13/12 is 1.083.
+     `--fs-ui-smaller` stays 12 for the six chrome rows below that use it. */
+  font-size: var(--fs-ui-small);
+  font-weight: 400;
+  /* [S] 1.3 is Obsidian's `--line-height-tight` (app.css:2401), which its `body`
+     rule (app.css:3134) puts on everything and which
+     `.workspace-tab-header-inner-title` inherits — measured on the live app,
+     its computed line-height is 16.9px.  base.css puts `--lh-ui: 1` on Cairn's
+     body, so without this line the label's box is a flat 13px.  Same literal,
+     same reason and the same "there is no token for it" as `.vault-name`'s.
+     ── AND IT IS ONE OF THE TWO HALVES OF §0.26.2's HALF-PIXEL, so do not drop
+     it as cosmetic.  Neither this nor the tab's own top edge moves the glyphs
+     ALONE: measured on this machine at dpr 1.25, the label ink sits one device
+     ROW below Obsidian's with either fix applied on its own, and lands on
+     Obsidian's rows exactly with both.  Chromium snaps a text baseline to a
+     whole device pixel, so a fraction of a CSS px either side of the boundary
+     is the difference between the same row and the next one. */
+  line-height: 1.3;
+  color: var(--text-normal);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.tab[hidden] { display: none; }          /* §7.4 — no note open, no note tab   */
+
+/* ---- 1a. the INACTIVE tab (2026-09-15, the fixed `Memoir` tab; both tabs
+ * fixed 2026-09-16) --------------------------------------------------------
+ * Transcribed from Obsidian 1.13.7's own `.workspace-tab-header` (app.css),
+ * read out of `~/.config/obsidian/obsidian-1.13.7.asar`, NOT derived:
+ *   - an inactive header carries NO fill, NO ring and NO shoulder curves —
+ *     the `::before`/`::after` concaves exist only under `.is-active`
+ *     (app.css:6738-6762), and the inactive hover raises a
+ *     `--background-modifier-hover` pill on the INNER (app.css:6706-6714);
+ *   - its text is `--tab-text-color` = `--text-faint`, `--tab-text-color-focused`
+ *     = `--text-muted` when focused (app.css:2726-2728).  Cairn has no
+ *     unfocused state (KNOWN-ISSUES.md UI-1), so the focused value is taken:
+ *     `--text-muted` against the active tab's `--text-normal`.
+ * ONE DELIBERATE DEVIATION, recorded:
+ *   - NO 1px divider (`--tab-divider-color` on `.workspace-tab-header-inner::after`,
+ *     app.css:7016-7024).  It separates an inactive tab from its RIGHT
+ *     neighbour; the strip ends after Memoir (no `+`, §0.30 E71), so on the
+ *     one inactive tab Cairn ever shows beside an active one it would be a
+ *     lone tick in empty space rather than a separator.
+ * (A second deviation stood here — the hover fill painted on the whole `.tab`
+ * instead of the inner pill — and the user photographed it touching the active
+ * tab.  Withdrawn 2026-09-16; `.tab-inner` above is the correction.)
+ * NEITHER tab carries a close button (user ruling 2026-09-16), so Obsidian's
+ * `display: none` until hover has nothing to apply to.
+ * G9 is unaffected: its `tab` row reads `.tab.is-active` (falling back to
+ * `.tab`), and exactly one tab carries `.is-active` at any moment. */
+.tab:not(.is-active) {
+  background: transparent;
+  box-shadow: none;
+}
+.tab:not(.is-active)::before,
+.tab:not(.is-active)::after {
+  display: none;
+}
+.tab:not(.is-active) .tab-label {
+  color: var(--text-muted);
+}
+.tab:not(.is-active):hover .tab-inner {
+  background: var(--bg-modifier-hover);
+}
+
+/* ---- 1b. the Linux window controls (§0.5 E7, spike N §3) ----------------
+ * OFF EVERYWHERE BUT LINUX.  chrome.ts sets `data-os` at boot; index.html ships
+ * `macos`, so a failed read leaves the cluster hidden, which is the safe
+ * direction — macOS is what every gate measures and macOS draws traffic lights
+ * in this strip's first 88px instead.
+ *
+ * Obsidian's own numbers (spike N §3.2), from its app.css:
+ *   .mod-linux .titlebar-button { padding: 0 16px }  + a 12px glyph  = 44px
+ *   .titlebar-button-container  { height: 100% }  on a 39px strip    = 39px
+ * and its three ink centres measured 1937.9 / 1981.9 / 2025.98 against a 2048
+ * right edge — a 44px pitch and a 22px half-width, to a tenth of a pixel.
+ *
+ * NO `border-radius`.  `.icon-btn` has one; these do not.  Obsidian gives its
+ * titlebar buttons `--radius-s` ONLY under `.mod-macos`, and a rounded hover
+ * fill in a square corner is the visible tell of a hand-rolled title bar. */
+.window-controls { display: none; }
+
+[data-os="linux"] .window-controls {
+  display: flex;
+  flex: 0 0 auto;
+  height: 100%;
+  align-items: stretch;
+}
+.win-btn {
+  width: var(--winctl-w);
+  flex: 0 0 var(--winctl-w);
+  height: 100%;
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: none;
+  padding: 0;
+  margin: 0;
+  /* [S] spike N §3.4 — `--titlebar-text-color-focused`, i.e. --text-normal, not
+     the muted --icon-color the strip's other buttons use.  Obsidian really does
+     draw these brighter than the icons beside them, and at full opacity: there
+     is no --icon-opacity on a titlebar button. */
+  color: var(--text-normal);
+}
+.win-btn:hover { background: var(--bg-modifier-hover); }
+/* [O] the one destructive control in the app.  White ink, not brighter grey. */
+.win-close:hover {
+  background: var(--bg-close-hover);
+  color: #ffffff;
+}
+
+/* ---- 2. the two panes ---------------------------------------------------
+ * Horizontal split: sidebar x 0..411 (412px), editor x 412..1917 (1506px).
+ * NO DIVIDER LINE — the colour change alone separates them (spec-01 §2).
+ * Obsidian draws one and Cairn does not; §2b has the measurement and
+ * `KNOWN-ISSUES.md` UI-3 has the open ruling. */
+.sidebar {
+  position: relative;                    /* §0.7 E9 — the resize handle's origin */
+  width: var(--sidebar-w);
+  flex: 0 0 var(--sidebar-w);            /* [M] FIXED. §5.5: it does not scale,
+                                            there is no splitter, M60 deleted
+                                            `sidebar_w` from state.json.       */
+  background: var(--bg-secondary);
+  /* [D] §5.2 — the 3px beyond the scroller that closes 409 -> 412.  The tree
+     scroller's border box is x 0..409 and the reserved 8px gutter is its
+     rightmost 8px at x 401..409, reproducing the measured thumb run sx 402..410. */
+  padding-right: 3px;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+
+/* ---- 2b. the resize handle (§0.7 E9, spike N §11) -----------------------
+ * A 3px column at the sidebar's right edge, absolutely positioned so it takes
+ * NO layout space — it overlays the sidebar's own 3px right padding, exactly as
+ * Obsidian's `.workspace-leaf-resize-handle` overlays its split's edge.  So the
+ * sidebar is still 412 wide, the scroller is still 409, and no gate row moves.
+ *
+ * Transparent at rest and `--accent` on hover or while dragging.  Measured off
+ * the reference at (138,92,246) against Obsidian's `--color-accent`,
+ * hsl(258,88%,66%) = (138,92,245) — a one-unit match on all three channels.
+ *
+ * ONE DELIBERATE DIVERGENCE FROM OBSIDIAN, forced by a standing ruling:
+ *   - NO `transition`.  Obsidian fades the colour over 200ms; M59 is "no
+ *     transitions anywhere" and chrome-ui.test.mjs greps this file for it.
+ *     The colour change is instant.
+ *
+ * ── THE 1px DIVIDER, USER RULING 2026-09-15, OVERTURNING spec-01 §2 ────────
+ * spec-01 §2 was `[M]`, "the sidebar/editor boundary is the #282828 ->
+ * #1c1c1c colour change ALONE, do not add a border-right", drawn once at the
+ * user's request 2026-09-11, and taken back out unruled — `KNOWN-ISSUES.md`
+ * UI-3 carried the measurement that ruling rested on.  `border-right` below
+ * is now that ruling, reversed: Obsidian paints it on THIS element —
+ *     .workspace-leaf-resize-handle { border-right: 1px solid var(--divider-color) }
+ * (`.workspace-split.mod-left-split > .workspace-leaf-resize-handle`,
+ * app.css:6489-6491) — `--divider-color` -> `--background-modifier-border` ->
+ * `--color-base-30` = #333333 dark (app.css:2196, 2873, 2976), read from the
+ * pinned 1.13.7 asar's own cascade.  UI-3's live sample read #363636; that
+ * was a screenshot at the seam's dpr-1.25 snap, which blends its edge pixel,
+ * and the cascade read here is the more direct source.  `var(--hairline)`,
+ * not a flat 1px, for the same reason the tree's guides use it: a used
+ * border snaps to `floor(dpr)/dpr`, and Obsidian's own border does too.  It
+ * moves nothing: `box-sizing: border-box` puts it inside the existing 3px
+ * handle, on the sidebar's last pixel — the same "one declaration" the
+ * withdrawn comment always said it would be.  It lines only the part BELOW
+ * the strip, as before: the strip is one continuous #333333 band, so the
+ * rule is #333333 on #333333 there and shows nothing, exactly matching
+ * Obsidian's own strip (`.workspace-tab-header-container` has no seam either). */
+.sidebar-resize {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  width: var(--divider-w);
+  cursor: col-resize;
+  background: transparent;
+  border-right: var(--hairline) solid var(--divider-color);
+  z-index: 2;
+  touch-action: none;                    /* the drag is pointer-driven, not scroll */
+}
+.sidebar-resize:hover,
+.sidebar-resize.is-active { background: var(--accent); border-color: var(--accent); }
+
+/* While dragging, the cursor must not flicker as the pointer crosses the panes,
+ * and nothing may select.  Obsidian does the same with `body.is-grabbing`. */
+.is-grabbing, .is-grabbing * {
+  cursor: col-resize !important;
+  user-select: none;
+}
+
+.editor {
+  flex: 1 1 auto;
+  background: var(--bg-primary);         /* [M] #1c1c1c                        */
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;                      /* §5.12.4.3 — `hidden` is NOT a scroller
+                                            and earns no compositing surface.   */
+  /* §0.52 E100 — THE EDITOR PANE IS A PAINT CONTAINMENT BOX, AND IT IS WHAT PUTS
+   * EVERY SNAPPED BOX INSIDE IT ON OBSIDIAN'S DEVICE COLUMN.
+   *
+   * [S] Obsidian's `.workspace-leaf { contain: strict }` (app.css), on the
+   * element that is this one's counterpart: same box, same origin, same role.
+   *
+   * WHAT IT DOES, AND WHY IT IS NOT COSMETIC. This pane's left edge is the
+   * sidebar's width, which at dpr 1.25 is almost never a whole device pixel —
+   * 221 CSS px is 276.25. Paint containment makes the pane a paint origin of its
+   * own, and Chromium SNAPS that origin (276.25 -> 276), so everything inside is
+   * painted 0.25 device px left of where an uncontained subtree would put it.
+   * Obsidian has that shift and Cairn did not, so a box that Chromium snaps —
+   * the list bullet's disc — rounded the other way and landed ONE DEVICE COLUMN
+   * right. Reported by the user as *"I think those bullets are closer to the
+   * right than Obsidian. 1 pixel or so!"*, and it is one pixel or so.
+   *
+   * MEASURED, both apps, sidebar 221, dpr 1.25, same engine
+   * (Chrome/142.0.7444.265 in both — this is NOT the version gap §9 records for
+   * the Mac): the dot's LAYOUT box is 276.55 CSS / 345.6875 device in BOTH, to
+   * four decimals. Painted, Cairn was columns 346..351 and Obsidian 345..350.
+   * With this declaration Cairn paints 345..350. The pane's own text moves with
+   * it — the two apps' glyph ink was 0.2 device px apart before and is 0 after.
+   *
+   * `paint`, NOT Obsidian's `strict`, and the difference is deliberate.
+   * Measured: `paint`, `layout paint` and `strict` all put the dot on the same
+   * column, so the paint half is the whole of the effect. `strict` also implies
+   * SIZE containment, which makes this box size as if it were empty — harmless
+   * only because `flex: 1 1 auto` is paired with `flex-grow: 1` here, so the
+   * pane still grows into the free space. A containment that could collapse the
+   * editor to nothing if somebody ever edited that shorthand is not worth taking
+   * for a rasterisation origin.
+   *
+   * One `position: fixed` descendant is now contained by this box: CM6's
+   * `.cm-announced`, the screen-reader live region it parks at `top: -10000px`.
+   * Clipping is a PAINT effect and the accessibility tree is unchanged, so it
+   * still announces; it was invisible before and is invisible now. */
+  contain: paint;
+}
+
+/* ---- 3. §0.12 E14 — THERE IS NO NAV TOOLBAR -----------------------------
+ * The five-slot 40px band that stood here (New note, New folder, Sort, Refresh,
+ * Collapse all) is DELETED at the user's request, and §5.9 is STRUCK with it —
+ * its measured centres 141/173/205/237/269, the 156px group box [127,283), the
+ * `padding-left: calc((var(--sidebar-w) - 156px) / 2 - 1px)` origin E9 derived,
+ * and the `.is-lit` opacity rule that was the watcher-degraded signal.
+ *
+ * DELETING THE ELEMENT WAS SUFFICIENT AND NO OTHER RULE MOVED.  `.sidebar` is a
+ * `flex-direction: column` and `.tree-scroller` is its only `flex: 1 1 auto`
+ * child, so the 40px is redistributed to the scroller automatically and
+ * `.vault-bar`'s `flex: 0 0 var(--vaultbar-h)` still pins its bottom.  The band
+ * is now content y 40..914, height 875 (was 40..920 / 881 before the vault bar
+ * went to its real 43px; and 80..920 / 841 before §0.6 E8 —
+ * moved it 1px and §3.3's prose had not caught up; E14 fixes both).
+ *
+ * E9'S 158px FLOOR WENT WITH IT.  `--sidebar-w` could not fall below 158 or the
+ * nav origin expression turned negative; nothing else in this file has that
+ * property, so `SIDEBAR_MIN` (180, chrome.ts) now stands on `EDITOR_MIN` alone.
+ * Do not reintroduce a toolbar without reintroducing that floor.
+ */
+
+/* ---- 4. the §3.3 truncation banners (X9) --------------------------------
+ * SIBLINGS of the tree scroller inside .sidebar, NEVER children of it — so a
+ * banner does not scroll away and does not enter the tree's coordinate system.
+ * Box height 24px border-box, 1px bottom rule.  Both can be present at once
+ * (nodes AND depth), stacked in that order, for a maximum of 48px.  The tree
+ * scroller is then 875 - 24 x (banners shown): 875 / 851 / 827 (§0.12 E14 — the
+ * 842 / 818 / 794 this used to print predated both E8's 1px and E14's 40px).
+ * The vault bar does not move.  No icon and no dismiss control: dismissing a
+ * truth that is still true is a lie.
+ *
+ * SINGLE LINE + ellipsis is now a MEMORY rule as well as a layout one
+ * (§5.12.4.3): a banner that wrapped into a scrollable box would cost a
+ * compositing surface. */
+.cap-banner {
+  height: 24px;
+  flex: 0 0 24px;
+  box-sizing: border-box;
+  border-bottom: 1px solid var(--bg-modifier-border);
+  background: var(--bg-secondary);
+  color: var(--text-faint);
+  font-size: var(--fs-ui-smaller);       /* 12px */
+  line-height: 23px;
+  padding: 0 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---- 5. the vault-switcher bar (§5.5, §5.10 R2) -------------------------
+ * content y 915..957.  ONE 43px BORDER-BOX element whose `border-top` IS the
+ * 1px rule — not a 42px bar plus a separate 1px element.  A `height` that
+ * excludes the border puts the rule one pixel low under border-box and makes the
+ * sidebar column sum to 959.
+ *
+ * IT WAS 37px, AND §5.10 R2 CALLED THAT NORMATIVE.  THE 37 WAS NEVER MEASURED:
+ * it is `winH 958 - rule 921`, and the 958 is short.  The 43 is the reference
+ * PNG's own number, and it took two passes to read it correctly — the first
+ * reading said 42 and blamed the difference on version drift, which was wrong.
+ *
+ * HOW THE REFERENCE'S FRAME ACTUALLY WORKS (docs/reference/obsidian-macos-window.png):
+ * macOS does NOT draw a 1px ring outside the window.  Three of the four edges
+ * are a ~20% WHITE WASH OVER THE OUTERMOST CONTENT PIXEL, which is why they look
+ * like a frame and are not one.  Solve the alpha and it is the same number every
+ * time: bottom row 994 reads 78 over the sidebar's 34, 73 over the editor's 28
+ * and 78 over the scrollbar track's 39 -> 0.1991 / 0.1982 / 0.1991.  The left
+ * column reads 78 over 34, the same 0.1991.  And row 994 carries GLYPH INK at
+ * x700 (220 over a 121 body row), which no frame line can do.  Only the TOP is a
+ * real frame: row 30 is a flat #696969 = 105 everywhere, where a 0.199 wash of
+ * the strip's 47 would be 88.
+ *
+ * So the reference's CONTENT box is rows 31..994 and columns 0..1919 — 1920 x
+ * 964, not the 1918 x 958 §5.5 records and not the 1918 x 963 the first pass
+ * here wrote.  Under that reading everything lands at once:
+ *   - the vault bar's rule is at screen y952 = CONTENT y921, which is §5.10 R2's
+ *     one real measurement and was right all along;
+ *   - the bar runs 952..994 = 43px;
+ *   - the tree band is 964 - 40 - 43 = 881, the number the docs always carried;
+ *   - and 43 is EXACTLY what Obsidian 1.13.7 computes from its own rules, so no
+ *     version-drift excuse is needed and none is claimed.
+ * §5.10 R2's "unexplained 3px" goes with it: it put the ink band's centre at
+ * content y942.5 and called it underivable because a 37px bar centres on 939.5.
+ * A 43px bar at 921 has its 26px content row at 930..955, whose centre is 942.5.
+ *
+ * THE ARITHMETIC IN 1.13.7's OWN CSS, independently: the bar has `height: unset`
+ * and `padding: var(--size-4-2)` (app.css:6319-6330) round a content row as tall
+ * as its tallest child, and that child is the `?`/gear column's `.clickable-icon`
+ * — `var(--size-2-2)` padding round an `--icon-m` glyph, 4 + 18 + 4 = 26
+ * (8010-8022, 2352-2356).  1 + 8 + 26 + 8 = 43.  The user's own screenshot of
+ * their running 1.13.7 measures 42.1 CSS px with its last row under the OS
+ * taskbar, which is this 43 with one row hidden.  Three sources, one number.
+ *
+ * REPORTED AND NOT ACTED ON: `winH: 958` is 6 short of the reference's 964 and
+ * `winW: 1918` is 2 short of its 1920.  Both are §5.5 gate constants and moving
+ * either moves every row in tools/verify-geometry.js, so it needs a G9 run.
+ * docs/PENDING-USER-ACTIONS.md carries it.  Nothing is broken at 958: the column
+ * closes on itself (40 + 875 + 43 = 958).
+ *
+ * CAIRN OMITS THE `?` AND THE GEAR (§9 E4) AND STILL TAKES THE 43.  The switcher
+ * alone is 24.9 and would give 41.9; E4 removes two CONTROLS, not the bar they
+ * sat in.  The 26px content row is therefore pinned here by `--vaultbar-h`, and
+ * `align-items: center` centres the switcher in it exactly as Obsidian's does. */
+.vault-bar {
+  height: var(--vaultbar-h);             /* 43px, border-box, rule included      */
+  flex: 0 0 var(--vaultbar-h);
+  box-sizing: border-box;
+  border-top: 1px solid var(--bg-modifier-border);
+  background: var(--bg-secondary);
+  display: flex;
+  align-items: center;
+  padding: 8px;                          /* [S] --size-4-2 both axes, app.css:6327 */
+  min-width: 0;
+}
+/* The hover target, and it is the WHOLE ROW, not the two glyphs' bounding box.
+ * `flex: 1 1 auto` is Obsidian's `flex-grow: 1` (app.css:6335): the switcher
+ * fills the bar, so hovering anywhere along it lights the same box every time.
+ * Without the grow — which is how this shipped — the highlight hugged the label
+ * and stopped dead after the vault name, which is the mismatch the user saw.
+ * `padding: 4px 8px` is `var(--size-4-1) var(--size-4-2)` (6339), and it is what
+ * makes the box 24px tall and starts it at content x 8 rather than at the
+ * chevron.  The chevron itself does not move: 8 (bar) + 8 (switcher) = the same
+ * content x 16..32 the probe has always asserted. */
+.vault-switch {
+  display: flex;
+  align-items: center;
+  flex: 1 1 auto;
+  /* NO `height`.  Obsidian gives the switcher none either: its box is
+     `padding: 4px 8px` round `max(the 16px icon, the name's line box)`, and the
+     name WINS — 13px at Obsidian's body `line-height: var(--line-height-tight)`
+     of 1.3 (app.css:3204 + 2422) is 16.9px, so the box is 24.9 and not 24.
+     Pinning 24 here was 0.9px short and, worse, pinned a number Obsidian
+     derives; `.vault-name`'s line-height below is what actually sets it. */
+  gap: 8px;                              /* [S] --size-4-2 — label left = 8+8+16+8 = 40 */
+  border: 0;
+  background: none;
+  padding: 4px 8px;                      /* [S] --size-4-1 --size-4-2             */
+  margin: 0;
+  color: var(--text-normal);             /* [S] --vault-profile-color, app.css:6332 */
+  border-radius: var(--radius-s);        /* [S] --vault-profile-radius on Linux    */
+  min-width: 0;
+  font: inherit;
+  text-align: left;
+}
+.vault-switch:hover { background: var(--bg-modifier-hover); }
+/* The glyph host.  A dedicated box element, not the injected <svg> itself, so
+ * the 16px box exists and is measurable before icons.ts has run.
+ * `--text-faint`, NOT `--icon-color`: app.css:6364-6370 gives the switcher icon
+ * `color: var(--text-faint)` and lifts it to `--text-muted` on hover (6353).
+ * Both tokens are character-identical to Obsidian's (#666666 / #b3b3b3). */
+.ico { display: block; }
+.ico-vault {                             /* chevrons-up-down, 16px box [M]      */
+  width: var(--icon-vault); height: var(--icon-vault);
+  flex: 0 0 var(--icon-vault);
+  color: var(--text-faint);
+}
+.vault-switch:hover .ico-vault { color: var(--text-muted); }
+/* The name INHERITS `--text-normal` from the switcher — it is not `--text-muted`.
+ * app.css:6357-6362 sets only size and weight here and lets the colour fall
+ * through from `--vault-profile-color`, which resolves to `--text-normal`.
+ * `--font-medium` is 500 (app.css:2271); there is no weight token to consume. */
+.vault-name {
+  font-size: var(--fs-ui-small);         /* [M] 13px == Obsidian --font-ui-small */
+  font-weight: 500;                      /* [S] --font-medium, app.css:2271      */
+  /* [S] 1.3 is Obsidian's `--line-height-tight`, which its `body` rule puts on
+     everything (app.css:3204).  NOT the heading ladder's own line-heights,
+     which are 1.2/1.2/1.3/1.4/1.5/1.5 (`--hN-lh`, spike Q) and would
+     make the line box 15.6 — under the 16px icon, so the icon would set the
+     switcher's height and the hover box would come out 24 instead of 24.9.
+     base.css puts `--lh-ui: 1` on Cairn's body, so without this line the name's
+     line box is a flat 13px and the same thing happens. A literal for the same
+     reason `font-weight: 500` is one: there is no token for it. */
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+/* §9 E4, SETTLED: the reference's help "?" and settings gear at the right end of
+ * this bar are OMITTED.  No space is reserved and nothing inert is drawn in
+ * their place.  Do not add them back. */
+
+/* ---- 6. the shared icon button (spec-01 §8.3) ---------------------------
+ * `stroke="currentColor"` means one `color` declaration drives the glyph: no
+ * per-icon fill rules, and hover is a single opacity change with no repaint of
+ * the path geometry. */
+.icon-btn {
+  display: grid;
+  place-items: center;
+  border: 0;
+  background: none;
+  padding: 0;
+  margin: 0;
+  color: var(--icon-color);
+  opacity: var(--icon-opacity);
+  border-radius: var(--radius-s);
+}
+.icon-btn:hover {
+  opacity: var(--icon-opacity-hover);
+  background: var(--bg-modifier-hover);
+}
+
+/* ---- 9. the ONE context menu (§5.1, §5.12.4.3, §0.14 E16) ---------------
+ * src/menu.ts's single primitive: the tree's file-row menu, its folder-row
+ * menu, the empty-space menu and the vault bar's recents popover are all THIS
+ * box.  One primitive, not four.  (It was five until §0.12 E14 deleted the sort
+ * menu with the nav toolbar that hosted it.)
+ *
+ * EVERY NUMBER BELOW IS OBSIDIAN 1.12.7's OWN, `[S]` — read out of the `app.css`
+ * inside `/opt/Obsidian/resources/obsidian.asar` on this machine, not measured
+ * off a screenshot.  That matters: the screenshot this work started from is a
+ * CROP at roughly 0.79x with no complete edge of the menu in it, and §0.8 E10 is
+ * the record of what happens when this project derives CSS from a downscaled
+ * capture (it shipped the tab 1px too tall, twice).  The source is exact and the
+ * screenshot is now only a cross-check — a good one: the model below predicts
+ * its submenu box at 88.7 x 0.789 = 70.0px and the crop measures 70.
+ *
+ *   .menu        border 1px, radius --radius-m (8px), padding 0
+ *   .menu-scroll padding --size-2-3 (6px)
+ *   .menu-item   padding --size-4-1 --size-4-2 (4px 8px), gap --size-4-2 (8px),
+ *                font-size --font-ui-small (13px), radius --radius-s (4px)
+ *   body         line-height --line-height-tight (1.3)
+ *   icon         --icon-s 16px at --icon-s-stroke-width 2 (user units)
+ *   .menu-separator  height 0; margin --size-2-3 calc(--size-2-3 * -1);
+ *                    border-bottom --border-width solid --background-modifier-border
+ *
+ * THE ROW IS 24.9px AND IS NEVER PINNED.  13 x 1.3 = 16.9 of text box, which is
+ * taller than the 16px glyph beside it and therefore drives the row, plus 4 + 4
+ * of padding.  §0.7 E9's lesson applies exactly: write the rule, not the answer.
+ * The old box drew 28px rows at 15px in 12px padding with no glyph at all.
+ *
+ * COLOURS ARE CAIRN'S, NOT OBSIDIAN 1.12.7's, AND THAT IS A REPORTED CONFLICT,
+ * NOT AN OVERSIGHT (§0.14.1), AND NO LONGER A CONFLICT.  The two "measurements"
+ * were one build read two ways: docs/reference/obsidian-macos-window.png carries
+ * an iCCP display profile (S27E390, gamma 1.961), so its bytes are framebuffer
+ * values and decode to Obsidian 1.12.7's declared palette exactly.  The whole
+ * palette now targets 1.13.7 — see tokens.css.
+ * Repainting one box would leave it 4 units off every surface around it, so the
+ * tokens stay and the palette question is escalated whole.
+ *
+ * NO `overflow: auto` ANYWHERE IN THIS BLOCK, and no max-height paired with
+ * scrolling.  §5.12.4.3: a menu MUST FIT OR CLIP — a floating box that scrolled
+ * would be the document's THIRD scrollable box, ~23.5 MB at 2x, and would fail
+ * both the probe's `layers.scrollers` row and gate G5d.  Placement is arithmetic
+ * (inline-edit.ts's clampPopup, which flips above the anchor before it clips);
+ * `overflow: hidden` below is the clip, and it is not a scroller.  E16 makes the
+ * tallest menu SHORTER — the 9-row recents popover goes 269 -> 249 — so the clip
+ * branch is further from reachable than it was, not closer.
+ *
+ * The element exists only while the menu is open — there is no persistent popup
+ * layer and no backdrop element, because a permanently mounted viewport-sized
+ * box is exactly what §5.12 spent three spikes removing. */
+.ctx-menu {
+  position: fixed;
+  z-index: 100;
+  /* [S] NO `min-width`.  Obsidian's `.menu` sets none and lets the widest row
+     size the box; the 180px that stood here was fitted to the invented 15px
+     row and now forces ~20px of dead width onto the narrowest menu.  The
+     `max-width` stays as a guard on a long vault name in the recents popover —
+     `.ctx-label` is `clipline`, so it ellipsises rather than overflowing — and
+     is inert for every label the app ships today. */
+  max-width: 320px;
+  padding: 6px;                          /* [S] --menu-padding = --size-2-3    */
+  background: var(--bg-menu);
+  /* [S] §0.27 E67 — --menu-border-color is --background-modifier-border-HOVER
+     (#3f3f3f), not --background-modifier-border (#333333).  The #333333 that
+     stood here is the SEPARATOR's colour, which is --background-modifier-border
+     and stays where it is, ten lines down.  Obsidian uses two different greys
+     for the two rules and Cairn was using one for both. */
+  border: 1px solid var(--menu-border-color);
+  border-radius: var(--radius-m);        /* [S] --menu-radius = --radius-m 8px */
+  box-shadow: var(--menu-shadow);        /* [S] --menu-shadow = --shadow-s     */
+  color: var(--text-normal);
+  font-size: var(--fs-ui-small);         /* [S] --font-ui-small 13px           */
+  line-height: 1.3;                      /* [S] body --line-height-tight       */
+  overflow: hidden;                      /* CLIP, never scroll (§5.12.4.3)     */
+}
+.ctx-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;                              /* [S] --size-4-2                     */
+  padding: 4px 8px;                      /* [S] --size-4-1 --size-4-2          */
+  border-radius: var(--radius-s);        /* [S] --radius-s 4px                 */
+  color: var(--text-normal);
+  white-space: nowrap;
+  min-width: 0;
+  position: relative;                    /* §0.30 E70 — `.ctx-row-btn`'s context */
+}
+/* [S] `.menu-item-icon` VERBATIM, and §0.27 E67 corrected all three of its
+ * declarations.  It is `flex: 0 1 auto` with NO width and NO height: the 16px is
+ * the glyph's own (`icon()` writes `width="16" height="16"`, which is app.css's
+ * `--icon-s` via `.menu-item-icon .svg-icon`), and an EMPTY slot is therefore
+ * ZERO wide.  It still costs the row's 8px `gap`, which is exactly the indent
+ * Obsidian's iconless rows carry — measured 23px from the menu's outer left
+ * edge, against 39px for a row whose slot is filled.
+ *
+ * The `flex: 0 0 16px` that stood here forced the box open to 16px whether or
+ * not a glyph landed in it, so an all-iconless menu would have indented every
+ * label by 24 rather than 8 — which is why menu.ts used to suppress the slot
+ * entirely and why the labels then sat 8px LEFT of Obsidian's.  Two compensating
+ * errors, and removing either one alone makes it worse. */
+.ctx-icon {
+  flex: 0 1 auto;
+  display: flex;
+  color: var(--text-muted);              /* [S] .menu-item-icon                */
+}
+.ctx-label { flex: 1 1 auto; min-width: 0; }
+/* §0.30 E70 — the row's trailing button (the vault popover's `Close`).
+ *
+ * ABSOLUTELY POSITIONED, AND THAT IS THE WHOLE POINT.  Obsidian has no button
+ * inside a `.menu-item`, so anything Cairn adds here is a divergence; putting it
+ * OUT OF FLOW keeps the divergence to the hovered row and leaves every menu's
+ * measured box exactly what §0.27 E67 pinned it to.  In flow — even at
+ * `visibility: hidden` — it would widen the popover by 16 + 8 and quietly
+ * undo that.
+ *
+ * Revealed on hover and on the keyboard's `is-active`, which are ONE state here
+ * (see the rule below), so the resting popover is byte-identical to Obsidian's.
+ * `.ctx-item` is the positioning context — declared on the rule above, not on a
+ * second `.ctx-item {}` here, so there is one block per selector. */
+.ctx-row-btn {
+  position: absolute;
+  right: 8px;                            /* [S] --size-4-2, the row's own padding */
+  top: 50%;
+  transform: translateY(-50%);
+  display: none;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-faint);
+  cursor: var(--cursor, default);
+}
+.ctx-item:hover > .ctx-row-btn,
+.ctx-item.is-active > .ctx-row-btn { display: flex; }
+.ctx-row-btn:hover { color: var(--text-normal); }
+/* A disabled row is a vault whose folder is gone.  Forgetting it is EXACTLY what
+ * a user wants there, so the button stays live while the row does not:
+ * `.ctx-item.is-disabled` sets `pointer-events: none` on the row, and this puts
+ * them back on the one child that still means something. */
+.ctx-item.is-disabled > .ctx-row-btn { pointer-events: auto; }
+/* Hover and keyboard focus are ONE state: a single-selection list cannot show
+ * two different "here" marks without lying about which one Enter will take. */
+.ctx-item:hover,
+.ctx-item.is-active { background: var(--bg-modifier-hover); }
+/* §5.1 X3 — Delete, and nothing else today.  [S] `.menu-item.is-warning` puts
+ * --text-error on the ROW, and `.menu-item.is-warning .menu-item-icon` repeats
+ * it on the glyph, which would otherwise stay --text-muted and read as a
+ * disabled row beside red text. */
+.ctx-item.is-danger,
+.ctx-item.is-danger .ctx-icon { color: var(--text-error); }
+.ctx-item.is-disabled {
+  color: var(--text-faint);
+  pointer-events: none;
+}
+.ctx-item.is-disabled .ctx-icon { color: var(--text-faint); }
+.ctx-item.is-disabled:hover { background: none; }
+/* §0.27 E67 — THERE IS NO RULE FOR THE TICK, and that is the finding.  Obsidian
+ * styles neither `.menu-item.mod-checked` nor its check glyph: the glyph is a
+ * plain trailing `.menu-item-icon`, so it is already 16px and already
+ * --text-muted by the block above, and the title's `flex-grow` is what puts it
+ * against the row's right padding edge.  What stood here was a 30px left gutter
+ * and a `::before "\2713"` TEXT glyph — a different mark, on the other side of
+ * the row, in a font rather than in Lucide, and it moved every ticked row's
+ * label 22px out of line with every plain one in the same menu. */
+/* [S] A RULE, NOT A BOX: `height: 0` with a 1px bottom border and 6px of margin
+ * that BLEEDS 6px past the menu's own 6px padding, so the line runs edge to edge
+ * while the rows do not.  The old `height: 1px; margin: 4px 0` drew it inset. */
+.ctx-sep {
+  height: 0;
+  margin: 6px -6px;
+  border-bottom: 1px solid var(--bg-modifier-border);
+}
+
+/* ---- 10. the shared inline name editor (§7.3 case 11, §5.4.2) -----------
+ * src/inline-edit.ts.  ONE filter and ONE flash in the app, shared by new note,
+ * new folder, rename and the inline title's click-to-rename — so there are not
+ * two that drift.
+ *
+ * The ROW that hosts this input is the caller's: tree rows are absolutely
+ * positioned inside `.sz` under §5.2's box model, which is tree.css's and owner
+ * 04's, and the inline title keeps its own H1 metrics (§5.4.2; 25.888px since
+ * spike Q).  Only the
+ * field itself is styled here. */
+.inline-edit-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 21px;
+  padding: 0 4px;
+  margin: 0;
+  font: inherit;
+  font-size: var(--fs-ui-small);         /* 13px — the tree row's size */
+  color: var(--text-normal);
+  background: var(--bg-form-field);      /* [S] #2e2e2e */
+  border: 1px solid var(--border-focus);
+  border-radius: var(--radius-s);
+  /* base.css sets `user-select: none` on <body> for the chrome; a field the user
+     is typing a filename into has to be selectable. */
+  -webkit-user-select: text;
+  user-select: text;
+}
+.inline-edit-input:focus { border-color: var(--accent); }
+/* The 200 ms invalid flash.  A CLASS ON A TIMER, not an animation: base.css
+ * enforces `animation: none !important` app-wide (M59), so an animated flash
+ * would be silently dead. */
+.inline-edit-input.bad,
+.nc-title-edit.bad {
+  color: var(--text-error);
+  border-color: var(--text-error);
+}
+/* The inline message.  §7.3 case 11 / §5.4.2: on invalidName / alreadyExists the
+ * editor STAYS OPEN with the message inline — nothing is silently
+ * accepted-then-rejected.  Fixed-positioned and clamped by the same arithmetic
+ * as the menu, for the same §5.12.4.3 reason. */
+.inline-edit-msg {
+  position: fixed;
+  z-index: 101;                          /* above an open menu */
+  max-width: 380px;
+  padding: 4px 8px;
+  background: var(--bg-menu);
+  border: 1px solid var(--bg-modifier-border);
+  border-radius: var(--radius-s);
+  box-shadow: var(--shadow-popover);
+  color: var(--text-error);
+  font-size: var(--fs-ui-smaller);       /* 12px */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---- 11. §7.3 case 8 — the vault root is gone --------------------------
+ * `nc://vault-lost`, which before M57 had NO CONSUMER IN ANY FRONTEND SPEC.
+ * The invariant: the app never autosaves into a path whose root is gone, and
+ * never draws a vault that no longer exists.
+ *
+ * §7.3 case 8 specifies no geometry, so this is [C]: a 48px two-line bar in the
+ * same sidebar slot as the §3.3 banners and ABOVE them — "the vault is gone"
+ * outranks "the vault is big".  It shortens the live scroller exactly as a cap
+ * banner does, through the same ordinary-resize path.  The geometry fixture
+ * never trips it (the gate vault is present), so no probe row moves and G9 is
+ * unaffected.  `overflow: hidden`, never a scroller. */
+.vault-lost {
+  height: 48px;
+  flex: 0 0 48px;
+  box-sizing: border-box;
+  border-bottom: 1px solid var(--bg-modifier-border);
+  background: var(--bg-secondary);
+  padding: 0 12px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  overflow: hidden;
+}
+.vault-lost-line {
+  color: var(--text-error);
+  font-size: var(--fs-ui-smaller);       /* 12px */
+  line-height: 1.2;
+}
+.vault-lost-actions { display: flex; gap: 6px; }
+
+/* ---- 11c. F66 — the note-state bar (§7.3 cases 5/7) -----------------------
+ * Same box as `.vault-lost`, deliberately, but across the top of `main.editor`
+ * above `#ed`: it names the NOTE, not the vault. It shows only in the
+ * conflict/detached states, so nothing at rest moves (G9). */
+.note-bar {
+  flex: 0 0 auto;
+  box-sizing: border-box;
+  border-bottom: 1px solid var(--bg-modifier-border);
+  background: var(--bg-secondary);
+  padding: 6px 12px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 4px;
+  overflow: hidden;
+}
+.note-bar-line {
+  color: var(--text-error);
+  font-size: var(--fs-ui-smaller);
+  line-height: 1.2;
+}
+.note-bar-actions { display: flex; gap: 6px; }
+
+/* ---- 11b. §7.3 case 16 — the watcher is degraded (§0.12 E14) ------------
+ * Until E14 this state was one opacity change on nav slot 4, with the whole
+ * explanation in that button's `title`.  E14 deleted the toolbar, so the signal
+ * needs a box of its own — and a box is the better affordance anyway: a lit icon
+ * asks the user to notice a shade of grey, a bar says what happened.
+ *
+ * SAME BOX AS `.vault-lost`, deliberately, so the sidebar has one banner shape
+ * and not three: 48px border-box, two rows, 1px bottom rule, `overflow: hidden`
+ * and NEVER a scroller (§5.12.4.3 / G5d — a third rendered scroller is ~23.5 MB
+ * at 2x).  It ranks BELOW `.vault-lost` and ABOVE `.cap-banner`:
+ * gone > stale > truncated.
+ *
+ * The ink is `--text-muted`, NOT `--text-error`.  The vault is intact and every
+ * note is still readable and writable; what stopped is the live update.  Red is
+ * reserved for `.vault-lost` and for Delete, and spending it here would leave
+ * nothing louder for the case where the vault is actually gone.
+ *
+ * The geometry fixture has a healthy watcher, so this element never exists under
+ * `--pixeltest` and no probe row moves — the same argument §7.3 case 8 makes,
+ * and the probe asserts the absence rather than assuming it. */
+.watch-degraded {
+  height: 48px;
+  flex: 0 0 48px;
+  box-sizing: border-box;
+  border-bottom: 1px solid var(--bg-modifier-border);
+  background: var(--bg-secondary);
+  padding: 0 12px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
+  overflow: hidden;
+}
+.watch-degraded-line {
+  color: var(--text-muted);
+  font-size: var(--fs-ui-smaller);       /* 12px */
+  line-height: 1.2;
+}
+.watch-degraded-actions { display: flex; gap: 6px; }
+
+/* The shared small text button: §7.3 case 8's [ Re-open ] and [ Switch vault… ]
+ * and §7.3 case 16's [ Refresh ].  It used to say "§7.5's first-run button is
+ * deliberately larger and keeps its own rule"; that button is deleted (§0.44
+ * E89) and this is the only text button in the chrome now. */
+.chrome-btn {
+  font: inherit;
+  font-size: var(--fs-ui-smaller);
+  line-height: 1;
+  color: var(--text-normal);
+  background: var(--bg-form-field);
+  border: 1px solid var(--bg-modifier-border);
+  border-radius: var(--radius-s);
+  padding: 3px 8px;
+  margin: 0;
+}
+.chrome-btn:hover { background: var(--bg-modifier-hover); }
+
+/* A switch is in flight (§4.3).  The button is disabled for the whole of steps
+ * 1-6, so a second click cannot start a second teardown behind the first. */
+.vault-bar.is-busy .vault-switch { opacity: var(--icon-opacity); }

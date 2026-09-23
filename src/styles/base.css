@@ -1,0 +1,202 @@
+/* ==========================================================================
+ * src/styles/base.css
+ * Owner: 01.  Spec: CONTRACT.md §5.12.5 (the main frame must never scroll),
+ * §5.1 rule 5 (no transitions, no animations anywhere), §6.1 (no innerHTML
+ * outside icons.ts), spec-01 §1 / §4 (font strategy: no font files shipped).
+ *
+ * Reset, font stacks, and the no-layer discipline.  DECLARES NO CUSTOM
+ * PROPERTY — tokens.css is the only declaration site (CONTRACT §5.1).
+ * ======================================================================== */
+
+*, *::before, *::after { box-sizing: border-box; }
+
+/* CONTRACT §5.12.5, NORMATIVE AND MEMORY-LOAD-BEARING, verbatim:
+ *   `html, body { overflow: hidden; height: 100% }`
+ * A main frame that CANNOT scroll is tiled to exactly its viewport (overdraw
+ * 1.00x at every size).  The moment the document scrolls it takes overdraw like
+ * any other scroller: at 1600x1000 it takes 3.28x where a subscroller takes
+ * 1.64x, and the measured page-scroll variant came in at 4.25x against a 2.96x
+ * baseline — 44% WORSE than the baseline it was meant to beat — and it was also
+ * UNSTABLE (3.88 MB and 7.00 MB for the identical page at the identical size).
+ * `position: fixed` does not rescue it; `position: sticky` earns the sidebar its
+ * own backing store on top.  Asserted by the probe's `layers.scrollers` row on
+ * BOTH elements, because overflow:hidden on html alone still lets body scroll in
+ * some quirks paths. */
+html, body {
+  overflow: hidden;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--bg-primary);
+  color: var(--text-normal);
+  font-family: var(--font-ui);
+  font-size: var(--fs-ui-small);
+  line-height: var(--lh-ui);
+  /* [S] §0.42 — `body { text-rendering: optimizeLegibility }`, app.css:3202 in
+     1.13.7 and :3135 in 1.12.7, i.e. in every build of Obsidian this project
+     has ever read.  Cairn had NO `text-rendering` declaration anywhere: `grep
+     -rn text-rendering src/ electron-shell/` returned nothing.
+   *
+   * IT IS INERT ON THIS MACHINE AND IT IS STILL WRONG TO OMIT.  Measured both
+   * ways in the live app at 2048x1070 / dpr 1.25: `.metadata-content` 129.9,
+   * first line top 329.1, and a full-frame diff of 3,425,280 pixels with the
+   * declaration toggled on the running body — **0 differing pixels**.  So it
+   * buys nothing against the font this stack resolves to here.
+   *
+   * What it buys is that it cannot start mattering silently.  `optimizeLegibility`
+   * turns on kerning and standard ligatures; a font that carries either renders
+   * different ADVANCE WIDTHS, which moves where every line wraps, which moves
+   * everything below it.  The stack is `ui-sans-serif, …` (§0.18 E23) and
+   * resolves per machine — so "no difference" is a fact about this box's
+   * fontconfig, not about the declaration.  A transcription that is currently a
+   * no-op is exactly the kind this project keeps: §5.1's rule is that Cairn's
+   * sheet says what Obsidian's says. */
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  /* wry sets dragDropEnabled:false (CONTRACT §6.1) so CM6's in-editor text drags
+     survive; this only suppresses the webview's own text-selection drag on chrome.
+     Obsidian writes the SAME TWO DECLARATIONS on `body` (app.css:3168) and
+     nothing else about selection. */
+  -webkit-user-select: none;
+  user-select: none;
+  /* THERE IS NO `cursor` HERE, AND ITS ABSENCE IS THE RULE.  `cursor` inherits,
+     so `body { cursor: default }` -- which shipped until 2026-09-10 -- pinned an
+     ARROW over every character in the note: the editor's own `cursor: auto`
+     never got a chance, because `auto` is the UA value the declaration replaced.
+     Reported by the user ("hovering on text doesn't change the cursor").
+     Obsidian sets no cursor on `body` either; it spends `cursor: var(--cursor)`
+     (= `default`) on the ~40 CHROME elements that need it and leaves everything
+     else at `auto`.  With `auto`, Chromium shows an I-beam exactly where the
+     node can start a selection or is editable -- which is `.cm-content` and the
+     Properties inputs and nothing else, because this `user-select: none` covers
+     the rest of the app.  So the chrome is unchanged and the text reads as text.
+     Do not reintroduce it: pin a cursor on the one element that needs one. */
+}
+
+/* Obsidian's own companion to the two declarations above, app.css:3173, and it
+ * had been transcribed WITHOUT it:
+ *   body [contenteditable="true"], body [contenteditable=""] { user-select: text }
+ * `user-select` inherits, so the blanket `none` on `body` reaches into every
+ * editable region and Cairn's `.cm-content` computed `none` where Obsidian's
+ * computes `text` (both measured over CDP, 2026-09-10, same machine).  A drag
+ * still selected -- an editable node can start a selection whatever `user-select`
+ * says -- so nothing looked broken, which is exactly why it survived; but it is
+ * the property Chromium reads when it decides between an arrow and an I-beam
+ * for `cursor: auto`, and no rule should have to depend on the editable
+ * short-circuit.  `editor.css`'s per-element copy on `.metadata-input-longtext`
+ * is now redundant with this and is left alone: same value, same reason. */
+body [contenteditable="true"],
+body [contenteditable=""] {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* CONTRACT §5.1 rule 5 (M59): NO TRANSITIONS, NO ANIMATIONS, ANYWHERE.
+ * spec-04 §4.3's `transition: transform 100ms ease` on the chevron is STRUCK.
+ * This is a blanket enforcement, not a preference: an animated property is a
+ * per-frame paint on a main thread that CONTRACT §5.12.6 has already made the
+ * critical path of every scroll frame.
+ *
+ * ── ⚠ ITS RATIONALE NAMES AN ENGINE THAT NO LONGER EXISTS ──────────────────
+ * §5.12.6 made the MAIN THREAD the scroll critical path by disabling WebKitGTK's
+ * async overflow scrolling.  That engine was DELETED (§0.20.6 E35), and its
+ * successor sustains 105 fps (spike P).  The rule is still in force because
+ * nobody has ruled otherwise — but read it as a rule whose reason is gone, not
+ * as a measured constraint, and see §0.24.5 before extending it.
+ *
+ * ── WHAT IT SILENTLY KILLED, FOUND 2026-09-09 ──────────────────────────────
+ * A stylesheet `!important` outranks a NORMAL INLINE style, so this rule
+ * defeats JavaScript that sets `element.style.transition` as well as anything
+ * in a sheet.  Three declarations written to match Obsidian were dead on
+ * arrival and nothing failed:
+ *   · `editor.css`'s fold-arrow rotation (app.css:7274)   — now `!important`
+ *   · `properties.ts`'s 100ms fold slide (app.js `bl`/`wl`) — inline `!important`
+ *   · `editor.css:453`'s checkbox box-shadow (app.css:12923) — still dead, and
+ *     harmless, but NOT for the reason this comment gave until 2026-09-10.  It
+ *     claimed the box is read-only and `pointer-events: none`; it is neither —
+ *     the task box takes a real `mousedown` and edits the document (§0.23 E47),
+ *     and no rule gives it `pointer-events`.  It is dead TWICE: this blanket
+ *     rule outranks it, and nothing in `editor.css` ever sets `box-shadow` on
+ *     that element for it to animate.  The hover it belongs to changes
+ *     `border-color`, which is not in the transition.
+ * THERE ARE FOUR EXEMPTIONS AND NOTHING ELSE.  All four exist because the user
+ * reported the difference.
+ *   · the two above, inside the Properties block — "Obsidian - smooth. Cairn:
+ *     just show/hide abruptly."
+ *   · §0.44 E90, `tree.css`'s `.tr.d::before` — the folder chevron's
+ *     `transform 100ms ease-in-out`, Obsidian's app.css:7893.  "Please reverse
+ *     engineer the open folder animation … both the animation of the arrow and
+ *     the animation of the notes appearing."
+  *   · the Memoir page's ink ring/dot and shimmer lines
+  *     (`memoir.css`) — "the animation didn't run. It was frozen."  Scoped to
+  *     three selectors inside `#memoir`, by the same specificity mechanism as
+  *     the chevron.  Drawer slides and button transitions stay banned.
+ *
+ * THE THIRD ONE IS WHY THIS PARAGRAPH IS WORTH READING BEFORE ADDING A FIFTH.
+ * It is declared `!important` in `tree.css` and it WINS, where a normal
+ * declaration would have been silently dead: between two AUTHOR `!important`
+ * declarations the cascade falls back to SPECIFICITY, and `.tr.d::before`
+ * (0,2,1) outranks this rule's `*::before` (0,0,1).  Its duration is also a
+ * custom property rather than a literal — `var(--chev-ms, 0ms)` — because the
+ * tree's rows are POOLED and a blanket transition would animate a row that
+ * merely changed which node it draws.  Neither trick is decoration; see the
+ * block on `.tr.d::before` in `tree.css` for the whole argument.  The fourth
+ * (the Memoir checking animation) won the same way, scoped to `#memoir`.
+ *
+ * The FIFTH one, whenever it comes, should note that this rule's own rationale
+ * names an engine that no longer exists (see the warning above) and that
+ * whether a blanket ban still earns its keep is a user ruling nobody has
+ * taken. */
+*, *::before, *::after {
+  transition: none !important;
+  animation: none !important;
+}
+
+/* Obsidian's own, `app.css:4457`, and GLOBAL there as it is here:
+ *   ::selection { background-color: var(--text-selection) }
+ * `body` above is `user-select: none`, so the only selectable text in the app is
+ * the editor's and the two name editors' — and the tree's rename field opened
+ * with Chromium's DEFAULT BLUE against Obsidian's accent wash until this rule
+ * existed, which is visible in any side-by-side of the two renaming a note.
+ * `editor.css`'s `.cm-editor ::selection` is now redundant with this and is left
+ * alone: it names the same token, so the two cannot disagree. */
+::selection { background-color: var(--text-selection); }
+
+/* No focus ring on the shell.  Rows are not individually focusable; the tree
+ * container takes focus and keyboard navigation moves `.is-active`
+ * (spec-01 §5.4).  Where a ring is ever needed it is a `box-shadow`, never
+ * `outline` — the tree's cursor ring is Obsidian's outset 2px on the row
+ * fill (tree.css). */
+:focus { outline: none; }
+
+/* The app shell.  Two columns; `.app` itself carries no border-right and none
+ * of that colour change is drawn here — CONTRACT §5.3 / spec-01 §2 read that
+ * way until 2026-09-15, when a user ruling overturned it and put a 1px
+ * `--divider-color` line back, on `.sidebar-resize` (chrome.css), which is
+ * where Obsidian itself draws it (`KNOWN-ISSUES.md` UI-3, closed). `.app`
+ * was never the right element for it either way. */
+.app {
+  position: absolute;
+  inset: var(--titlebar-h) 0 0 0;   /* below the 39px strip, filling the rest */
+  display: flex;
+  min-height: 0;
+}
+
+img, svg { max-width: 100%; }
+svg { display: block; }
+
+/* CONTRACT §5.12.4.3 — NO THIRD SCROLLER, EVER.  Any new box with
+ * `overflow: auto | scroll | overlay` whose content overflows earns its own
+ * compositing surface, and a viewport-sized one costs ~23.5 MB at 2x.  Menus,
+ * popovers, the tab strip, the vault bar and both §3.3 cap banners must fit or
+ * clip — single line with `text-overflow: ellipsis`.  This class is the shared
+ * primitive for that, and it is why nothing in chrome.css says `overflow:auto`. */
+.clipline {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+}

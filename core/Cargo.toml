@@ -1,0 +1,104 @@
+# Owner: 07.  CONTRACT.md §6.2 IS this manifest — spec-07 §4's dependency block
+# and spec-02 §1.4's Linux target block are both STRUCK.
+
+[package]
+name         = "cairn"
+version      = "0.1.0"
+edition      = "2021"
+rust-version = "1.77.2"          # spec-07's verified floor; a lower floor is strictly more permissive
+license      = "MIT"
+publish      = false
+description  = "Cairn — a memory-lean markdown vault viewer"
+
+[lib]
+name       = "cairn_lib"
+# `rlib` ONLY.  The napi addon links this as a normal Rust library and emits
+# the `cdylib` itself.
+crate-type = ["rlib"]
+
+# The napi addon is a SEPARATE crate because napi-rs owns the `cdylib` it
+# emits.  One workspace, so there is one `Cargo.lock` and one `target/` and the
+# core and the addon cannot drift a dependency version against each other.
+#
+# `default-members` is EXPLICIT and it is load-bearing: without it a bare
+# `cargo test` run from this directory would be read by a future cargo as
+# "the workspace".
+[workspace]
+members        = ["napi"]
+default-members = ["."]
+
+
+[dependencies]
+# tokio is a DIRECT dependency: the runtime tuning (2 workers, 6 blocking
+# threads) is load-bearing — the search coordinator holds one blocking slot
+# for a whole search — and a transitive dependency cannot be configured.
+# `rt` is what `Handle`/`JoinHandle` need; `rt-multi-thread` is kept for the
+# integration tests, which build the real 2-worker runtime.
+tokio            = { version = "1.48", default-features = false, features = ["rt", "rt-multi-thread"] }
+serde            = { version = "1.0.229", features = ["derive"] }
+serde_json       = "1.0.151"
+# notify 8's feature table is exactly default= ["macos_fsevent"], macos_fsevent,
+# macos_kqueue, serde, serialization-compat-6 — so this stanza is a no-op that
+# happens to equal the default.  Kept anyway: it makes the intent explicit and
+# pins behaviour if the default ever changes.  spec-02's "keeps crossbeam-channel
+# and flume off" justification is STRUCK as factually wrong.
+notify           = { version = "8.2.0", default-features = false, features = ["macos_fsevent"] }
+# KEEP DEFAULT FEATURES.  spec-07's `default-features = false` was justified by
+# "drops its Linux D-Bus/chrono path", which is wrong: trash 5.2.7's [features]
+# table holds only the four coinit_* Windows flags plus the implicit optional
+# `chrono`, and no dbus feature at all.  chrono writes the .trashinfo
+# DeletionDate field, WITHOUT WHICH LINUX FILE MANAGERS CANNOT RESTORE PROPERLY
+# — i.e. dropping it silently breaks the one recovery path §7.3 depends on.
+trash            = "5.2.7"
+# UNCONDITIONAL (M68).  malloc_trim is Linux-glibc-only and is cfg'd AT THE CALL
+# SITE; a musl build will not link it, which is a recorded limitation.
+libc             = "0.2.189"
+memchr           = "2.8.3"
+grep-searcher    = "0.1.17"
+grep-regex       = "0.1.14"
+grep-matcher     = "0.1.9"
+# §0.33 E79 — `nucleo-matcher` (MPL-2.0) IS REMOVED.  Its only consumer was the
+# filename phase of search, which is a case-insensitive SUBSTRING match now by
+# user ruling; a subsequence matcher is Obsidian's quick switcher, not its
+# search panel.  The MPL-2.0 obligation goes with it.
+
+
+
+[dev-dependencies]
+tempfile = "3.27.0"
+
+# panic = "unwind", NOT "abort" (B7, B21, M50).  Unwind tables are
+# demand-paged sections, so they cost file size and virtual address space, not
+# the resident footprint this project optimises.  Against that ~0 MB benefit
+# sits a real DATA-LOSS cost: with unwind, a panic inside a command kills that
+# one task, the promise rejects, the window stays up, and the user's unsaved
+# text — which lives in the webview, not in Rust — is still there and still
+# savable.  With abort, one unwrap on a corrupt directory entry destroys the
+# whole dirty CodeMirror buffer, with no crash handler and no journal (there is
+# deliberately no WAL).  abort also makes `cargo test --release` impossible.
+#
+# opt-level = "s", NOT "z".  Nearly irrelevant to memory (binary text is
+# demand-paged clean), so it is decided by the one thing it does affect: gate
+# G4, the 60 ms search budget.  "s" with memchr at 3 is the measured
+# configuration.
+[profile.release]
+opt-level       = "s"
+lto             = "fat"
+codegen-units   = 1
+panic           = "unwind"
+strip           = "symbols"
+incremental     = false
+overflow-checks = false
+debug           = false
+
+# Under lto = "fat" a per-package override is a STRONG HINT, not a hard
+# partition.  Recorded so nobody reads a G4 regression as a manifest bug.
+[profile.release.package.memchr]
+opt-level = 3
+
+[profile.dev]
+opt-level   = 0
+incremental = true
+
+[profile.dev.package."*"]
+opt-level = 2
