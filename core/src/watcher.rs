@@ -502,7 +502,7 @@ fn wants_rewatch(ev: &Event) -> bool {
  * guarded -- `symlink_metadata` fails, there is no ctime to compare, and a
  * deletion must always propagate. */
 #[derive(Clone, Copy)]
-struct Epoch(i128);
+struct Epoch(#[cfg_attr(not(target_os = "macos"), allow(dead_code))] i128);
 
 impl Epoch {
     /// An epoch nothing can predate, so the guard is inert. Unit tests that
@@ -523,11 +523,28 @@ impl Epoch {
 
     /// True when `path` still exists and NOTHING has touched its inode since
     /// this epoch — i.e. the event reporting it is FSEvents replaying history.
+    ///
+    /// MACOS ONLY, and Linux returns false outright.  inotify is a LIVE stream:
+    /// it emits only events from the moment the watch is registered, so there
+    /// is no history to replay and the comparison can only do harm.  It did:
+    /// ctime is coarse (jiffy granularity) while the epoch is `SystemTime::now()`
+    /// at nanoseconds, so a legitimate write in the same tick as
+    /// `VaultWatcher::start` compared as older than the epoch and was dropped —
+    /// the vault's first external edit, silently lost.  FSEvents really does
+    /// replay, so macOS keeps the guard.
     fn predates(self, path: &Path) -> bool {
-        use std::os::unix::fs::MetadataExt;
-        match std::fs::symlink_metadata(path) {
-            Ok(md) => (md.ctime() as i128) * 1_000_000_000 + (md.ctime_nsec() as i128) < self.0,
-            Err(_) => false,
+        #[cfg(target_os = "macos")]
+        {
+            use std::os::unix::fs::MetadataExt;
+            match std::fs::symlink_metadata(path) {
+                Ok(md) => (md.ctime() as i128) * 1_000_000_000 + (md.ctime_nsec() as i128) < self.0,
+                Err(_) => false,
+            }
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            let _ = path;
+            false
         }
     }
 }
@@ -1127,6 +1144,29 @@ mod tests {
             flushes.is_empty(),
             "a pre-existing file surfaced as an external change: {flushes:?} — \
              the tree was walked with this content already in it"
+        );
+    }
+
+    /// LINUX DOES NOT REPLAY HISTORY, SO IT MUST NOT PREDATE.  The ctime this
+    /// guard reads comes from the coarse clock (jiffy granularity) while the
+    /// epoch is `SystemTime::now()` at nanoseconds, so a legitimate write in
+    /// the same tick as `VaultWatcher::start` compared as OLDER than the epoch
+    /// and was dropped as if it were FSEvents history — the first external
+    /// edit after opening a vault could be lost silently.  `native.test.mjs`
+    /// reproduced it 8 runs in 10; this pins the rule.
+    #[cfg(not(target_os = "macos"))]
+    #[test]
+    fn a_linux_write_in_the_same_tick_as_the_epoch_is_not_history() {
+        let dir = tempfile::tempdir().unwrap();
+        let note = dir.path().join("Note.md");
+        std::fs::write(&note, b"fresh\n").unwrap();
+        // The sleep forces the file's coarse ctime to a tick strictly before
+        // the fine epoch: the exact shape the jiffy race produces.
+        std::thread::sleep(Duration::from_millis(20));
+        let epoch = Epoch::now();
+        assert!(
+            !epoch.predates(&note),
+            "a write from this tick was classified as FSEvents history and dropped"
         );
     }
 

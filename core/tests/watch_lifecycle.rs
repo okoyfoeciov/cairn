@@ -76,9 +76,9 @@ fn base() -> (tempfile::TempDir, PathBuf) {
 
 fn open(ctx: &Rec, root: &Path) {
     app::open_vault_blocking(ctx, &ctx.state, root.to_str().unwrap()).unwrap();
-    // Let the watch settle; the epoch guard compares a coarse ctime against a
-    // fine clock, so a write in the same jiffy as `start` can read as history.
-    std::thread::sleep(Duration::from_millis(300));
+    // No settle sleep, deliberately: a write immediately after the watcher
+    // starts is exactly the jiffy race `Epoch::predates` used to lose on
+    // Linux, and every test below must pass without one.
 }
 
 /// §7.3 case 8, when the vault's PARENT is renamed: the root's own inode
