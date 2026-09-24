@@ -305,3 +305,49 @@ test('F48: a hung Check disables nothing after reset(), and the abort lands', as
     delete globalThis.fetch
   }
 })
+
+/* F48's deadline must outlast a real check: a full-size entry (12000
+ * characters) takes about 210 s at llm-service, and a deadline shorter than
+ * that aborts an answer that was on its way. */
+test('F48: the Check deadline outlasts a full-size check and still fires', async (ctx) => {
+  const t = makeTransport()
+  const pane = globalThis.document.createElement('div')
+  const v = MO.mountMemoir(pane, {
+    path: 'Memoir.md',
+    transport: t,
+    onDirtyChanged: () => {},
+    onFirstCreate: () => {},
+    onError: () => {},
+  })
+  v.show()
+  await settle()
+  await settle()
+  let aborted = false
+  globalThis.fetch = (_url, opts) => new Promise((_, rej) => {
+    opts?.signal?.addEventListener('abort', () => {
+      aborted = true
+      rej(new Error('aborted'))
+    })
+  })
+  ctx.mock.timers.enable({ apis: ['setTimeout'] })
+  try {
+    const btn = pane.descendants().find((e) => e.tagName === 'BUTTON' && e.id === 'mm-checkBtn')
+    assert.ok(btn, 'no Check button')
+    btn.dispatch('click', {})
+    await settle()
+    await settle()
+    assert.equal(btn.disabled, true, 'Check never started')
+    ctx.mock.timers.tick(210_000)
+    await settle()
+    assert.equal(aborted, false, 'a 210 s check was cut off')
+    ctx.mock.timers.tick(90_000)
+    await settle()
+    await settle()
+    assert.equal(aborted, true, 'the deadline never fired')
+    assert.equal(btn.disabled, false, 'a timed-out Check left the button dead')
+  } finally {
+    ctx.mock.timers.reset()
+    delete globalThis.fetch
+    v.reset()
+  }
+})

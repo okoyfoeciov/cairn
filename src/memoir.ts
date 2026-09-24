@@ -353,8 +353,9 @@ export function mountMemoir(pane: HTMLElement, deps: MemoirDeps): MemoirView {
   // F48: the one live LLM request, if any. A hung service must not disable
   // both buttons for the rest of the session: every request carries a
   // deadline, and leaving the UI (drawer close, tab leave, vault switch)
-  // cancels it.
-  const LLM_DEADLINE_MS = 180_000
+  // cancels it. A full-size entry (12000 characters) takes about 210 s to
+  // check, so the deadline sits well past that.
+  const LLM_DEADLINE_MS = 300_000
   let llmAbort: AbortController | null = null
 
   /** Cancel the live request, if any. Idempotent. */
