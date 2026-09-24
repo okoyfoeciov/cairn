@@ -1729,11 +1729,18 @@ function imageDeco(doc: Text, from: number, to: number): Decoration {
  *               i12 + 1`), so only a caret ON the bullet turns the dot back
  *               into a `-`.  `hr` tests its own node range, which is the line's
  *               whole text and therefore the same thing.
+ *   'never'     Cairn's, not Obsidian's [C]: a pasted image is never revealed.
+ *               The paste leaves the caret touching the new run, so any other
+ *               scope shows base64 soup until the caret moves away — and the
+ *               ruling is that the image is on the page from the keystroke
+ *               until Backspace/Delete or the X takes it.
  */
-type RevealScope = 'line' | 'construct' | 'marker'
+type RevealScope = 'line' | 'construct' | 'marker' | 'never'
 
 function revealScope(kind: ConstructKind): RevealScope {
   switch (kind) {
+    case 'image':
+      return 'never'
     case 'heading':
     case 'blockquote':
     case 'escape':

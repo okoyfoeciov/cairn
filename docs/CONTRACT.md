@@ -2884,6 +2884,7 @@ E46). Finding and decorating are separated by the `ConstructSource` / `buildDeco
 | **line** | heading, blockquote marker, backslash escape |
 | **construct** | bold, italic, strikethrough, highlight, inline code, link |
 | **marker** | list bullet, ordered marker, task box, thematic break |
+| **never** | pasted image — Cairn `[C]`, not Obsidian: the paste leaves the caret touching the run, so the image renders from the keystroke until Backspace/Delete or the X takes it |
 
 So a caret anywhere on a heading line reveals its `## ` but **not** the bold on the same line, and
 only a caret exactly on a bullet turns the dot back into a `-`. **AND THE REVEAL IS GATED ON

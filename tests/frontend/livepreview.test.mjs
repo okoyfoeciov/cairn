@@ -1339,11 +1339,14 @@ test('image: hidden behind a widget off the caret, atomic so one Backspace takes
   assert.deepEqual(atoms, [{ from: 4, to: 4 + IMG.length }], 'the whole run deletes as one')
 })
 
-test('image: revealed as source where the selection touches it, and not atomic there', () => {
-  const { found, atoms } = markerAt(`see ${IMG} here`, { anchor: 10 })
+test('image: never revealed — the widget is up from the paste keystroke itself', () => {
+  // The paste leaves the caret at the end of the inserted run; any other scope
+  // shows base64 soup until the caret moves away. The ruling is that the image
+  // is on the page from the keystroke until Backspace/Delete or the X takes it.
+  const { found, atoms } = markerAt(`see ${IMG} here`, { anchor: 4 + IMG.length })
   assert.equal(found.length, 1)
-  assert.equal(found[0].v, LP.SHOW_PLAIN)
-  assert.deepEqual(atoms, [])
+  assert.ok(found[0].v.spec.widget instanceof LP.ImageWidget)
+  assert.deepEqual(atoms, [{ from: 4, to: 4 + IMG.length }])
 })
 
 test('image: a screenshot-sized data URL on its own line still renders', () => {
