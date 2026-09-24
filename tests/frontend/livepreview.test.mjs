@@ -1306,3 +1306,56 @@ test('F77: the reveal state is frozen while a composition is active', () => {
   })
   assert.ok(hideCount() > 0, 'hidden again once the composition is over')
 })
+
+/* =========================================================================
+ * Pasted clipboard images: `![…](data:image/…)` renders as an image widget.
+ * Anything else that starts with `![` keeps LP-2's raw-source treatment.
+ * ======================================================================= */
+
+const IMG = '![pasted image](data:image/png;base64,iVBORw==)'
+
+test('image: a pasted data-URL image is one construct covering the whole run', () => {
+  const doc = `see ${IMG} here`
+  const found = constructs(doc).filter((c) => c.kind === 'image')
+  assert.equal(found.length, 1)
+  assert.deepEqual({ from: found[0].from, to: found[0].to }, { from: 4, to: 4 + IMG.length })
+  assert.deepEqual(found[0].markers, [['open', 4, 4 + IMG.length]])
+})
+
+test('image: a file or remote image stays raw source, never a link', () => {
+  for (const doc of ['see ![a](b.png) here', 'see ![a](https://x.com/b.png) here', 'see ![a][ref] here']) {
+    assert.deepEqual(constructs(doc).filter((c) => c.kind === 'image'), [], doc)
+    assert.deepEqual(constructs(doc).filter((c) => c.kind === 'link'), [], doc)
+  }
+})
+
+test('image: hidden behind a widget off the caret, atomic so one Backspace takes it', () => {
+  const doc = `see ${IMG} here`
+  const { found, atoms } = markerAt(doc, { anchor: 0 })
+  assert.equal(found.length, 1)
+  assert.ok(found[0].v.spec.widget instanceof LP.ImageWidget, 'the run is replaced by the image')
+  assert.equal(found[0].v.spec.widget.url, 'data:image/png;base64,iVBORw==')
+  assert.deepEqual({ from: found[0].from, to: found[0].to }, { from: 4, to: 4 + IMG.length })
+  assert.deepEqual(atoms, [{ from: 4, to: 4 + IMG.length }], 'the whole run deletes as one')
+})
+
+test('image: revealed as source where the selection touches it, and not atomic there', () => {
+  const { found, atoms } = markerAt(`see ${IMG} here`, { anchor: 10 })
+  assert.equal(found.length, 1)
+  assert.equal(found[0].v, LP.SHOW_PLAIN)
+  assert.deepEqual(atoms, [])
+})
+
+test('image: a screenshot-sized data URL on its own line still renders', () => {
+  const big = '![pasted image](data:image/png;base64,' + 'A'.repeat(25_000) + ')'
+  const found = constructs(big).filter((c) => c.kind === 'image')
+  assert.equal(found.length, 1, 'past INLINE_SLICE, a paragraph line is still scanned whole')
+  assert.deepEqual({ from: found[0].from, to: found[0].to }, { from: 0, to: big.length })
+})
+
+test('image: imageRangeAt answers the run around the pointer, else null', () => {
+  const state = st(`see ${IMG} here`)
+  assert.deepEqual(LP.imageRangeAt(state, 10), { from: 4, to: 4 + IMG.length })
+  assert.equal(LP.imageRangeAt(state, 2), null)
+  assert.equal(LP.imageRangeAt(st('see ![a](b.png) here'), 8), null)
+})

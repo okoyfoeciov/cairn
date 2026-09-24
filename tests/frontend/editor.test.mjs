@@ -2069,3 +2069,24 @@ test('F83: openNote blurs a focused widget editor inside the note first', async 
   }
   assert.deepEqual(blurred, [true], 'the widget field was never committed')
 })
+
+/* Pasted clipboard images land inline as `![pasted image](data:…)` — the one
+ * image use case. Like `refuseDrop` above, the pick rule is pure so it is
+ * unit-testable without manufacturing a ClipboardEvent. */
+test('image paste: firstClipboardImage takes the first image file, nothing else', () => {
+  assert.equal(ED.firstClipboardImage(null), null)
+  assert.equal(ED.firstClipboardImage({ files: [] }), null)
+  assert.equal(ED.firstClipboardImage({ files: [{ type: 'text/plain' }] }), null)
+  const png = { type: 'image/png' }
+  assert.equal(ED.firstClipboardImage({ files: [png] }), png)
+  assert.equal(
+    ED.firstClipboardImage({ files: [{ type: 'text/plain' }, png] }),
+    png,
+    'a text item does not hide the image behind it',
+  )
+})
+
+test('image paste: blobToDataUrl carries the MIME and the bytes', async () => {
+  const url = await ED.blobToDataUrl(new Blob([new Uint8Array([137, 80, 78, 71])], { type: 'image/png' }))
+  assert.equal(url, 'data:image/png;base64,iVBORw==')
+})

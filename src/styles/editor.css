@@ -911,6 +911,31 @@
   margin: 0;
 }
 
+/* -- pasted images ------------------------------------------------------
+ * Ctrl/Cmd-V writes `![pasted image](data:…)` (editor.ts) and livepreview.ts
+ * renders it through `ImageWidget`.  The X is Cairn's, not Obsidian's [C]:
+ * Obsidian draws no remove control on images (its value beside this rule is
+ * "no control").  Pinned by tests/frontend/livepreview.test.mjs so nobody
+ * silently "corrects" the divergence back. */
+.nc-img-wrap { position: relative; display: inline-block; max-width: 100%; }
+.nc-img { max-width: 100%; height: auto; vertical-align: middle; }
+.nc-img-x {
+  position: absolute;
+  top: 4px;
+  inset-inline-end: 4px;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--bg-modifier-border);
+  border-radius: var(--radius-m);
+  background: var(--bg-secondary);
+  color: var(--text-muted);
+  font-size: 14px;
+  line-height: 1;
+  cursor: default;
+}
+.nc-img-x:hover { color: var(--text-normal); background: var(--bg-modifier-hover); }
+
 /* ---- 6. THE PROPERTIES BLOCK (§5.4.5, 2026-09-09) ----------------------
  * Owner: 03.  Source: `src/properties.ts`, and Obsidian 1.12.7's `app.css`
  * lines 11161-11485.  Class names here are OBSIDIAN'S OWN, not `nc-`-prefixed,

@@ -521,6 +521,45 @@ export function refuseDrop(
   return !!dt.files && dt.files.length > 0
 }
 
+/**
+ * Pasted clipboard images land inline as `![pasted image](data:…)` — the one
+ * image use case.  A data URL keeps the image in the note's own text, so no
+ * core change (the tree holds `.md` only), no IPC addition (the table is
+ * closed at 25) and no attachment folder are owed.
+ *
+ * `firstClipboardImage` is the pure pick rule — the first `image/*` file, or
+ * null — unit-testable without manufacturing a ClipboardEvent, like
+ * `refuseDrop` above.  `blobToDataUrl` converts through `arrayBuffer` + `btoa`
+ * rather than `FileReader`, so it runs identically in the renderer and in the
+ * Node harness.
+ */
+export interface ClipboardImageLike {
+  readonly type: string
+  arrayBuffer(): Promise<ArrayBuffer>
+}
+
+export function firstClipboardImage(
+  dt: { files?: ArrayLike<ClipboardImageLike> | null } | null,
+): ClipboardImageLike | null {
+  const files = dt?.files
+  if (!files) return null
+  for (let i = 0; i < files.length; i++) {
+    const f = files[i] as ClipboardImageLike | undefined
+    if (f !== undefined && typeof f.type === 'string' && f.type.startsWith('image/')) return f
+  }
+  return null
+}
+
+export async function blobToDataUrl(blob: ClipboardImageLike): Promise<string> {
+  const buf = new Uint8Array(await blob.arrayBuffer())
+  let bin = ''
+  const CHUNK = 0x8000
+  for (let i = 0; i < buf.length; i += CHUNK) {
+    bin += String.fromCharCode.apply(null, Array.from(buf.subarray(i, i + CHUNK)) as number[])
+  }
+  return `data:${blob.type};base64,${btoa(bin)}`
+}
+
 const EXTENSIONS: Extension[] = [
   blockIndex,
   livePreview,
@@ -544,6 +583,31 @@ const EXTENSIONS: Extension[] = [
       if (refuseDrop(event.dataTransfer)) {
         event.preventDefault()
       }
+    },
+    /* Pasted clipboard images land inline; everything else pastes as CM6
+       pastes it.  Returning true stops CM6's own handler, which would
+       otherwise insert the file's name (or nothing) beside our markdown. */
+    paste(event, v) {
+      const file = firstClipboardImage(event.clipboardData)
+      if (!file) return false
+      if (v.state.readOnly || open === null || secretMode) return false
+      event.preventDefault()
+      // F38's shape at paste scale: the read is async and the user may switch
+      // notes while it is in flight — the image then belongs to neither note,
+      // so it is dropped rather than written into the wrong one.
+      const path = open.path
+      void blobToDataUrl(file).then((url) => {
+        if (currentPath() !== path || v.state.readOnly) return
+        const sel = v.state.selection.main
+        v.dispatch({
+          changes: { from: sel.from, to: sel.to, insert: `![pasted image](${url})` },
+          scrollIntoView: true,
+          userEvent: 'input.paste-image',
+        })
+      }).catch((e: unknown) => {
+        console.error('cairn[image-paste]: ' + (e instanceof Error ? e.message : String(e)))
+      })
+      return true
     },
   }),
   /* §0.38 E85 — the link click, `KNOWN-ISSUES.md` LP-1 closed.  A `click`

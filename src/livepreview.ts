@@ -18,10 +18,12 @@
  *            or email · backslash escape · task checkbox
  *
  * and, still deliberately, NOTHING ELSE.  `![[embed]]`, `#tag`, `[^footnote]`,
- * callouts, math, mermaid, images and inline HTML are absent because each of
+ * callouts, math, mermaid, non-pasted images and inline HTML are absent because each of
  * them needs something Cairn does not have (a renderer, a second parser), not
  * because the shape cannot hold them: `ConstructKind` is a union and §4 is a
- * switch.
+ * switch.  Pasted clipboard images (`data:` URLs, written by `editor.ts`'s
+ * paste handler) are the exception: an `<img>` is a renderer the engine has
+ * always had.
  *
  * TABLES ARE IN `tables.ts` (§0.40 E87) and not here, because a table is a
  * BLOCK REPLACEMENT and CM6 refuses one of those from a `ViewPlugin` — the same
@@ -316,8 +318,10 @@ export const blockIndex = StateField.define<BlockIndex>({
  *
  * THE v2 SET, LANDED 2026-09-09.  It is not the set §5.4.3 predicted, and the
  * difference is a reading of Obsidian rather than a preference — see §3's
- * header.  `'image'` is still absent, and so are `hmd-embed`, `hashtag` and
- * `footref`.  **`hmd-internal-link` IS here now** (§0.36 E83, as `'wikilink'`),
+ * header.  `'image'` is a pasted clipboard image (`data:` URL — see
+ * `IMAGE_DATA_RE` in §3 and `ImageWidget` in §4).  Still absent, each needing
+ * a renderer Cairn does not have: `hmd-embed`, `hashtag` and `footref`.
+ * **`hmd-internal-link` IS here now** (§0.36 E83, as `'wikilink'`),
  * and so is Obsidian's bare-url/email linkifier (as `'url'`) — which has no
  * token of its own in the CM5 mode at all: the mode ADDS the class `url` to
  * whatever token it is already emitting.  Cairn makes it a construct because
@@ -330,6 +334,8 @@ export type ConstructKind =
   /* inline */
   | 'task' | 'strong' | 'emphasis' | 'strikethrough' | 'highlight'
   | 'inlineCode' | 'link' | 'autolink' | 'wikilink' | 'url' | 'escape'
+  /* a pasted clipboard image */
+  | 'image'
 
 /**
  * HOW the construct's own body is decorated.
@@ -498,6 +504,11 @@ const LINK_DEST_RE = /^\([^)\n]*\)/
  * a destination is, and the reference form (`![alt][ref]`, space optional) is
  * carried because Obsidian's lookahead accepts it. */
 const IMAGE_RUN_RE = /^\[[^\]\n]*\](?:\([^)\n]*\)| ?\[[^\]\n]*\])/
+/* Pasted clipboard images, and ONLY those: `editor.ts`'s paste handler writes
+ * `![pasted image](data:…)` on Ctrl/Cmd-V.  `[^)\n]*` never crosses a line
+ * (F84), so a data URL carrying a `)` — an SVG one can — falls through to the
+ * raw-source skip below rather than rendering half an image. */
+const IMAGE_DATA_RE = /^!\[([^\]\n]*)\]\((data:image\/[^)\n]+)\)/
 
 /* §0.36 E83 — THE TWO LINK RULES, AND BOTH ARE OBSIDIAN'S OWN LITERALS.
  *
@@ -1142,6 +1153,18 @@ class MarkdownSource implements ConstructSource {
        * is the honest fallback for the text — and the click now goes where the
        * document says. */
       if (ch === BANG && i + 1 < n && text.charCodeAt(i + 1) === LBRACKET) {
+        // A pasted clipboard image renders through §4's `ImageWidget`.  Every
+        // other image keeps the raw-source skip below: there is no file to
+        // resolve (the tree holds `.md` only) and no remote fetch to make.
+        const dm = IMAGE_DATA_RE.exec(text.slice(i))
+        if (dm) {
+          const total = (dm[0] as string).length
+          this.mark(0, base + i, base + i + total, 'open')
+          this.emit('image', 'inline', base + i, base + i + total, 0, 1)
+          i += total
+          runEnd = -1
+          continue
+        }
         const im = IMAGE_RUN_RE.exec(text.slice(i + 1))
         if (im) {
           i += 1 + (im[0] as string).length
@@ -1520,7 +1543,7 @@ export const SHOW_MARK = Decoration.mark({ class: 'nc-md-marker' })
  * `-highlight` — so a revealed `**` renders bold in body colour, inside the
  * `nc-strong` mark that covers it.  Dimming it would be this file's invention.
  */
-const SHOW_PLAIN = Decoration.mark({ class: 'nc-md-marker-plain' })
+export const SHOW_PLAIN = Decoration.mark({ class: 'nc-md-marker-plain' })
 
 /* Inline bodies.  Obsidian's `getType` puts the construct's own class on the
  * formatting tokens too, so these cover the markers — except `link`, whose
@@ -1628,6 +1651,66 @@ class TaskWidget extends WidgetType {
 }
 const TASK_OFF = Decoration.replace({ widget: new TaskWidget(false) })
 const TASK_ON = Decoration.replace({ widget: new TaskWidget(true) })
+
+/**
+ * A pasted clipboard image (`data:` URL only — §3 emits nothing else as
+ * `'image'`).  The whole `![…](…)` run is one atomic replace, so Backspace and
+ * Delete take it in a single keystroke and the caret can never land inside
+ * 200 kB of base64.  A click anywhere but the X places the caret and reveals
+ * the source, like the table widget.
+ *
+ * The X is Cairn's, not Obsidian's [C]: Obsidian draws no remove control on
+ * images.  It is a real `<button>` (focusable, labelled) whose mousedown
+ * deletes the run through the ordinary dispatch + autosave path — §9 E4
+ * forbids drawing a control that does nothing, so this one works.  `mousedown`,
+ * not `click`, like the task checkbox: the caret must not land in the run
+ * first and reveal the source under the pointer.  No innerHTML anywhere (B12):
+ * the glyph is a text node, not markup, and `src` is set as a property.
+ */
+export class ImageWidget extends WidgetType {
+  constructor(readonly url: string, readonly alt: string) { super() }
+  override eq(o: WidgetType): boolean {
+    return o instanceof ImageWidget && o.url === this.url && o.alt === this.alt
+  }
+  toDOM(view: EditorView): HTMLElement {
+    const wrap = document.createElement('span')
+    wrap.className = 'nc-img-wrap'
+    const img = document.createElement('img')
+    img.className = 'nc-img'
+    img.src = this.url
+    img.alt = this.alt
+    img.draggable = false
+    wrap.appendChild(img)
+    const x = document.createElement('button')
+    x.className = 'nc-img-x'
+    x.type = 'button'
+    x.textContent = '×'
+    x.setAttribute('aria-label', 'Remove image')
+    x.setAttribute('title', 'Remove image')
+    x.addEventListener('mousedown', (e) => {
+      e.preventDefault()
+      const hit = imageRangeAt(view.state, view.posAtDOM(x, 0))
+      if (hit === null) return
+      view.dispatch({ changes: { from: hit.from, to: hit.to }, userEvent: 'delete.image' })
+    })
+    wrap.appendChild(x)
+    return wrap
+  }
+  // The X owns its mousedown; anything else falls through to CM6.
+  override ignoreEvent(e: Event): boolean {
+    const t = e.target
+    return t instanceof Element && t.closest('.nc-img-x') !== null
+  }
+}
+
+/** The replace decoration for one pasted-image marker, over the whole run.
+ *  Built per image (the URL differs), unlike §4's singletons. */
+function imageDeco(doc: Text, from: number, to: number): Decoration {
+  const m = IMAGE_DATA_RE.exec(doc.sliceString(from, to))
+  return Decoration.replace({
+    widget: new ImageWidget(m ? (m[2] as string) : '', m ? (m[1] as string) : ''),
+  })
+}
 
 /**
  * WHAT COUNTS AS "the selection is here", per kind.
@@ -1906,9 +1989,13 @@ export function buildDecorations(
         // is always fatal in CM6, so show the raw source instead of wedging.
         add(mk.from, mk.to, shownDeco(c.kind))
       } else {
-        const deco = hiddenDeco(c, i)
+        // A pasted image is replaced by its widget, over the whole run, and
+        // the run is atomic — one Backspace or Delete takes it.  `isAtomic`
+        // below compares singleton identity, which a per-image widget can
+        // never satisfy, so the kind carries the atomicity instead.
+        const deco = c.kind === 'image' ? imageDeco(doc, mk.from, mk.to) : hiddenDeco(c, i)
         add(mk.from, mk.to, deco)
-        if (isAtomic(deco)) atomRanges.push({ from: mk.from, to: mk.to, value: deco })
+        if (c.kind === 'image' || isAtomic(deco)) atomRanges.push({ from: mk.from, to: mk.to, value: deco })
       }
     }
   }
@@ -2092,6 +2179,23 @@ function internalTarget(inner: string): LinkTarget {
   return hash < 0
     ? { kind: 'internal', path, subpath: '' }
     : { kind: 'internal', path: path.slice(0, hash).trim(), subpath: path.slice(hash) }
+}
+
+/**
+ * The pasted-image run around `pos`, or null.  **Takes a state, not a view**,
+ * like `linkTargetAt` above, so the whole of this decision is testable with no
+ * DOM — the X button's mousedown handler is the only DOM caller.  A file or
+ * remote image is not an `'image'` construct and never answers here.
+ */
+export function imageRangeAt(state: EditorState, pos: number): { from: number; to: number } | null {
+  const line = state.doc.lineAt(pos)
+  let found: { from: number; to: number } | null = null
+  markdownSource.constructsIn(state, line.from, line.to, (c) => {
+    if (found !== null || c.kind !== 'image') return
+    if (pos < c.from || pos > c.to) return
+    found = { from: c.from, to: c.to }
+  })
+  return found
 }
 
 /**

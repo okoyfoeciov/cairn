@@ -46,12 +46,18 @@ tokens and the `is-unresolved` rule. **§0.38 E85 built half of it** — `TreeBl
 exactly this question, in one pass over bytes — but on a CLICK, once. Running it per wikilink per
 decoration rebuild is a different cost and needs its own measurement.
 
-### LP-2 · Eight markdown constructs are absent, by decision
+### LP-2 · Seven markdown constructs are absent, by decision
 
 `src/livepreview.ts:20` names them: `![[embed]]`, `#tag`, `[^footnote]`, callouts, math, mermaid,
-images, inline HTML. Each needs something the app does not have — a second parser or a renderer — so
+non-pasted images, inline HTML. Each needs something the app does not have — a second parser or a renderer — so
 the absence is scope, not oversight. `ConstructKind` is a union and §4 is a switch, so none of them is
 structurally blocked.
+
+*Pasted clipboard images are the exception (2026-09-24, user ruling):* Ctrl/Cmd-V writes
+`![pasted image](data:image/…)` into the note and it renders as an inline widget — an `<img>` is a
+renderer the engine has always had, so no second parser was owed. One atomic replace: Backspace/Delete
+takes the whole run, and a Cairn `[C]` X (Obsidian draws none) removes it by mouse. File, remote and
+reference images stay raw source.
 
 ### LP-11 · The task tick is the app's one remaining SVG image, and it can poison a strike 🟡
 

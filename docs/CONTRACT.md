@@ -639,7 +639,9 @@ reveals nothing** (§0.23.3).
 Constructs: ATX headings, fenced code blocks, thematic breaks, blockquotes (nested), bullet and
 ordered lists, task checkboxes, bold / italic / bold-italic / strikethrough / `==highlight==`,
 inline code, `[text](url)`, `<url>` autolinks, `[[wikilink]]`, bare urls, backslash escapes, tables,
-and `totp` fenced blocks. `![[embed]]`, `#tag`, `[^footnote]`, callouts, math, mermaid, images and
+`totp` fenced blocks, and pasted clipboard images (`![…](data:image/…)` — Ctrl/Cmd-V writes the
+data URL into the note, one atomic widget, Backspace/Delete or the Cairn `[C]` X removes it).
+`![[embed]]`, `#tag`, `[^footnote]`, callouts, math, mermaid, non-pasted images and
 inline HTML remain absent, each named — `docs/KNOWN-ISSUES.md` LP-2 is the live list. **Two
 deviations from Obsidian remain:** list depth is not tracked (`grep` of `app.css` finds no rule for
 `.cm-list-1/2/3`, so the stack would move no pixel), and the `<hr>` widget is inline rather than
@@ -2864,9 +2866,9 @@ With no note open there is no title, and the widget is not created.
 | | |
 |---|---|
 | block | ATX heading · fenced code block · thematic break · blockquote (nested) · bullet list · ordered list · table · `totp` block |
-| inline | bold · italic · bold-italic · strikethrough · `==highlight==` · inline code · `[text](url)` · `<url>` autolink · `[[wikilink]]` · bare url · backslash escape · task checkbox |
+| inline | bold · italic · bold-italic · strikethrough · `==highlight==` · inline code · `[text](url)` · `<url>` autolink · `[[wikilink]]` · bare url · backslash escape · task checkbox · pasted image (`data:` URL) |
 
-`![[embed]]`, `#tag`, `[^footnote]`, callouts, math, mermaid, images and inline HTML are absent, each
+`![[embed]]`, `#tag`, `[^footnote]`, callouts, math, mermaid, non-pasted images and inline HTML are absent, each
 because it needs something Cairn does not have — a resolver, a second renderer — not because the
 shape cannot hold it. `docs/KNOWN-ISSUES.md` LP-2 is the live list.
 
