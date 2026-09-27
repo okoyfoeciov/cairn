@@ -13,7 +13,9 @@ including a credentials note and a journal. Three layers:
 remain in `docs/CONTRACT.md`, but nothing designs around them. Correctness and pixel-identity are
 the goals.
 
-**Cairn is never distributed** — no store, no notarization, ever. Ad-hoc `codesign -s -` is the
+**Cairn is never publicly distributed** — no store, no notarization, ever. The only artifacts are
+the private GitHub releases of the single version 1.0.0, built from latest main for the author's
+own Debian and macOS machines. Ad-hoc `codesign -s -` is the
 permanent signature, not a stopgap; `tools/cairn.entitlements` is load-bearing on macOS (library
 validation demands it). A locally built app has no quarantine xattr and launches with no dialog; if
 a copy ever travelled through a quarantining route, `xattr -dr com.apple.quarantine <app>` clears it.
@@ -44,8 +46,9 @@ node tools/scroll-bench.mjs --self-test     67 passed, 0 failed
 dies on node 24 and is a CLI failure wearing a test failure's clothes. G9 opens a real window; it is
 the one command here that takes the screen.
 
-Packaging is descoped for the development phase. **`npm run electron:app` is the dev command.**
-`npm run package:deb` and `npm run package:mac` exist and are not run as part of development; on
+**`npm run electron:app` is the dev command.** `npm run package:deb` and `npm run package:mac`
+ship the private 1.0.0 release (`.github/workflows/release.yml`, manual dispatch from latest main)
+and are not run as part of development; on
 macOS a packaged `.app` additionally needs `bash tools/sign-macos.sh out/darwin-<arch>`.
 
 State lives at `<appData>/com.cairn.app/state.json` — `~/.config/` on Debian,

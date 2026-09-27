@@ -1,7 +1,8 @@
 # Cairn
 
 A pixel-identical Obsidian clone the author runs daily on **Debian and macOS** for real notes,
-including a credentials note and a journal. Personal software: never distributed, never in a store,
+including a credentials note and a journal. Personal software: never publicly distributed — private
+GitHub releases for the author's own machines only — never in a store,
 no notarization — ad-hoc `codesign -s -` is the permanent signature and `tools/cairn.entitlements`
 is load-bearing on macOS.
 
@@ -93,7 +94,7 @@ emulation is not a rasterisation scale.
 
 | Decision | Status |
 |---|---|
-| Never distributed | Permanent. No store, no notarization; ad-hoc signing only. Open the app after signing; TCC re-prompts after every rebuild are accepted. |
+| Never publicly distributed | Permanent. No store, no notarization; ad-hoc signing only. The only artifacts are private 1.0.0 releases (repo-private) for the author's own machines. Open the app after signing; TCC re-prompts after every rebuild are accepted. |
 | Identifier `com.cairn.app` | Single source: `package.json` `identifier`. State: `<appData>/com.cairn.app/state.json`; Chromium userData is separate at `<appData>/Cairn/`. |
 | Do not infer identity | Never infer identity, ownership or affiliation from a path, hostname, git config or login name. |
 | Mouse, never a trackpad | Trackpad scroll feel is out of scope. |
@@ -144,7 +145,7 @@ node tools/scroll-bench.mjs --self-test
 node tools/scroll-bench.mjs --expect-hz N   # scroll baseline; refuses on a locked screen
 node tools/obsidian-live.mjs --vault DIR --config-from VAULT --sidebar N --open NAME --eval 'JS'
 npm run verify:electron-pin          # G-PIN
-npm run package:deb                  # out/cairn_0.1.0_amd64.deb, then sudo dpkg -i
+npm run package:deb                  # out/cairn_1.0.0_amd64.deb, then sudo dpkg -i
 npm run package:mac                  # then: bash tools/sign-macos.sh out/darwin-<arch>
 ```
 

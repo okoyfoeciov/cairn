@@ -1,0 +1,69 @@
+# Basic CI. Display-free and secret-free: typecheck, clippy, the Rust
+# suites, the frontend glob (its pretest rebuilds the frame fixtures and
+# runs the scroll-bench self-test), the geometry self-test, and both
+# builds (the "does it build" gates).
+#
+# Out of scope here on purpose: the Electron launch suites and G9 (need a
+# display) and the Memoir live test (needs llm-service + CAIRN_MEMOIR_LIVE=1).
+
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: core
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Electron pin (G-PIN)
+        run: npm run verify:electron-pin
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Clippy (lib, napi, all-targets)
+        working-directory: core
+        run: |
+          cargo clippy --lib -- -D warnings
+          cargo clippy -p cairn-napi -- -D warnings
+          cargo clippy --all-targets -- -D warnings
+
+      - name: Rust tests
+        working-directory: core
+        run: cargo test --no-fail-fast
+
+      - name: Frontend tests
+        run: npm test
+
+      - name: Geometry self-test
+        run: npm run selftest:geometry
+
+      - name: Native addon + frontend bundle
+        run: |
+          node electron-shell/build-native.mjs
+          node electron-shell/build-app.mjs

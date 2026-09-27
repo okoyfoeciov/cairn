@@ -61,8 +61,10 @@ process wherever the claim is about a crash or about concurrency.
 in `core/tests/dataloss.rs`. Its case is `electron-shell/shipped-binary.test.mjs`,
 which drives the artefact `npm run package:deb` installs, headless, and adds the
 half the Rust version could not see from another process: that the watcher
-started. It skips on macOS while packaging is descoped for the development
-phase — an honest gap, not a passing test.
+started. It still skips on macOS in a dev checkout — the suite's assertions are
+Linux-layout-specific and the macOS packaged-binary assertions do not exist yet —
+an honest gap, not a passing test. (The release workflow does build and sign the
+macOS artefact in CI; what has never run is this data-loss check against it.)
 
 `dl_26_g_a_the_trash_for_a_fixture_note_is_the_users_real_trash_not_the_fixture`
 measures that a fixture note's trash destination is the user's real `~/.Trash`,
@@ -78,7 +80,7 @@ the trash happy path is a gap (§2, G-a) rather than a test.
 | G-d: Dropbox / OneDrive | Case 9 against those clients | Unmeasured; only Syncthing has been driven | Syncthing run above; mechanism cover (temp+rename in one directory, `.`-prefixed temp, PID-aware sweep, case-7 conflict guard) |
 | G-e: syscall-level traversal proof | `dtruss` / `strace` verification of case 13 | `dtruss` needs SIP-relaxed root | `dl_19` at the resolution seam plus the byte-unchanged outside file |
 | G-f: case 16's injection point | `Watcher::new` returning `MaxFilesWatch` from an integration test | The injection point is `#[cfg(test)]` and does not exist in the linked library | `watcher.rs` unit tests; `dl_22` for the user-visible half |
-| G-g: shipped artefact on macOS | `dl_23` on macOS | Packaging is descoped for the development phase; the test skips there with the reason | `dl_23` on Linux; `dl_02` at the Rust seam on both |
+| G-g: shipped artefact on macOS | `dl_23` on macOS | No macOS packaged-binary assertions yet; the test skips there with the reason | `dl_23` on Linux; `dl_02` at the Rust seam on both |
 
 A network vault (NFS/SMB) emits no watcher events. The watcher still starts, so
 no degraded banner is drawn. Such a vault picks up outside changes on its next
@@ -134,7 +136,7 @@ node --test electron-shell/note-frame-edges.test.mjs \
 node --test electron-shell/close-handshake.test.mjs \
   electron-shell/sync-client.test.mjs
 
-# the shipped artefact (Linux; skips on macOS while packaging is descoped)
+# the shipped artefact (Linux; still skips on macOS — no macOS assertions yet)
 node --test electron-shell/shipped-binary.test.mjs
 ```
 

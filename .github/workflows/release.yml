@@ -1,0 +1,106 @@
+# CD for the single 1.0.0 version, built from latest main.
+#
+# Manual dispatch only: Run workflow on main whenever a fresh build is
+# wanted. It builds the .deb on Linux and the ad-hoc-signed .dmg on macOS
+# (no notarization, standing ruling), then (re)publishes both to the
+# v1.0.0 tag. The repo is private, so that release is private too --
+# visible only to people with read access to the repo.
+#
+# No version automation: there is exactly one version, 1.0.0, and this
+# file names it outright.
+
+name: Release 1.0.0
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  deb:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: core
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install packaging tools
+        run: sudo apt-get update && sudo apt-get install -y fakeroot
+
+      - name: Build the .deb
+        run: npm run package:deb
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: deb
+          path: out/cairn_1.0.0_amd64.deb
+          if-no-files-found: error
+
+  dmg:
+    runs-on: macos-14
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: core
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Package the .app
+        run: npm run package:mac
+
+      - name: Ad-hoc sign the .app and build the signed .dmg
+        run: bash tools/sign-macos.sh out/darwin-arm64
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dmg
+          path: out/Cairn-1.0.0-arm64.dmg
+          if-no-files-found: error
+
+  publish:
+    needs: [deb, dmg]
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Publish the private v1.0.0 release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          cd dist
+          if ! gh release view v1.0.0 >/dev/null 2>&1; then
+            gh release create v1.0.0 \
+              --title "Cairn 1.0.0" \
+              --notes "Private 1.0.0 build from latest main. Debian: sudo dpkg -i the .deb. macOS: open the ad-hoc-signed .dmg (no notarization, by ruling)." \
+              --latest
+          fi
+          gh release upload v1.0.0 ./cairn_1.0.0_amd64.deb ./Cairn-1.0.0-arm64.dmg --clobber

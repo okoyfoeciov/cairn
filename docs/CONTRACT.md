@@ -127,7 +127,7 @@ Sections are numbered in the order below: §0's passes are §0.1–§0.53, then 
 | E3 | **Removed** — the retin/WebKit single-surface lever; deleted with the engine | §9 E3 |
 | E4 | No inert decoration: four reference controls omitted | §9 E4 |
 | E4a | The `panel-left` button is omitted | §9 E4a |
-| E5 | Cairn is never distributed; ad-hoc signing is permanent | §9 E5 |
+| E5 | Cairn is never publicly distributed; ad-hoc signing is permanent | §9 E5 |
 | E6 | Debian/Linux is a supported dev and usage platform | §9 E6 |
 | E7 | The Linux title bar is Cairn's own, 39px with a right-flush cluster | §0.5, §9 E7 |
 | E8 | The tab strip: 40px, active tab inset/radius 6/ring/shoulders, two fixed tabs | §0.6 |
@@ -514,8 +514,9 @@ a packaging mistake cannot fall back to the welcome screen. `electron-shell/pack
 the shipped binary through a real tree-row click and a real contenteditable insertion and then reads
 the bytes on disk. There is no `Depends:` line in the control file — a dependency list is a promise
 about machines, and §9 E5 says the only machines are the author's. `postinst` sets the setuid bit on
-`chrome-sandbox`. **macOS packaging is descoped for the development phase** (user ruling): the app
-is run from the checkout with `npm run electron:app`.
+`chrome-sandbox`. **macOS packaging is verified** (packaged, signed and launched 2026-09-09, K8):
+releases ship the signed `.dmg` through the private 1.0.0 release; day-to-day dev still runs from
+the checkout with `npm run electron:app`.
 
 #### §0.20.6 — DELETED (Tauri was deleted — E35; the stack is Electron 39.8.3 / Chrome 142 + the napi core; `src-tauri/` is now `core/`, and `cargo tree` holds zero tauri crates).
 
@@ -600,11 +601,13 @@ always propagate. `full_rescan` is reserved for `Any`/`Other` events, NOT `path 
 reports the watched directory itself whenever a child is added or removed, so the old rule cost a
 whole-tree rescan for every note created in the vault root.
 
-#### §0.22.8 — What is descoped, and two capture rules
+#### §0.22.8 — Packaging scope, and two capture rules
 
-**Packaging is descoped for the development phase** (user ruling): the app runs from the checkout,
-`electron-shell/package.test.mjs` and `shipped-binary.test.mjs` skip on macOS and say *descoped*, and
-**`dl_23` has never run on macOS** — an honest gap, not a passing test.
+**Packaging ships through the private 1.0.0 release** (§9 E5): day-to-day dev still runs from the
+checkout, and `electron-shell/package.test.mjs` and `shipped-binary.test.mjs` still skip on macOS
+in a checkout — their assertions are Linux-layout-specific and the macOS packaged-binary
+assertions do not exist yet — so **`dl_23` has never run on macOS** — an honest gap, not a
+passing test.
 
 **Two capture rules, both bought with a wrong number:** force `--force-color-profile=srgb` on BOTH
 sides of any pixel comparison, or a colour profile invents a palette defect (Obsidian stores
@@ -3284,7 +3287,7 @@ position and are not current tools. `path.rs` performs **no Unicode normalisatio
 limitation, not an oversight.
 
 **Signing (NORMATIVE, and the permanent answer).** `codesign -s -` is the FINAL signature, not a
-stopgap: Cairn is never distributed, so there is no Apple Developer account, no Developer ID, no
+stopgap: Cairn is never publicly distributed, so there is no Apple Developer account, no Developer ID, no
 `notarytool` and no stapling — deleted, not deferred. What the packager emits is only
 *linker*-signed and fails `codesign --verify --strict`; `hardenedRuntime` is inert without
 `tools/sign-macos.sh`, and **`tools/cairn.entitlements` is what lets the signed app launch at all**
@@ -3295,8 +3298,9 @@ does not see it. A locally built app carries no `com.apple.quarantine` xattr, so
 Gatekeeper dialog; `spctl`'s `rejected` verdict is expected forever. **The build is not
 reproducible** — the ad-hoc designated requirement is a bare `cdhash` — so every rebuild is a new
 code identity and **TCC Files-and-Folders grants are re-prompted after every rebuild**: a permanent,
-accepted property of the app, not a defect awaiting a certificate. **macOS packaging is descoped for
-the development phase** (user ruling): the app is run from the checkout with `npm run electron:app`.
+accepted property of the app, not a defect awaiting a certificate. **Packaging ships through the
+private 1.0.0 release** (`.github/workflows/release.yml`, manual dispatch from latest main);
+day-to-day dev still runs from the checkout with `npm run electron:app`.
 
 ### 6.5 Acceptance gates (consolidated)
 
@@ -3737,7 +3741,7 @@ never a startup failure. The `vaults` map is pruned to the 8 entries in `recents
 
 **The identifier is settled: `com.cairn.app`** (§9 E1), and it decides this path. It is **stable
 because churning it is pointless, not because change is dangerous**: there is no installed base to
-strand (Cairn is never distributed, §9 E5), and a change would cost one `mv` of one directory before
+strand (Cairn is never publicly distributed, §9 E5), and a change would cost one `mv` of one directory before
 the next launch.
 
 #### 7.6.1 The read path — `expanded` and `scroll_top` (Z2)
@@ -3848,10 +3852,12 @@ The reference draws it and nothing in this document binds it, so it would ship a
 an invented feature. **Omitted**, and omission moves nothing: `.titlebar-left` is width-fixed at
 `--sidebar-w`. `[C]`
 
-### E5 — Distribution — **SETTLED: there is none, and there never will be. NORMATIVE**
+### E5 — Distribution — **SETTLED: none public, ever; private releases to own machines only. NORMATIVE**
 
-The user builds Cairn, packages it, and installs it on devices they own. **Permanent, not a v1
-simplification**, and every consequence below is engineering rather than wording.
+The user builds Cairn, packages it, and installs it on devices they own. The only artifacts are
+the private GitHub releases of the single version 1.0.0, built from latest main by
+`.github/workflows/release.yml` (the repo is private, so those releases are private too).
+**Permanent, not a v1 simplification**, and every consequence below is engineering rather than wording.
 
 1. **Notarization is deleted, not deferred.** No Apple Developer Program membership, no Developer ID
    certificate, no `notarytool`, no stapling. No section, spec or tool script may describe
@@ -3860,17 +3866,20 @@ simplification**, and every consequence below is engineering rather than wording
 2. **Ad-hoc `codesign -s -` is the permanent, correct signature**, as `tools/sign-macos.sh` runs it.
    §6.4's four-step order and its "rebundling by any route destroys the signature" rule are
    mandatory.
-3. **Gatekeeper's first-launch story is not this app's story.** `com.apple.quarantine` is set by the
+3. **Gatekeeper's first-launch story is mostly not this app's story.** `com.apple.quarantine` is set by the
    **downloader**, and a locally built `.app` carries no such xattr, so it launches with **no dialog
-   at all**. The hard block and the "Open Anyway" walkthrough describe a downloaded copy this
-   project never produces.
-4. **The `.dmg` is a copy convenience, not a distribution channel.** §6.4's signing order applies to
-   it unchanged.
+   at all**. A copy pulled from the private release travels through a browser and DOES carry the
+   xattr — clear it as README describes. `spctl`'s `rejected` verdict is expected forever either way.
+4. **The `.dmg` is a copy convenience for the author's own Macs**, shipped only through the private
+   1.0.0 release — never a public download. §6.4's signing order applies to it unchanged.
 5. **What survives, and it is the one real cost:** the ad-hoc designated requirement is a bare
    `cdhash` and the build is not reproducible, so **every rebuild is a new code identity and TCC
    Files-and-Folders grants are re-prompted after every rebuild.** A Developer ID is the only thing
    that would stop it and Cairn will never have one: **a permanent, accepted property of the app,
    not a defect awaiting a certificate.**
+6. **One version: 1.0.0, from latest main.** No semver, no incrementing, no changelog automation.
+   The release workflow republishes the `v1.0.0` tag (upload with `--clobber`) whenever it is
+   dispatched by hand.
 
 ### E6 — Debian/Linux is a supported dev and usage platform — **SETTLED**
 

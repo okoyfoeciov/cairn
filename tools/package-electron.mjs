@@ -196,7 +196,7 @@ function buildDeb(stage) {
       'Priority: optional',
       'Section: editors',
       `Description: ${conf.description}`,
-      ' Built locally and never distributed (CONTRACT §9 E5).',
+       ' Built locally and never publicly distributed (CONTRACT §9 E5).',
       '',
     ].join('\n')
   )
