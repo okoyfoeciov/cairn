@@ -47,7 +47,7 @@ dies on node 24 and is a CLI failure wearing a test failure's clothes. G9 opens 
 the one command here that takes the screen.
 
 **`npm run electron:app` is the dev command.** `npm run package:deb` and `npm run package:mac`
-ship the private 1.0.0 release (`.github/workflows/release.yml`, manual dispatch from latest main)
+ship the private 1.0.0 release (`.github/workflows/release.yml`, rebuilt on every push to `main`)
 and are not run as part of development; on
 macOS a packaged `.app` additionally needs `bash tools/sign-macos.sh out/darwin-<arch>`.
 

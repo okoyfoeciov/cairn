@@ -1,10 +1,9 @@
 # CD for the single 1.0.0 version, built from latest main.
 #
-# Manual dispatch only: Run workflow on main whenever a fresh build is
-# wanted. It builds the .deb on Linux and the ad-hoc-signed .dmg on macOS
-# (no notarization, standing ruling), then (re)publishes both to the
-# v1.0.0 tag. The repo is private, so that release is private too --
-# visible only to people with read access to the repo.
+# Runs on every push to main (plus manual dispatch). It builds the .deb on
+# Linux and the ad-hoc-signed .dmg on macOS (no notarization, standing ruling),
+# then (re)publishes both to the v1.0.0 tag. The repo is private, so that
+# release is private too -- visible only to people with read access to the repo.
 #
 # No version automation: there is exactly one version, 1.0.0, and this
 # file names it outright.
@@ -12,7 +11,16 @@
 name: Release 1.0.0
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
+
+# Latest push wins: a newer run cancels the older one's builds, and the
+# publish step uploads with --clobber, so a cancelled run can never leave
+# the release half-updated.
+concurrency:
+  group: release-1.0.0
+  cancel-in-progress: true
 
 permissions:
   contents: write

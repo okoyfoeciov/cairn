@@ -3878,8 +3878,8 @@ the private GitHub releases of the single version 1.0.0, built from latest main 
    that would stop it and Cairn will never have one: **a permanent, accepted property of the app,
    not a defect awaiting a certificate.**
 6. **One version: 1.0.0, from latest main.** No semver, no incrementing, no changelog automation.
-   The release workflow republishes the `v1.0.0` tag (upload with `--clobber`) whenever it is
-   dispatched by hand.
+   Every push to `main` rebuilds both artifacts and republishes the `v1.0.0` tag (upload with
+   `--clobber`); the workflow can also be dispatched by hand.
 
 ### E6 — Debian/Linux is a supported dev and usage platform — **SETTLED**
 
