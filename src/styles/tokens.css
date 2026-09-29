@@ -10,6 +10,12 @@
  *
  * Marks: [M] measured · [D] derived from [M] · [O] Obsidian default ·
  *        [C] a choice CONTRACT.md makes.
+ *
+ * [C] 2026-09-30 — COLOR SYSTEM IS OCEANIC (#16 of the showcase), by user
+ * ruling: Cairn no longer targets Obsidian-identical color. Layout, radii,
+ * spacing and type below are untouched; every COLOR value is Oceanic.
+ * The [S]/[M] citations on the color lines are the Obsidian provenance,
+ * retained for reference — the values no longer follow them.
  * ======================================================================== */
 
 :root {
@@ -55,40 +61,19 @@
    * rows and docs/VISUAL-MEASUREMENTS.md's table are now wrong about every
    * ground and are REPORTED, not quietly edited.
    * ══════════════════════════════════════════════════════════════════════ */
-  --bg-primary:         #1c1c1c;  /* [S] --color-base-00. UNMOVED: 1.12.7's
-                                     #1e1e1e decodes from raw 28, but 1.13.7
-                                     declares #1C1C1C, and the two coincide      */
-  --bg-primary-alt:     #232323;  /* [S] --code-background -> --background-primary-alt
-                                     -> --color-base-10.  Was #212121           */
-  --bg-secondary:       #282828;  /* [S] --background-secondary -> --color-base-20.
-                                     Was #222222.  Also the menu's ground        */
-  --bg-titlebar:        #333333;  /* [S] --titlebar-background-FOCUSED ->
-                                     --background-secondary-alt -> --color-base-30.
-                                     Was #2f2f2f.  NOT --background-secondary:
-                                     app.css:2818 says that and app.css:2819 +
-                                     4116-4118 immediately override it under
-                                     `body.is-focused`, which every reference
-                                     capture and every real window is.  Reading
-                                     2818 and stopping there is how an earlier
-                                     pass concluded the strip merges into the
-                                     sidebar; it does not                        */
-  --bg-modifier-border: #333333;  /* [S] --background-modifier-border ->
-                                     --color-base-30.  Was #2f2f2f — and this is
-                                     the SAME base-30 as the strip and as
-                                     --tab-outline, which §0.6 E8 had already
-                                     taken from 1.13.7.  That is what made the
-                                     palette a mixture before this pass          */
+  --bg-primary:         #182028;  /* [C] Oceanic #16. Was [S] --color-base-00 #1c1c1c */
+  --bg-primary-alt:     #212a34;  /* [C] Oceanic. Was [S] --color-base-10 #232323 */
+  --bg-secondary:       #252f3a;  /* [C] Oceanic. Was [S] --color-base-20 #282828 */
+  --bg-titlebar:        #323e4c;  /* [C] Oceanic. Was [S] --color-base-30 #333333 */
+  --bg-modifier-border: #334052;  /* [C] Oceanic. Was [S] --color-base-30 #333333 */
   /* [S] §0.27 E67 — --background-modifier-border-hover -> --color-base-35, which
      is #3f3f3f in the dark theme (app.css:2874 + :2977).  It is the MENU's
      border, and --bg-modifier-border above is the menu's SEPARATOR; Cairn was
      drawing both with the separator's #333333.  Note this is the same value as
      --border-focus below and NOT the same token: that one is
      --background-modifier-border-FOCUS, which is --color-base-40. */
-  --bg-modifier-border-hover: #3f3f3f;
-  --bg-modifier-hover:  rgba(255,255,255,.067); /* [S] --background-modifier-hover
-                                     = color-mix(in oklch, white 6.7%, transparent).
-                                     Was .075, and .067 is what the reference's
-                                     hovered titlebar button decodes to exactly  */
+  --bg-modifier-border-hover: #43536a;  /* [C] Oceanic. Was [S] --color-base-35 #3f3f3f */
+  --bg-modifier-hover:  rgba(170,205,240,.08); /* [C] Oceanic. Was [S] 6.7% white */
   /* [C] §5.1 / errata 2 Y3 — .15, NOT .075.  The two names carried the IDENTICAL
      rgba(255,255,255,.075) until now, so the SELECTED tree row was pixel-
      identical to a merely hovered one and the only difference between them was
@@ -124,20 +109,15 @@
    * CONTRACT §5.1 Y3 AND THIS LINE NOW DISAGREE, loudly and on purpose:
    * CLAUDE.md §1 says a measurement beats the contract and that the conflict
    * must be reported rather than quietly worked around. Reported. */
-  --bg-modifier-active: rgba(255,255,255,.067);  /* [M] = --bg-modifier-hover, as Obsidian declares it */
-  --bg-form-field:      #2e2e2e;  /* [S] --background-modifier-form-field ->
-                                     --color-base-25.  Was #2a2a2a              */
-  --bg-menu:            #282828;  /* [S] --menu-background -> --background-secondary
-                                     -> --color-base-20, i.e. the SAME value as
-                                     --bg-secondary, which is how Obsidian
-                                     declares it.  + 1px --bg-modifier-border
-                                     + --shadow-popover.  Was #222222           */
+  --bg-modifier-active: rgba(170,205,240,.08);  /* [C] Oceanic. Was [M] 6.7% white */
+  --bg-form-field:      #303a47;  /* [C] Oceanic. Was [S] --color-base-25 #2e2e2e */
+  --bg-menu:            #252f3a;  /* [C] Oceanic. Was [S] --color-base-20 #282828 */
 
   /* ---- ink ------------------------------------------------------------- */
-  --text-normal:    #dadada;      /* [M] body, H1, tab label, code              */
-  --text-muted:     #b3b3b3;      /* [M] file-tree rows, icons, vault name      */
-  --text-faint:     #666666;      /* [O] tree chevrons, markdown markers        */
-  --text-on-accent: #ffffff;      /* [O]                                        */
+  --text-normal:    #d7dfe9;      /* [C] Oceanic. Was [M] #dadada                */
+  --text-muted:     #a5b1c2;      /* [C] Oceanic. Was [M] #b3b3b3                */
+  --text-faint:     #626d7e;      /* [C] Oceanic. Was [O] #666666                */
+  --text-on-accent: #0a1c2b;      /* [C] Oceanic: dark ink on the ice-blue accent */
   /* [S+M] Obsidian 1.13.7 `app.css:2997`, verbatim:
        --text-selection: color-mix(in oklch, var(--interactive-accent) 33%, transparent)
      and its `--interactive-accent` is `--color-accent`, i.e. this file's --accent.
@@ -152,17 +132,12 @@
   /* [O] §5.1 X3 — destructive menu rows, the invalid-name `.bad` flash in the
      tree's rename editor and in the inline title's.  It is a TOKEN: the raw
      #e05252 literal is STRUCK in tree.css, search.css and chrome.css alike. */
-  --text-error:     #fb464c;      /* [S] --text-error -> --color-red.  Was #e05252,
-                                     which is the framebuffer byte of 1.12.7's own
-                                     red.  NOTE --bg-close-hover below is ALREADY
-                                     #fb464c, cited to the same --color-red: the
-                                     two now agree, where before one name held the
-                                     colour and the other held its picture. */
+  --text-error:     #f26d6d;      /* [C] Oceanic. Was [S] --color-red #fb464c  */
   /* [C] §5.1 — search-match background.  NOT purple: a purple match is
      indistinguishable from --text-selection on a selected result row, which is
      exactly when it is being read.  Yellow is also Obsidian's --text-highlight-bg. */
-  --text-highlight: rgba(255,208,0,.28);
-  --caret-color:    #dadada;      /* [M] 1px, flush with the content inset      */
+  --text-highlight: rgba(255,208,0,.30);  /* [C] Oceanic. Was [C] §5.1 .28 yellow */
+  --caret-color:    #d7dfe9;      /* [C] Oceanic: == --text-normal               */
 
   /* ---- lines ----------------------------------------------------------- */
   /* [S] --indentation-guide-color = color-mix(in oklch, white 12%, transparent).
@@ -172,8 +147,8 @@
      would have to be re-derived by hand every time a ground changes; as the blend
      it simply follows.  Over the new #282828 this paints #424242; the old #383838
      over the old #222222 was 12% white read as 10%. */
-  --indent-guide:   rgba(255,255,255,.12);
-  --border-focus:   #3f3f3f;      /* [O] Obsidian --background-modifier-border-focus */
+  --indent-guide:   rgba(170,205,240,.14);  /* [C] Oceanic. Was [S] 12% white */
+  --border-focus:   #43536a;      /* [C] Oceanic. Was [O] #3f3f3f */
   /* [S] 2026-09-15 — Obsidian 1.13.7's REAL --background-modifier-border-focus:
      `var(--color-base-40)` (app.css:2875) = #555555 in the dark theme (:2978),
      and measured live on this Mac as exactly #555555 in its tree's keyboard ring
@@ -182,7 +157,7 @@
      --background-modifier-border-HOVER.  Its four consumers (base, chrome,
      editor, search) were never measured against Obsidian and are left alone;
      only the tree ring, which was, takes this one. */
-  --bg-modifier-border-focus: #555555;
+  --bg-modifier-border-focus: #5a6b84;  /* [C] Oceanic. Was [S] --color-base-40 #555555 */
 
   /* ---- accent ---------------------------------------------------------- */
   /* [M+S] Obsidian 1.13.7's `--color-accent`, hsl(258,88%,66%).  It WAS #8b6cef,
@@ -192,7 +167,7 @@
      handle on the user's screen reads (138,92,246), which is (0,0,1) from this
      value and (-1,-16,+7) from the old one.  Three consumers: the resize
      handle, the inline-edit focus ring and the modal's primary button. */
-  --accent:         #8a5cf5;
+  --accent:         #6ba8d9;  /* [C] Oceanic ice-blue. Was [M+S] --color-accent #8a5cf5 */
 
   /* ---- elevation ------------------------------------------------------- */
   --shadow-popover: 0 2px 8px rgba(0,0,0,.35);  /* [C] §5.1 — the one permitted shadow */
@@ -217,7 +192,7 @@
      `--shadow-l` dark (`mod-dim` container).  The shadow's light/dark twins
      differ only in the last layer (0.1/30px vs 0.2/90px); the strong one is
      the dark theme's, confirmed by pixel A/B against the live dialog. */
-  --modal-border-color: #555555;
+  --modal-border-color: #5a6b84;  /* [C] Oceanic. Was [S] --color-base-40 #555555 */
   --dialog-width: 560px;
   --button-radius: 5px;
   --shadow-l: 0 1px 2px rgba(0,0,0,.071), 0 3.4px 6.7px rgba(0,0,0,.112),
@@ -273,8 +248,8 @@
      tree/search scroller and the editor's (tree.css, editor.css share these
      two tokens), matching Obsidian's own single document-wide
      `scrollbar-color` rule. */
-  --scrollbar-thumb:       #808080;
-  --scrollbar-thumb-hover: #595a5b;
+  --scrollbar-thumb:       #6e7d90;  /* [C] Oceanic steel. Was [S] #808080 */
+  --scrollbar-thumb-hover: #8fa0b5;  /* [C] Oceanic lighter-on-hover. Was #595a5b */
   --scrollbar-track:    transparent;
   /* [M] §5.1/§5.2 X6 — the ONE reserved gutter, for BOTH the editor and the
      sidebar.  Load-bearing twice over: it is the 8px that turns a 1442px content
@@ -595,10 +570,7 @@
   --quote-border-color: var(--accent);     /* app.css:2088 -> --interactive-accent */
 
   --hr-thickness: 2px;                     /* app.css:2332                        */
-  --hr-color:     #363636;                 /* app.css:2331 --hr-color ->
-                                              --background-modifier-border (2829)
-                                              -> --color-base-30, and the DARK
-                                              --color-base-30 is #363636 (2939).   */
+  --hr-color:     #334052;  /* [C] Oceanic. Was [S] --color-base-30 #363636 */
 
   /* app.css:2409 --link-external-color -> --text-accent, and the dark theme's
      --text-accent is --color-accent-1 (2955), which is
@@ -606,7 +578,7 @@
      hsl(258,88%,66%), so this is hsl(255, 89.76%, 75.9%).  Written as the
      hsl() so it follows --accent's own derivation rather than freezing a hex
      against it -- the same argument as --indent-guide above. */
-  --text-accent: hsl(255, 89.76%, 75.9%);
+  --text-accent: #8cbfe6;  /* [C] Oceanic ice-blue link. Was hsl(255,89.76%,75.9%) */
   --link-color: var(--text-accent);
   /* [S] app.css:2430.  A SECOND token holding the same value, kept separate
      because Obsidian keeps it separate: `--link-color` dresses an internal
@@ -627,7 +599,7 @@
      the SEARCH match at .28 and is a different token with the same hue: §5.1's
      ruling picked yellow for search precisely because it is Obsidian's
      highlight colour, and `==this==` is where that colour actually comes from. */
-  --highlight-bg: rgba(255,208,0,.4);
+  --highlight-bg: rgba(255,208,0,.42);  /* [C] Oceanic. Was [S] .4 yellow */
 
   /* [S] app.css:2346 `--icon-color: var(--text-muted)`, and it is the ONE token
      the property rows' glyphs take (`.metadata-property-icon`, app.css:11320,
@@ -683,7 +655,7 @@
      `#ec7500`).  Its one consumer is a property value whose type Obsidian
      cannot name — `.mod-unknown`, app.css:11479 — which is the row the
      reference screenshot shows for a nested map. */
-  --text-warning: #e9973f;
+  --text-warning: #e8a33d;  /* [C] Oceanic amber. Was [S] --color-orange #e9973f */
 
   /* [S] app.css:2539-2553's `--pill-*`, but ONLY the two that survive
      app.css:11457's override: inside a property value the border width and both
@@ -693,7 +665,7 @@
   --pill-gap: 6px;                       /* app.css:2626 --size-2-3           */
 
   /* ---- icons ----------------------------------------------------------- */
-  --icon-color:         #b3b3b3;  /* [D] == --text-muted                        */
+  --icon-color:         #a5b1c2;  /* [C] Oceanic == --text-muted */
   --icon-opacity:       .85;      /* [O] Obsidian --icon-opacity                */
   --icon-opacity-hover: 1;        /* [O]                                        */
   --icon-vault:         16px;     /* [D] vault-switcher chevron                 */
@@ -885,13 +857,7 @@
      the user.  The Linux value lives in the PLATFORM OVERRIDES block below,
      the only place a token may depend on the OS. */
   --tab-pill-radius: var(--radius-m);
-  --tab-outline: #333333;         /* [S] Obsidian --tab-outline-color ->
-                                     --divider-color -> --background-modifier-border
-                                     -> --color-base-30.  DELIBERATELY NOT
-                                     --bg-modifier-border (#2f2f2f): that is this
-                                     project's own [M] for its other 1px rules,
-                                     and conflating the two would either redraw
-                                     every rule in the app or draw this one wrong. */
+  --tab-outline: #334052;  /* [C] Oceanic. Was [S] --color-base-30 #333333 */
   /* [S] 2026-09-15 — Obsidian's `--divider-color` itself: `var(--background-
      modifier-border)` -> `var(--color-base-30)` = #333333 in the dark theme
      (app.css:2196, 2873, 2976), read from the currently-pinned 1.13.7 asar —
@@ -902,7 +868,7 @@
      reading is superseded by this one, taken directly from the pinned
      stylesheet's own cascade rather than off a screenshot the border's
      dpr-1.25 snapping could blend at its edge. */
-  --divider-color: #333333;
+  --divider-color: #334052;  /* [C] Oceanic. Was [S] --color-base-30 #333333 */
   --macos-tl-inset: 88px;         /* [D] §5.6 — traffic-light reserve.  NOT 89: the
                                      discs span content x 21..73, so 89 leaves 16px
                                      not 23, and 88 puts the search button's centre
@@ -920,11 +886,7 @@
                                      three ink centres measure 1937.9 / 1981.9 /
                                      2025.98 against a 2048 right edge, i.e. a 44px
                                      pitch and a 22px half-width, to a tenth of a px */
-  --bg-close-hover: #fb464c;      /* [O] Obsidian --color-red, which is what
-                                     --background-modifier-error resolves to for
-                                     `.mod-close:hover`.  NOT --text-error (#e05252):
-                                     that is a different token for a different job and
-                                     §5.1's collision table keeps them apart.  */
+  --bg-close-hover: #f26d6d;  /* [C] Oceanic red. Was [O] --color-red #fb464c */
 }
 
 /* ══════════════════════════════════════════════════════════════════════════

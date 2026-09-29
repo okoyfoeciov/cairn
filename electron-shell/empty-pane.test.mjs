@@ -53,9 +53,8 @@ const SKIP = !existsSync(BIN)
       ? 'electron-shell/app not built -- run node electron-shell/build-app.mjs'
       : NO_DISPLAY
 
-/** `tokens.css`'s `--caret-color: #dadada [M]`, which is Obsidian's
- *  `--caret-color: var(--text-normal)` (app.css:2154 + :3238). */
-const CARET = 'rgb(218, 218, 218)'
+/** `tokens.css`'s `--caret-color: #d7dfe9 [C]` (Oceanic == `--text-normal`). */
+const CARET = 'rgb(215, 223, 233)'
 
 function runProbe(openNote) {
   const work = mkdtempSync(join(tmpdir(), 'cairn-empty-'))
@@ -165,9 +164,9 @@ test('§0.45 E93 the caret takes the MEASURED colour, not CM6\'s white', { skip:
   // `"&dark .cm-content": {caretColor:"white"}` at (0,3,0) — a rule that is
   // right, present and outranked fails silently (§0.24.5 E53). Reading the
   // source would have passed throughout.
-  assert.equal(d.caretToken, '#dadada', 'the token itself moved')
+  assert.equal(d.caretToken, '#d7dfe9', 'the token itself moved')
   assert.equal(d.caretColor, CARET,
     'the caret is not `--caret-color` — CM6\'s base theme is winning the cascade again')
-  // Obsidian derives it from --text-normal, so the two must agree.
-  assert.equal(d.contentColor, CARET, 'Obsidian\'s caret IS --text-normal; these have diverged')
+  // Oceanic derives it from --text-normal, so the two must agree.
+  assert.equal(d.contentColor, CARET, 'the caret IS --text-normal; these have diverged')
 })

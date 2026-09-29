@@ -170,7 +170,7 @@ function buildDeb(stage) {
   )
 
   // The sized PNGs are the shipped assets (core/icons/<n>x<n>.png), derived from
-  // core/icons/source/logo-tight-native.png -- the v4_final_white stone's tight
+  // core/icons/source/logo-tight-native.png -- the v1_original_blue stone's tight
   // cutout, bbox exactly (0,0,w,h), the dark tile and glow removed (see
   // source/VERSION.json). No bounding box on either platform, just the stone,
   // sized like its dock neighbours, so it reads at the same visual weight as
@@ -196,7 +196,7 @@ function buildDeb(stage) {
       'Priority: optional',
       'Section: editors',
       `Description: ${conf.description}`,
-       ' Built locally and never publicly distributed (CONTRACT §9 E5).',
+        ' Built locally for the author\u2019s own machines (CONTRACT §9 E5).',
       '',
     ].join('\n')
   )

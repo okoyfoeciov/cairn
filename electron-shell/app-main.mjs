@@ -566,7 +566,7 @@ app.whenReady().then(async () => {
     height,
     show: false,
     title: 'Cairn',
-    backgroundColor: '#1c1c1c',
+    backgroundColor: '#182028',
     /* CONTRACT §5.6, measured: macOS gets `decorations: true` + `titleBarStyle:
        Overlay` + `hiddenTitle: true` -- the native bar's CHROME stays (traffic
        lights, resize, shadow) but its caption and strip do not, and Cairn's own
@@ -1286,7 +1286,7 @@ app.whenReady().then(async () => {
              await wait(200);
            }
            var onMemoir = tabState();
-           // THE LIVE LEG (gated: it bills one SkyDeck turn).  Type a sentence
+            // THE LIVE LEG (gated: it bills one Cerebras turn).  Type a sentence
            // with a known error, wait for the autosaved status, run Check,
            // and read back the issue cards — the whole renderer-to-localhost
            // path, plus the vault write proved from disk by the test.

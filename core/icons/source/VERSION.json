@@ -1,12 +1,12 @@
 {
-  "version": "v4_final_white",
-  "description_vi": "Trắng sáng nhất — bản đã chốt",
-  "source_filename": "luminous_ice_crystal_app_icon.png",
+  "version": "v1_original_blue",
+  "description_vi": "Bản xanh đầu tiên",
+  "source_filename": "glowing_icy_crystal_emblem.png",
   "source_dimensions": [
     1254,
     1254
   ],
-  "source_sha256": "433d8e55d4d41aeda78c45e1aecc69739b4e4f75cbb84ff6a18105ae7631451b",
+  "source_sha256": "b168a23c7f8b84c3fbed88d3b94b66df47dae3070d7eb41ef35b7cc17776217e",
   "original_unchanged": true,
   "generative_redrawing_used": false,
   "exports": {

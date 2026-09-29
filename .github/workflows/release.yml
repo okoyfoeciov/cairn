@@ -2,8 +2,8 @@
 #
 # Runs on every push to main (plus manual dispatch). It builds the .deb on
 # Linux and the ad-hoc-signed .dmg on macOS (no notarization, standing ruling),
-# then (re)publishes both to the v1.0.0 tag. The repo is private, so that
-# release is private too -- visible only to people with read access to the repo.
+# then (re)publishes both to the v1.0.0 tag. The repo is public, so that
+# release is public too.
 #
 # No version automation: there is exactly one version, 1.0.0, and this
 # file names it outright.
@@ -103,7 +103,7 @@ jobs:
           path: dist
           merge-multiple: true
 
-      - name: Publish the private v1.0.0 release
+      - name: Publish the v1.0.0 release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
@@ -111,7 +111,7 @@ jobs:
           if ! gh release view v1.0.0 >/dev/null 2>&1; then
             gh release create v1.0.0 \
               --title "Cairn 1.0.0" \
-              --notes "Private 1.0.0 build from latest main. Debian: sudo dpkg -i the .deb. macOS: open the ad-hoc-signed .dmg (no notarization, by ruling)." \
+              --notes "Cairn 1.0.0 build from latest main. Debian: sudo dpkg -i the .deb. macOS: open the ad-hoc-signed .dmg (no notarization, by ruling)." \
               --latest
           fi
           gh release upload v1.0.0 ./cairn_1.0.0_amd64.deb ./Cairn-1.0.0-arm64.dmg --clobber

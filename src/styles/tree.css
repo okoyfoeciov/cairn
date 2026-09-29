@@ -489,9 +489,8 @@
 .tr.a             { color: var(--text-normal); }
 /* The shift-selection fill (2026-09-14): Obsidian's own
  * `--nav-item-background-selected` — `color-mix(in oklch, var(--color-accent)
- * 15%, transparent)` — and `--accent` IS that accent (`#8a5cf5`, measured
- * equal down to the channel in chrome.css), so the mix reproduces their
- * purple by construction.  Same inset rounded rect (same element), same
+ * 15%, transparent)` — and `--accent` IS that accent (`#6ba8d9`, Oceanic), so the mix reproduces their
+ * blue by construction.  Same inset rounded rect (same element), same
  * normal ink (`--nav-item-color-selected` is `--text-normal`).
  * AFTER `.tr.a::before` on purpose: equal specificity, so source order
  * decides, and app.css carries `.tree-item-self.is-selected` AFTER
@@ -524,8 +523,8 @@
  *
  * Cairn's fill lives on `.tr::before` (the inset rounded rect), not on the row,
  * so the backgrounds go there and the inks stay on the row — the same split
- * `.tr.s`/`‑.a` already use. `--accent` IS Obsidian's `--interactive-accent`
- * (`#8a5cf5`, tokens.css) and `--text-accent` IS its highlighted ink, so both
+ * `.tr.s`/`‑.a` already use. `--accent` IS the interactive accent
+ * (`#6ba8d9`, tokens.css) and `--text-accent` IS its highlighted ink, so both
  * mixes reproduce by construction. AFTER `.tr.s` on purpose: a row that is both
  * selected and dragged (the common multi-drag) reads as dragged, and a row that
  * is both a drop target and selected reads as a target — the drag is the newer

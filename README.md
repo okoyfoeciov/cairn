@@ -13,8 +13,8 @@ including a credentials note and a journal. Three layers:
 remain in `docs/CONTRACT.md`, but nothing designs around them. Correctness and pixel-identity are
 the goals.
 
-**Cairn is never publicly distributed** — no store, no notarization, ever. The only artifacts are
-the private GitHub releases of the single version 1.0.0, built from latest main for the author's
+**Cairn is publicly developed** — no store, no notarization, ever. The only artifacts are
+the GitHub releases of the single version 1.0.0, built from latest main for the author's
 own Debian and macOS machines. Ad-hoc `codesign -s -` is the
 permanent signature, not a stopgap; `tools/cairn.entitlements` is load-bearing on macOS (library
 validation demands it). A locally built app has no quarantine xattr and launches with no dialog; if
@@ -47,7 +47,7 @@ dies on node 24 and is a CLI failure wearing a test failure's clothes. G9 opens 
 the one command here that takes the screen.
 
 **`npm run electron:app` is the dev command.** `npm run package:deb` and `npm run package:mac`
-ship the private 1.0.0 release (`.github/workflows/release.yml`, rebuilt on every push to `main`)
+ship the 1.0.0 release (`.github/workflows/release.yml`, rebuilt on every push to `main`)
 and are not run as part of development; on
 macOS a packaged `.app` additionally needs `bash tools/sign-macos.sh out/darwin-<arch>`.
 

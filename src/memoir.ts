@@ -248,7 +248,7 @@ export function mountMemoir(pane: HTMLElement, deps: MemoirDeps): MemoirView {
   checkBtn.type = 'button'
   checkBtn.id = 'mm-checkBtn'
   checkBtn.textContent = 'Check'
-  checkBtn.title = 'Check grammar, spelling and flow with AI (Skydeck)'
+  checkBtn.title = 'Check grammar, spelling and flow with AI'
   const sep = el('span', 'mm-sep', '·')
   sep.setAttribute('aria-hidden', 'true')
   const waysBtn = document.createElement('button')

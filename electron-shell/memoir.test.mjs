@@ -95,7 +95,7 @@ function runProbe() {
     const kill = setTimeout(() => {
       child.kill('SIGKILL')
       reject(new Error('memoir probe timed out\nstdout:\n' + out + '\nstderr:\n' + err))
-      // The live leg bills one SkyDeck turn and waits up to 2m for its cards.
+      // The live leg bills one Cerebras turn and waits up to 2m for its cards.
     }, process.env.CAIRN_MEMOIR_LIVE === '1' ? 240_000 : 90_000)
 
     child.on('error', (e) => { clearTimeout(kill); reject(e) })
@@ -202,7 +202,7 @@ test('Memoir — the note tab brings the note back and hides the page', { skip: 
   assert.equal(d.backOnNote.title, 'Memory', 'the note tab forgot its note across a memoir visit')
 })
 
-// THE LIVE LEG (gated: it bills one SkyDeck turn through llm-service, so it
+// THE LIVE LEG (gated: it bills one Cerebras turn through llm-service, so it
 // runs only with CAIRN_MEMOIR_LIVE=1). What it proves end to end, in the real
 // engine: typing in the page autosaves through the real addon (proved from
 // DISK, not the DOM), and Check reaches llm-service over localhost and renders

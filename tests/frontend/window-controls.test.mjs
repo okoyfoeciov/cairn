@@ -314,7 +314,7 @@ test('E7 — spike N §3.2 geometry survives in the CSS', () => {
     'window corner is the visible tell of a hand-rolled title bar')
   // The tokens live in tokens.css — chrome.css declares none (§5.1).
   assert.match(tokensCss, /--winctl-w:\s*44px/)
-  assert.match(tokensCss, /--bg-close-hover:\s*#fb464c/)
+  assert.match(tokensCss, /--bg-close-hover:\s*#f26d6d/, 'close hover is Oceanic red')
   assert.match(tokensCss, /:root\[data-os="linux"\][\s\S]*--macos-tl-inset:\s*8px/,
     'spike N §4: Linux zeroes the 80px traffic-light term, leaving Obsidian\'s own 8px')
 })

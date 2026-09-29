@@ -550,30 +550,34 @@ test('§0.12 E14 — E9\'s 158px sidebar floor was the nav toolbar\'s, and only 
   assert.match(chromeTs, /SIDEBAR_MIN\s*=\s*180/)
 })
 
-test('every ground is Obsidian 1.13.7\'s own value, resolved through its own chain', () => {
-  // NOTHING ASSERTED A GROUND BEFORE THIS. The whole palette could drift — and
-  // had drifted, by 4 to 6 levels on every surface, because each value was
-  // sampled off a COLOUR-MANAGED screenshot and recorded as if the framebuffer
-  // byte were the CSS value. tokens.css carries the full account.
-  //
-  // Keyed to Obsidian's variable CHAIN, not to a list of hexes, so the failure
-  // message says which chain broke.
+test('every ground is the Oceanic value (user ruling 2026-09-30, no longer Obsidian)', () => {
+  // The palette no longer targets Obsidian: every ground is Oceanic #16.
+  // Keyed to the token name so the failure message says which token broke.
   const tokens = read('src/styles/tokens.css')
-  const BASE = { '00': '#1c1c1c', '10': '#232323', '20': '#282828', '25': '#2e2e2e', '30': '#333333' }
-  for (const [name, base, chain] of [
-    ['--bg-primary',         '00', 'background-primary'],
-    ['--bg-primary-alt',     '10', 'code-background -> background-primary-alt'],
-    ['--bg-secondary',       '20', 'background-secondary'],
-    ['--bg-menu',            '20', 'menu-background -> background-secondary'],
-    ['--bg-form-field',      '25', 'background-modifier-form-field'],
-    ['--bg-titlebar',        '30', 'titlebar-background-focused -> background-secondary-alt'],
-    ['--bg-modifier-border', '30', 'background-modifier-border'],
-    ['--tab-outline',        '30', 'tab-outline-color -> divider-color -> background-modifier-border'],
+  const BASE = {
+    '--bg-primary': '#182028',
+    '--bg-primary-alt': '#212a34',
+    '--bg-secondary': '#252f3a',
+    '--bg-menu': '#252f3a',
+    '--bg-form-field': '#303a47',
+    '--bg-titlebar': '#323e4c',
+    '--bg-modifier-border': '#334052',
+    '--tab-outline': '#334052',
+  }
+  for (const [name, want, chain] of [
+    ['--bg-primary',         '#182028', 'editor ground'],
+    ['--bg-primary-alt',     '#212a34', 'code-background'],
+    ['--bg-secondary',       '#252f3a', 'sidebar ground'],
+    ['--bg-menu',            '#252f3a', 'menu-background = sidebar ground'],
+    ['--bg-form-field',      '#303a47', 'form field'],
+    ['--bg-titlebar',        '#323e4c', 'titlebar ground'],
+    ['--bg-modifier-border', '#334052', '1px rules'],
+    ['--tab-outline',        '#334052', 'tab outline = 1px rules'],
   ]) {
     const m = new RegExp(`${name}:\\s*(#[0-9a-fA-F]{6})`).exec(tokens)
     assert.ok(m, `${name} is not declared as a hex in tokens.css`)
-    assert.equal(m[1].toLowerCase(), BASE[base],
-      `${name} must be --color-base-${base} (${BASE[base]}) via ${chain}, got ${m[1]}`)
+    assert.equal(m[1].toLowerCase(), BASE[name],
+      `${name} must be ${BASE[name]} (${chain}), got ${m[1]}`)
   }
 
   // THE STRIP AND THE SIDEBAR ARE NOT THE SAME COLOUR. app.css:2818 says
@@ -585,19 +589,19 @@ test('every ground is Obsidian 1.13.7\'s own value, resolved through its own cha
   const side = /--bg-secondary:\s*(#[0-9a-fA-F]{6})/.exec(tokens)[1].toLowerCase()
   assert.notEqual(strip, side, 'the strip must not collapse into the sidebar — that is the UNFOCUSED value')
 
-  // The three inks never moved between the two builds and must not be "corrected".
-  for (const [name, want] of [['--text-normal', '#dadada'], ['--text-muted', '#b3b3b3'],
-                              ['--text-faint', '#666666'], ['--text-error', '#fb464c']]) {
+  // The three inks are Oceanic's and must not drift.
+  for (const [name, want] of [['--text-normal', '#d7dfe9'], ['--text-muted', '#a5b1c2'],
+                              ['--text-faint', '#626d7e'], ['--text-error', '#f26d6d']]) {
     const m = new RegExp(`${name}:\\s*(#[0-9a-fA-F]{6})`).exec(tokens)
     assert.equal(m[1].toLowerCase(), want, `${name} must be ${want}`)
   }
 
   // The two blends are DECLARED AS BLENDS, not frozen as the hex they happen to
-  // paint over today's ground. That is the mistake the whole migration undoes.
-  assert.match(tokens, /--indent-guide:\s*rgba\(255,255,255,\.12\)/,
-    'the indent guide must be Obsidian\'s 12% white, not a hex frozen against one ground')
-  assert.match(tokens, /--bg-modifier-hover:\s*rgba\(255,255,255,\.067\)/,
-    'hover is --background-modifier-hover = 6.7% white; .075 was read off a profiled screenshot')
+  // paint over today's ground. Oceanic tints them ice-blue.
+  assert.match(tokens, /--indent-guide:\s*rgba\(170,205,240,\.14\)/,
+    'the indent guide must be Oceanic ice-blue, not a hex frozen against one ground')
+  assert.match(tokens, /--bg-modifier-hover:\s*rgba\(170,205,240,\.08\)/,
+    'hover is Oceanic ice-blue 8%')
 })
 
 test('§5.1 rule 5 / M59 — chrome.css declares no transition and no animation', () => {
@@ -1879,7 +1883,7 @@ test('§5.11 — the probe runs AFTER a note is open, not on the boot frame', ()
   // THE TRIPWIRE THIS REPLACES HAS FIRED, AS DESIGNED.  It recorded that
   // mountChrome() hides the tab (§7.4) while main.ts ran runGeometryProbe() on
   // the very next frame with no note ever opened — so the probe's `tab` row
-  // (x 430 / width 200 / height 34 / #1c1c1c — §0.6 E8) read a display:none box and
+  // (x 430 / width 200 / height 34 / #182028 — §0.6 E8) read a display:none box and
   // FAILED four checks, in a gate whose whole condition is
   // `fail === 0 && skip === 0`.  main.ts now opens `VaultInfo.lastNote` and
   // fires the probe only after that, which is what §5.11's "on the first
