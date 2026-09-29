@@ -169,12 +169,12 @@ function buildDeb(stage) {
     ].join('\n')
   )
 
-  // The sized PNGs are the shipped assets (core/icons/<n>x<n>.png), derived from
-  // core/icons/source/logo-tight-native.png -- the v1_original_blue stone's tight
-  // cutout, bbox exactly (0,0,w,h), the dark tile and glow removed (see
-  // source/VERSION.json). No bounding box on either platform, just the stone,
-  // sized like its dock neighbours, so it reads at the same visual weight as
-  // Chrome/VS Code. No scalable SVG source exists for this icon.
+  // The sized PNGs are the shipped assets (core/icons/<n>x<n>.png), downscaled
+  // from core/icons/source/logo-transparent-1254.png -- the v1_original_blue
+  // stone as a transparent cutout, no dark tile and no bounding box (see
+  // source/VERSION.json). Just the stone, sized like its dock neighbours, so
+  // it reads at the same visual weight as Chrome/VS Code. No scalable SVG
+  // source exists for this icon.
   for (const n of [16, 24, 32, 48, 64, 128, 256, 512]) {
     const iconDir = join(debRoot, 'usr', 'share', 'icons', 'hicolor', `${n}x${n}`, 'apps')
     mkdirSync(iconDir, { recursive: true })
