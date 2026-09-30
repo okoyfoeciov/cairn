@@ -351,3 +351,35 @@ test('F48: the Check deadline outlasts a full-size check and still fires', async
     v.reset()
   }
 })
+
+/* A blank journal (only whitespace, e.g. a stray newline autosaved into
+ * Memoir.md) must open on the FIRST line, not past the blank: the fresh load
+ * used to place the caret at the end unconditionally, so "\n" opened with the
+ * caret on line 2 of an empty-looking page. */
+test('blank journal opens on the first line, non-blank at the end', async () => {
+  for (const [text, want] of [['\n', 0], ['   \n  ', 0], ['', 0], ['hello\n', 6]]) {
+    const t = makeTransport({ text, mtimeMs: 1000 })
+    const pane = globalThis.document.createElement('div')
+    const v = MO.mountMemoir(pane, {
+      path: 'Memoir.md',
+      transport: t,
+      onDirtyChanged: () => {},
+      onFirstCreate: () => {},
+      onError: () => {},
+    })
+    const editor = pane.descendants().find((e) => e.tagName === 'TEXTAREA')
+    editor.selectionStart = -1
+    editor.selectionEnd = -1
+    editor.setSelectionRange = (a, b) => { editor.selectionStart = a; editor.selectionEnd = b }
+    v.show()
+    await settle()
+    await settle()
+    assert.equal(editor.value, text)
+    assert.deepEqual(
+      [editor.selectionStart, editor.selectionEnd],
+      [want, want],
+      'caret for ' + JSON.stringify(text),
+    )
+    v.reset()
+  }
+})

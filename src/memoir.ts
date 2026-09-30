@@ -415,8 +415,13 @@ export function mountMemoir(pane: HTMLElement, deps: MemoirDeps): MemoirView {
       flags = r.flags
       loaded = true
       editor.readOnly = false
+      // A blank journal (whitespace-only, e.g. a stray newline) opens on the
+      // first line: placing the caret at the end lands it past the blank, so
+      // an empty-looking page starts on line 2. A real entry still opens at
+      // the end for appending.
       try {
-        editor.setSelectionRange(editor.value.length, editor.value.length)
+        const end = /\S/.test(r.text) ? editor.value.length : 0
+        editor.setSelectionRange(end, end)
       } catch {
         /* a shim textarea may not implement selection */
       }
@@ -454,6 +459,14 @@ export function mountMemoir(pane: HTMLElement, deps: MemoirDeps): MemoirView {
         flags = r2.flags
         loaded = true
         editor.readOnly = false
+        // Same blank rule as the first load above (this path usually holds a
+        // just-created empty file, but the alreadyExists race can hold text).
+        try {
+          const end = /\S/.test(r2.text) ? editor.value.length : 0
+          editor.setSelectionRange(end, end)
+        } catch {
+          /* a shim textarea may not implement selection */
+        }
         setStatus('Saved')
       } catch (err2) {
         if (gen !== generation) return
@@ -887,7 +900,8 @@ export function mountMemoir(pane: HTMLElement, deps: MemoirDeps): MemoirView {
   function focusTextarea(): void {
     // User ruling 2026-09-17: selecting the tab puts the caret in the text.
     // Plain focus() preserves the caret (a return visit lands where it left);
-    // the fresh load below already placed it at the end of the entry.
+    // the fresh load below already placed it at the end of a real entry, or
+    // at the start of a blank one.
     try {
       editor.focus({ preventScroll: true })
     } catch {
