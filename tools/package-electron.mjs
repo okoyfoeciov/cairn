@@ -145,14 +145,26 @@ function buildDeb(stage) {
   cpSync(stage, libDir, { recursive: true })
 
   mkdirSync(join(debRoot, 'usr', 'bin'), { recursive: true })
-  // Wayland-first on a Wayland session whose X layer isn't up yet (measured
-  // 2026-09-30: the default X11 backend dies with no X server, while this
-  // flag opens at once). Chromium reads the ozone backend before app code
-  // runs, so this cannot live in app-main.mjs -- an appendSwitch there was
-  // measured too late (still X11, still dead) while the identical
-  // command-line flag works. Only when a Wayland socket is advertised and
-  // no X display exists; every working setup is untouched. POSIX sh: this
-  // runs on machines whose /bin/sh is dash.
+  // Two launcher policies, both measured, both impossible in app code (see
+  // tools/verify-launcher.mjs for the gate that pins them):
+  //
+  // 1. Wayland-first on a Wayland session whose X layer isn't up yet
+  //    (2026-09-30: the default X11 backend dies with no X server, while
+  //    this flag opens at once). Chromium reads the ozone backend before app
+  //    code runs -- an appendSwitch in app-main was measured too late (still
+  //    X11, still dead) while the identical command-line flag works.
+  //
+  // 2. Software rendering on a virtual (virtio) GPU. MEASURED 2026-09-30 on
+  //    the portability VM: with the virtio adapter, GPU-process init fails
+  //    and Chromium's own SwiftShader fallback never presents a frame -- the
+  //    window is there in Electron's state (isVisible() true) but never
+  //    appears on screen, and roughly half the launches leave no renderer at
+  //    all. VS Code on the same guest paints, so the box can render; it is
+  //    the virtio GL path this Electron build cannot initialise.
+  //    `--disable-gpu` (software compositing) paints reliably, screenshot-
+  //    verified. Gated on the DRM driver reading `virtio-pci` so a real
+  //    adapter (i915/amdgpu/nvidia) keeps hardware acceleration untouched.
+  //    POSIX sh: this runs on machines whose /bin/sh is dash.
   writeFileSync(
     join(debRoot, 'usr', 'bin', 'cairn'),
     [
@@ -160,6 +172,13 @@ function buildDeb(stage) {
       'if [ -n "${WAYLAND_DISPLAY:-}" ] && [ -z "${DISPLAY:-}" ]; then',
       '  set -- --ozone-platform=wayland "$@"',
       'fi',
+      'for d in /sys/class/drm/card[0-9]*/device/driver; do',
+      '  [ -e "$d" ] || continue',
+      '  if [ "$(basename "$(readlink -f "$d")")" = virtio-pci ]; then',
+      '    set -- --disable-gpu "$@"',
+      '    break',
+      '  fi',
+      'done',
       'exec /usr/lib/cairn/cairn "$@"',
       '',
     ].join('\n')
