@@ -50,3 +50,18 @@ export const HAVE_DISPLAY =
 export const NO_DISPLAY = HAVE_DISPLAY
   ? false
   : 'no DISPLAY or WAYLAND_DISPLAY -- Electron cannot map a window'
+
+/**
+ * True on a Linux Wayland session whose X compatibility layer isn't up yet:
+ * the compositor socket is advertised while no X display exists.
+ * `app-main.mjs` forces the Wayland backend exactly here -- measured
+ * 2026-09-30, the default X11 backend dies with no X server while the
+ * Wayland one opens at once -- and leaves every setup where X11 works
+ * (XWayland already up, X11-only session, headless harness, macOS) alone.
+ * Lives here rather than at the use site because the display predicate may
+ * be spelled in exactly one file (`shell-syntax.test.mjs` enforces it).
+ */
+export const WAYLAND_WITHOUT_X =
+  process.platform === 'linux' &&
+  Boolean(process.env.WAYLAND_DISPLAY) &&
+  !process.env.DISPLAY

@@ -20,6 +20,7 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { loadAddon, nativeCommands, toEnvelope } from './native.mjs'
+import { WAYLAND_WITHOUT_X } from './have-display.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const ROOT = dirname(HERE)
@@ -27,9 +28,9 @@ const HEADLESS = process.env.CAIRN_HEADLESS === '1'
 const addon = loadAddon()
 
 /**
- * WAYLAND-FIRST ON A WAYLAND SESSION WHOSE XWAYLAND ISN'T UP YET.
+ * WAYLAND-FIRST ON A WAYLAND SESSION WHOSE X LAYER ISN'T UP YET.
  *
- * MEASURED 2026-09-30 on a fresh Debian 13/GNOME install: with no `DISPLAY`
+ * MEASURED 2026-09-30 on a fresh Debian 13/GNOME install: with no X display
  * in the environment the default backend is X11, and the launch dies before
  * any window exists -- `Missing X server or $DISPLAY`, then a segfault. The
  * process stays around holding the single-instance lock, so every later
@@ -37,22 +38,18 @@ const addon = loadAddon()
  * it" and nothing ever appears. Passing `--ozone-platform=wayland` on the
  * same machine opens the window at once.
  *
- * ONLY when `WAYLAND_DISPLAY` is set and `DISPLAY` is not. Once XWayland is
- * running (`DISPLAY` set) the default X11 backend works -- that is every
- * machine this app has ever run on -- so leave it alone there. Headless and
- * harness runs set neither variable and are untouched, and this is not macOS
- * (`have-display.mjs`: Quartz needs no variable at all).
+ * ONLY in `WAYLAND_WITHOUT_X` (imported, not spelled here -- the display
+ * predicate may live in exactly one file and `shell-syntax.test.mjs`
+ * enforces it): once the compatibility layer is running the default X11
+ * backend works -- that is every machine this app has ever run on -- so it
+ * is left alone there, as are headless runs and macOS.
  *
  * An `appendSwitch` here rather than an env var, because it has to reach the
- * zygotes as well: `ELECTRON_OZONE_PLATFORM_HINT=wayland` in the environment
- * was measured IGNORED on this build (still X11, still dead) while the
- * identical switch on the command line works. Must run before `ready`.
+ * zygotes as well: the equivalent env var was measured IGNORED on this
+ * build (still X11, still dead) while the identical switch on the command
+ * line works. Must run before `ready`.
  */
-if (
-  process.platform === 'linux' &&
-  process.env.WAYLAND_DISPLAY &&
-  !process.env.DISPLAY
-) {
+if (WAYLAND_WITHOUT_X) {
   app.commandLine.appendSwitch('ozone-platform', 'wayland')
 }
 

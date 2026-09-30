@@ -2,19 +2,19 @@
 /**
  * tools/verify-ozone-wayland.mjs -- the Wayland-first guard in app-main.mjs.
  *
- * MEASURED 2026-09-30 on a fresh Debian 13/GNOME install: with `DISPLAY`
- * unset the default backend is X11 and the launch dies before any window
- * exists (`Missing X server or $DISPLAY`, then a segfault), while the
- * identical launch with `--ozone-platform=wayland` opens at once. The guard
- * forces that switch exactly in the broken configuration -- a Wayland session
- * whose XWayland isn't up yet -- and leaves every working setup alone.
+ * MEASURED 2026-09-30 on a fresh Debian 13/GNOME install: with no X display
+ * in the environment the default backend is X11 and the launch dies before
+ * any window exists, while the identical launch with
+ * `--ozone-platform=wayland` opens at once. The guard forces that switch
+ * exactly in the broken configuration and leaves every working setup alone.
  *
  * This gate pins the guard's three properties, because each has already been
- * the wrong value once: the switch itself (an env var was measured IGNORED on
- * this build while the command-line switch works), the condition (Wayland
- * advertised AND X11 absent -- forcing Wayland when `DISPLAY` is set would
- * move every working machine onto an untested path), and the placement (it
- * must run before `ready`, after which Chromium has already chosen).
+ * the wrong value once: the switch itself (an env var was measured IGNORED
+ * on this build while the command-line switch works), the condition (the
+ * `WAYLAND_WITHOUT_X` predicate, imported from `have-display.mjs` -- the
+ * display check may be spelled in exactly one file and
+ * `shell-syntax.test.mjs` enforces it), and the placement (before `ready`,
+ * after which Chromium has already chosen).
  */
 
 import { readFileSync } from 'node:fs'
@@ -23,7 +23,9 @@ import process from 'node:process'
 import { fileURLToPath } from 'node:url'
 
 const ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
-const MAIN = join(ROOT, 'electron-shell', 'app-main.mjs')
+const SHELL = join(ROOT, 'electron-shell')
+const MAIN = join(SHELL, 'app-main.mjs')
+const OWNER = join(SHELL, 'have-display.mjs')
 
 function fail(reason) {
   process.stdout.write(`OZONE-WAYLAND result=FAIL reason=${reason}\n`)
@@ -42,16 +44,22 @@ if (!src.includes("appendSwitch('ozone-platform', 'wayland')")) {
   fail('wayland-switch-missing')
 }
 
-// 2. The condition: Linux, Wayland advertised, X11 absent.
-for (const token of [
-  "process.platform === 'linux'",
-  'process.env.WAYLAND_DISPLAY',
-  '!process.env.DISPLAY',
-]) {
-  if (!src.includes(token)) fail(`condition-missing token=${token}`)
+// 2. The condition, imported -- never spelled here.
+if (!src.includes("from './have-display.mjs'") || !src.includes('WAYLAND_WITHOUT_X')) {
+  fail('predicate-not-imported')
 }
+if (src.includes('WAYLAND_DISPLAY')) fail('predicate-spelled-locally')
 
-// 3. Placement: before `ready`, so Chromium has not chosen yet.
+// 3. The owner really owns it, so this cannot pass by rename.
+let owner
+try {
+  owner = readFileSync(OWNER, 'utf8')
+} catch {
+  fail('have-display-unreadable')
+}
+if (!owner.includes('WAYLAND_WITHOUT_X')) fail('predicate-missing-in-owner')
+
+// 4. Placement: before `ready`, so Chromium has not chosen yet.
 const switchAt = src.indexOf("appendSwitch('ozone-platform', 'wayland')")
 const readyAt = src.indexOf('app.whenReady')
 if (readyAt === -1) fail('whenReady-not-found')
@@ -59,6 +67,6 @@ if (!(switchAt < readyAt)) fail('switch-after-ready')
 
 process.stdout.write(
   'OZONE-WAYLAND result=PASS switch=ozone-platform/wayland ' +
-    'condition=wayland-without-x placement=before-ready\n'
+    'condition=imported placement=before-ready\n'
 )
 process.exit(0)
