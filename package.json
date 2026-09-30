@@ -18,6 +18,7 @@
     "bench:scroll:preflight": "node tools/scroll-bench.mjs --preflight",
     "bench:scroll:obsidian": "node tools/scroll-bench.mjs --obsidian --nodes 2000 --events 0",
     "verify:electron-pin": "node tools/verify-electron-pin.mjs",
+    "verify:ozone-wayland": "node tools/verify-ozone-wayland.mjs",
     "electron:native": "node electron-shell/build-native.mjs",
     "test:electron-native": "node --test electron-shell/native.test.mjs",
     "test:electron-close": "node --test electron-shell/close-handshake.test.mjs",

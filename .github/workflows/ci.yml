@@ -43,6 +43,9 @@ jobs:
       - name: Electron pin (G-PIN)
         run: npm run verify:electron-pin
 
+      - name: Ozone Wayland-first guard
+        run: npm run verify:ozone-wayland
+
       - name: Typecheck
         run: npm run typecheck
 

@@ -26,6 +26,36 @@ const ROOT = dirname(HERE)
 const HEADLESS = process.env.CAIRN_HEADLESS === '1'
 const addon = loadAddon()
 
+/**
+ * WAYLAND-FIRST ON A WAYLAND SESSION WHOSE XWAYLAND ISN'T UP YET.
+ *
+ * MEASURED 2026-09-30 on a fresh Debian 13/GNOME install: with no `DISPLAY`
+ * in the environment the default backend is X11, and the launch dies before
+ * any window exists -- `Missing X server or $DISPLAY`, then a segfault. The
+ * process stays around holding the single-instance lock, so every later
+ * launch reports "another instance already holds the lock; handing over to
+ * it" and nothing ever appears. Passing `--ozone-platform=wayland` on the
+ * same machine opens the window at once.
+ *
+ * ONLY when `WAYLAND_DISPLAY` is set and `DISPLAY` is not. Once XWayland is
+ * running (`DISPLAY` set) the default X11 backend works -- that is every
+ * machine this app has ever run on -- so leave it alone there. Headless and
+ * harness runs set neither variable and are untouched, and this is not macOS
+ * (`have-display.mjs`: Quartz needs no variable at all).
+ *
+ * An `appendSwitch` here rather than an env var, because it has to reach the
+ * zygotes as well: `ELECTRON_OZONE_PLATFORM_HINT=wayland` in the environment
+ * was measured IGNORED on this build (still X11, still dead) while the
+ * identical switch on the command line works. Must run before `ready`.
+ */
+if (
+  process.platform === 'linux' &&
+  process.env.WAYLAND_DISPLAY &&
+  !process.env.DISPLAY
+) {
+  app.commandLine.appendSwitch('ozone-platform', 'wayland')
+}
+
 // The macOS app-menu title still reads "Electron": that name comes from the
 // bundle's Info.plist, and this runs unpackaged. setName fixes the About panel
 // and the userData path; the menu bar itself only changes at packaging (step 10).
