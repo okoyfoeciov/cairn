@@ -498,16 +498,17 @@
  * which is what makes a range containing the open note read uniform. */
 .tr.s::before     { background-color: color-mix(in oklch, var(--accent) 15%, transparent); }
 .tr.s             { color: var(--text-normal); }
-/* The secret row (user feature, 2026-09-16): a secret file's row draws sky
- * blue, so credentials are spottable in a vault-wide glance.  Colour-only —
- * the row box never moves for it — and AFTER `.tr.s` on purpose, equal
- * specificity: the mark survives the active and selection fills, because a
- * row that stopped reading as secret the moment it was opened or selected
- * would defeat the purpose.  The transient drag gestures below still win
- * while live.  The hue is user-chosen (#5EB3F6, picked from a rendered
- * preview against this ground): a literal, not a token, because no palette
- * token holds it. */
-.tr.is-secret     { color: #5EB3F6; }
+/* The secret row (user feature, 2026-09-16): a secret file's row draws
+ * Oceanic ice-blue, so credentials are spottable in a vault-wide glance.
+ * Colour-only — the row box never moves for it — and AFTER `.tr.s` on
+ * purpose, equal specificity: the mark survives the active and selection
+ * fills, because a row that stopped reading as secret the moment it was
+ * opened or selected would defeat the purpose.  The transient drag gestures
+ * below still win while live.  [C] Oceanic 2026-09-30: was the user-chosen
+ * literal #5EB3F6, picked from a rendered preview against the old #282828
+ * ground; now `var(--text-accent)` (#8cbfe6) so it follows the color system
+ * instead of freezing a pre-Oceanic hue against it. */
+.tr.is-secret     { color: var(--text-accent); }
 /* ---- drag-to-move (Obsidian's file-explorer drop, transcribed) --------------
  * app.css + app.js, 1.13.7, measured 2026-09-16 (`/tmp/obsidian-app.*`):
  *

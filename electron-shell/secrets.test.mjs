@@ -173,9 +173,9 @@ test('the marker hides the editor host and mounts a VISIBLE viewer', { skip: SKI
 test('the tree row for the secret file carries the secret mark', { skip: SKIP }, async () => {
   const d = await probeOnce()
   assert.equal(d.treeSecret, true, 'the secret file row is not marked in the tree')
-  // The user-chosen hue, asserted on COMPUTED style — the class alone cannot
-  // say what the row paints.
-  assert.equal(d.treeInk, 'rgb(94, 179, 246)', 'the secret ink is not #5EB3F6: ' + d.treeInk)
+  // Oceanic ice-blue, asserted on COMPUTED style — the class alone cannot
+  // say what the row paints. Was #5EB3F6 pre-Oceanic; now var(--text-accent).
+  assert.equal(d.treeInk, 'rgb(140, 191, 230)', 'the secret ink is not #8cbfe6: ' + d.treeInk)
 })
 
 test('one row per entry on both sections', { skip: SKIP }, async () => {
