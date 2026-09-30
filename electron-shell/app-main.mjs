@@ -20,38 +20,16 @@ import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { loadAddon, nativeCommands, toEnvelope } from './native.mjs'
-import { WAYLAND_WITHOUT_X } from './have-display.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
 const ROOT = dirname(HERE)
 const HEADLESS = process.env.CAIRN_HEADLESS === '1'
 const addon = loadAddon()
 
-/**
- * WAYLAND-FIRST ON A WAYLAND SESSION WHOSE X LAYER ISN'T UP YET.
- *
- * MEASURED 2026-09-30 on a fresh Debian 13/GNOME install: with no X display
- * in the environment the default backend is X11, and the launch dies before
- * any window exists -- `Missing X server or $DISPLAY`, then a segfault. The
- * process stays around holding the single-instance lock, so every later
- * launch reports "another instance already holds the lock; handing over to
- * it" and nothing ever appears. Passing `--ozone-platform=wayland` on the
- * same machine opens the window at once.
- *
- * ONLY in `WAYLAND_WITHOUT_X` (imported, not spelled here -- the display
- * predicate may live in exactly one file and `shell-syntax.test.mjs`
- * enforces it): once the compatibility layer is running the default X11
- * backend works -- that is every machine this app has ever run on -- so it
- * is left alone there, as are headless runs and macOS.
- *
- * An `appendSwitch` here rather than an env var, because it has to reach the
- * zygotes as well: the equivalent env var was measured IGNORED on this
- * build (still X11, still dead) while the identical switch on the command
- * line works. Must run before `ready`.
- */
-if (WAYLAND_WITHOUT_X) {
-  app.commandLine.appendSwitch('ozone-platform', 'wayland')
-}
+// NOTE: the ozone backend is chosen in the /usr/bin/cairn launcher, not here.
+// Chromium reads it before app code runs -- an appendSwitch at this spot was
+// measured too late on 2026-09-30 (still X11, still dead) while the identical
+// command-line flag works. See tools/package-electron.mjs.
 
 // The macOS app-menu title still reads "Electron": that name comes from the
 // bundle's Info.plist, and this runs unpackaged. setName fixes the About panel

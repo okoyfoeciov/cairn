@@ -83,12 +83,6 @@ const APP_FILES = [
   'preload.cjs',
   'cairn.node',
   'app', // the built frontend: index.html (CSS inlined) + app.js
-  // Shipped because app-main.mjs imports WAYLAND_WITHOUT_X from it. Left out
-  // once (2026-09-30) and the packaged app died on launch with
-  // ERR_MODULE_NOT_FOUND -- dev and CI never noticed, because the file is
-  // always present in the checkout. Every runtime import must name a file
-  // in this list; verify-ozone-wayland.mjs enforces it for this one.
-  'have-display.mjs',
 ]
 
 function stageApp(appDir) {
@@ -151,9 +145,24 @@ function buildDeb(stage) {
   cpSync(stage, libDir, { recursive: true })
 
   mkdirSync(join(debRoot, 'usr', 'bin'), { recursive: true })
+  // Wayland-first on a Wayland session whose X layer isn't up yet (measured
+  // 2026-09-30: the default X11 backend dies with no X server, while this
+  // flag opens at once). Chromium reads the ozone backend before app code
+  // runs, so this cannot live in app-main.mjs -- an appendSwitch there was
+  // measured too late (still X11, still dead) while the identical
+  // command-line flag works. Only when a Wayland socket is advertised and
+  // no X display exists; every working setup is untouched. POSIX sh: this
+  // runs on machines whose /bin/sh is dash.
   writeFileSync(
     join(debRoot, 'usr', 'bin', 'cairn'),
-    '#!/bin/sh\nexec /usr/lib/cairn/cairn "$@"\n'
+    [
+      '#!/bin/sh',
+      'if [ -n "${WAYLAND_DISPLAY:-}" ] && [ -z "${DISPLAY:-}" ]; then',
+      '  set -- --ozone-platform=wayland "$@"',
+      'fi',
+      'exec /usr/lib/cairn/cairn "$@"',
+      '',
+    ].join('\n')
   )
   chmodSync(join(debRoot, 'usr', 'bin', 'cairn'), 0o755)
 
