@@ -26,6 +26,7 @@ const ROOT = dirname(dirname(fileURLToPath(import.meta.url)))
 const SHELL = join(ROOT, 'electron-shell')
 const MAIN = join(SHELL, 'app-main.mjs')
 const OWNER = join(SHELL, 'have-display.mjs')
+const PACKAGER = join(ROOT, 'tools', 'package-electron.mjs')
 
 function fail(reason) {
   process.stdout.write(`OZONE-WAYLAND result=FAIL reason=${reason}\n`)
@@ -64,6 +65,17 @@ const switchAt = src.indexOf("appendSwitch('ozone-platform', 'wayland')")
 const readyAt = src.indexOf('app.whenReady')
 if (readyAt === -1) fail('whenReady-not-found')
 if (!(switchAt < readyAt)) fail('switch-after-ready')
+
+// 5. Packaging: the import must resolve in the SHIPPED app, where only
+// APP_FILES exists. An import of a checkout-only file passes every dev and
+// CI check and dies on launch with ERR_MODULE_NOT_FOUND (2026-09-30).
+let packager
+try {
+  packager = readFileSync(PACKAGER, 'utf8')
+} catch {
+  fail('packager-unreadable')
+}
+if (!packager.includes("'have-display.mjs'")) fail('have-display-not-packaged')
 
 process.stdout.write(
   'OZONE-WAYLAND result=PASS switch=ozone-platform/wayland ' +

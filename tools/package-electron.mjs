@@ -83,6 +83,12 @@ const APP_FILES = [
   'preload.cjs',
   'cairn.node',
   'app', // the built frontend: index.html (CSS inlined) + app.js
+  // Shipped because app-main.mjs imports WAYLAND_WITHOUT_X from it. Left out
+  // once (2026-09-30) and the packaged app died on launch with
+  // ERR_MODULE_NOT_FOUND -- dev and CI never noticed, because the file is
+  // always present in the checkout. Every runtime import must name a file
+  // in this list; verify-ozone-wayland.mjs enforces it for this one.
+  'have-display.mjs',
 ]
 
 function stageApp(appDir) {
