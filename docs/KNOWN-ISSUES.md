@@ -635,15 +635,25 @@ inherit it by accident.**
 
 *Closed by:* a user ruling, recorded in CONTRACT §0.20.
 
-### X-13 · No in-note find, no non-`.md` rows, and search is `.md`-only
+### X-13 · In-note find ships; no non-`.md` rows, and search is `.md`-only
 
-**Opened 2026-09-23.** Three absences, one subject — what the app can look at. Obsidian's Mod-F finds
-inside the open note; Cairn binds Mod-Shift-F (the vault-wide panel) and has no in-note find at all.
-The tree hides every entry that is not a directory or a regular `*.md` (§3.6, `scan.rs`), so a `.txt`
-or `.pdf` beside a note is not listed and cannot be opened from the app. Search greps `.md` files
-only, for the same reason. Each is a decision by construction, and none has a ruling of its own.
+**Opened 2026-09-23.** Three absences, one subject — what the app can look at. The first is now
+closed: Mod-F opens an in-note find bar over the NOTE viewer only (`src/find.ts`, `src/styles/find.css`,
+Mod-F in `src/chrome.ts`, wired in `src/main.ts`, probed by `tests/frontend/find.test.mjs`). Plain
+case-insensitive substring with an `Aa` toggle, `Enter` / `Shift+Enter` / `↑` / `↓` to step, `Esc` to
+close; every match is marked in the editor (`.cm-find-match`, current `.cm-find-current` — owner 03's
+decoration set in `src/editor.ts`, which paints while the bar holds focus) and the current match is
+also the editor's selection, capped at 2,000 matches. Mod-F with the bar open refocuses the field
+instead of closing it; a pointer press outside the bar dismisses it. The Memoir page is deliberately excluded — it is a plain textarea outside the
+editor, the toggle refuses while it is visible, and every route to it hides the bar. The field takes
+no focus ring, by user ruling.
 
-*Closed by:* a user ruling on each, or the feature.
+Still open: the tree hides every entry that is not a directory or a regular `*.md` (§3.6, `scan.rs`),
+so a `.txt` or `.pdf` beside a note is not listed and cannot be opened from the app. Search greps
+`.md` files only, for the same reason. Each is a decision by construction, and none has a ruling of
+its own.
+
+*Closed by:* a user ruling on each remaining absence, or the feature.
 
 ### UI-11 · Mod-N with the cursor on a folder creates the note in the folder's PARENT
 

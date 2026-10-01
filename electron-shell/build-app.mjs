@@ -33,6 +33,7 @@ const CSS_ORDER = [
   'tree.css',
   'editor.css',
   'search.css',
+  'find.css',
   'memoir.css',
 ]
 

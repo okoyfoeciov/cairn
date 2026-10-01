@@ -9,7 +9,7 @@
  *
  * Owns the title bar, the vault bar's HOST, THE THREE BANNERS — §7.3 case 8's
  * vault-lost bar, §7.3 case 16's watcher-degraded bar and §3.3's cap banners —
- * the app's six keyboard shortcuts and the probe kick-off.  Owns the `.sidebar`
+ * the app's seven keyboard shortcuts and the probe kick-off.  Owns the `.sidebar`
  * shell but NOT its contents: `.tree-scroller`'s inside is owner 04's,
  * `.editor`'s is owner 03's, and no frontend module reaches into another's DOM
  * subtree (spec-07 §1, rule 5).
@@ -639,6 +639,12 @@ export interface ChromeDeps {
    *  close the panel, so a reveal-only binding would strand the user in the
    *  search view with the file tree unreachable (§0.7 E9, search.ts). */
   toggleSearch(): void
+  /** Mod-F.  In-note find (src/find.ts, KNOWN-ISSUES.md X-13): the overlay bar
+   *  in the NOTE viewer.  Show-or-focus, never a close — a second Mod-F with
+   *  the bar open hands the focus back to the field.  Never the Memoir page —
+   *  that is a plain textarea outside the editor and `main.ts` refuses the
+   *  toggle while it is visible. */
+  toggleFind(): void
   /** Mod-Shift-O, and the vault bar's recents popover.  §0.6 E8 deleted the
    *  title-bar button that also called this. */
   switchVault(): void
@@ -876,7 +882,7 @@ export function wireChrome(deps: ChromeDeps, root: ParentNode = document): Chrom
     else if (t.closest('.note-discard')) deps.discardNote()
   })
 
-  /* The six keyboard shortcuts (Obsidian-compatible).  Deliberately short: an
+  /* The seven keyboard shortcuts (Obsidian-compatible).  Deliberately short: an
      app with no settings UI cannot let the user fix a collision, so every extra
      binding is a permanent one. */
   function onKeyDown(ev: Event): void {
@@ -903,6 +909,13 @@ export function wireChrome(deps: ChromeDeps, root: ParentNode = document): Chrom
       if (e.repeat) { e.preventDefault(); return }
       e.preventDefault()
       deps.newNote()
+    } else if (k === 'f') {                                                   // ⌘F   find in note
+      // Mod-F is the browser's own find binding, so preventDefault is what
+      // keeps the engine's find bar from opening over the note.  Mod-Shift-F
+      // above stays the vault-wide panel; the two never collide (shift splits
+      // them before this branch is reached).
+      e.preventDefault()
+      deps.toggleFind()
     } else if (k === '1') {                                                   // ⌘1   note tab
       e.preventDefault()
       deps.selectTab('note')

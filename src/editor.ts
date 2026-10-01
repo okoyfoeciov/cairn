@@ -41,10 +41,10 @@
  * a one-line change and not a rename.
  * ------------------------------------------------------------------------- */
 
-import { Compartment, EditorSelection, EditorState } from '@codemirror/state'
+import { Compartment, EditorSelection, EditorState, StateEffect, StateField } from '@codemirror/state'
 import type { ChangeSpec, Extension, TransactionSpec } from '@codemirror/state'
-import { EditorView, ViewPlugin, keymap } from '@codemirror/view'
-import type { Command, ViewUpdate } from '@codemirror/view'
+import { Decoration, EditorView, ViewPlugin, keymap } from '@codemirror/view'
+import type { Command, DecorationSet, ViewUpdate } from '@codemirror/view'
 import { history, historyKeymap, standardKeymap } from '@codemirror/commands'
 
 import {
@@ -61,6 +61,7 @@ import {
 } from './livepreview'
 import { tables } from './tables'
 import { totp } from './totp'
+import { findMatches } from './find'
 import { isSecretText, renderSecrets } from './secrets'
 /* §5.4.5.  It is TWO extensions behind one name — a `StateField` that replaces
    the frontmatter range with the Properties block, and a `transactionFilter`
@@ -200,6 +201,11 @@ let chain: Promise<unknown> = Promise.resolve()
 
 const cursors = new Map<string, CursorMemo>()
 const editable = new Compartment()
+
+/* In-note find (src/find.ts, KNOWN-ISSUES.md X-13).  The panel lives outside
+ * this module and must not reach the module-private view, so document changes
+ * are fanned out here: one listener set, notified from `onUpdate` below. */
+const findListeners = new Set<() => void>()
 
 function fail(kind: string, message?: string): VaultErrorLike {
   return message === undefined ? { kind } : { kind, message }
@@ -429,6 +435,13 @@ function onUpdate(u: ViewUpdate): void {
   // marker walk runs only when it can change the answer: already in secret
   // mode, or a first line that is a frontmatter opener.
   if (secretMode || u.state.doc.line(1).text === '---') syncSecretMode()
+  for (const cb of [...findListeners]) {
+    try {
+      cb()
+    } catch {
+      /* a find listener must never break autosave */
+    }
+  }
 }
 
 /**
@@ -507,6 +520,59 @@ class ScrollPastEnd {
 
 const scrollPastEnd = ViewPlugin.fromClass(ScrollPastEnd, {
   provide: (p) => EditorView.contentAttributes.of((v) => v.plugin(p)?.attrs ?? null),
+})
+
+/**
+ * In-note find's mark layer (src/find.ts drives it through
+ * `setFindHighlightInView` below).
+ *
+ * The panel keeps focus while it is open, so the editor is BLURRED while the
+ * user reads the matches — and the editor's own selection is not a reliable
+ * highlight there.  These marks are ordinary decorations and paint regardless
+ * of focus: every match takes `.cm-find-match`, the current one
+ * `.cm-find-current`.  A fresh `EditorState` (note switch, empty) builds fresh
+ * fields, so the marks die with the note and nothing has to clear them there;
+ * hiding or destroying the panel clears through the effect.
+ */
+export interface FindHighlightSpec {
+  query: string
+  caseSensitive: boolean
+  from: number
+  to: number
+}
+
+export const setFindHighlight = StateEffect.define<FindHighlightSpec>()
+
+export const findSpecField = StateField.define<FindHighlightSpec>({
+  create: () => ({ query: '', caseSensitive: false, from: -1, to: -1 }),
+  update: (v, tr) => {
+    for (const e of tr.effects) if (e.is(setFindHighlight)) return e.value
+    return v
+  },
+})
+
+const FIND_MATCH = Decoration.mark({ class: 'cm-find-match' })
+const FIND_CURRENT = Decoration.mark({ class: 'cm-find-current' })
+
+function findDeco(state: EditorState): DecorationSet {
+  const spec = state.field(findSpecField)
+  if (spec.query === '') return Decoration.none
+  const { matches } = findMatches(state.doc.toString(), spec.query, spec.caseSensitive)
+  if (matches.length === 0) return Decoration.none
+  const out = []
+  for (const m of matches) {
+    out.push((m.from === spec.from && m.to === spec.to ? FIND_CURRENT : FIND_MATCH).range(m.from, m.to))
+  }
+  return Decoration.set(out, true)
+}
+
+export const findHighlightDeco = StateField.define<DecorationSet>({
+  create: (state) => findDeco(state),
+  update: (deco, tr) => {
+    if (!tr.docChanged && !tr.effects.some((e) => e.is(setFindHighlight))) return deco
+    return findDeco(tr.state)
+  },
+  provide: (f) => EditorView.decorations.from(f),
 })
 
 /** F80/F81/F82: whether a drag carries anything the editor must refuse — a
@@ -644,6 +710,10 @@ const EXTENSIONS: Extension[] = [
      second fence scanner or a second focus reporter. */
   totp,
   livePreviewAtomicRanges,
+  /* In-note find's mark layer.  A pure mark set alongside the others: no block
+     widget, no ordering constraint, initialised with the rest per M70. */
+  findSpecField,
+  findHighlightDeco,
   EditorView.lineWrapping,
   scrollPastEnd,
   EditorView.darkTheme.of(true),
@@ -932,6 +1002,76 @@ export function selectRange(line: number, col: number, len: number): void {
     scrollIntoView: true,
   })
   v.focus()
+}
+
+/**
+ * In-note find's narrow seam into the single EditorView (src/find.ts).
+ *
+ * NOTE VIEWER ONLY: the Memoir journal page is a plain textarea outside this
+ * module and never reaches these functions — `main.ts` refuses the Mod-F
+ * toggle while the page is visible and hides the bar on every route to it.
+ * Secret files are refused here too: the viewer replaces the editor, so
+ * `findDocText` is null and the panel cannot open over it.
+ */
+export function findDocText(): string | null {
+  const v = view
+  if (!v || !open || secretMode) return null
+  try {
+    return v.state.doc.toString()
+  } catch {
+    return null
+  }
+}
+
+/** The current selection, for find prefill. Single short line only. */
+export function findSelectionText(): string {
+  const v = view
+  if (!v || secretMode) return ''
+  try {
+    const sel = v.state.selection.main
+    if (sel.empty) return ''
+    const t = v.state.doc.sliceString(sel.from, sel.to)
+    if (t.length === 0 || t.length > 100 || t.includes('\n')) return ''
+    return t
+  } catch {
+    return ''
+  }
+}
+
+/** Select [from, to) and scroll it into view. Keeps focus where it is, so
+ *  typing in the find field is not interrupted by every keystroke's reveal. */
+export function findReveal(from: number, to: number): void {
+  const v = view
+  if (!v || !open || secretMode) return
+  const len = v.state.doc.length
+  const a = Math.max(0, Math.min(Math.trunc(from), len))
+  const b = Math.max(a, Math.min(Math.trunc(to), len))
+  v.dispatch({
+    selection: EditorSelection.range(a, b),
+    scrollIntoView: true,
+  })
+}
+
+export function onFindDocChanged(cb: () => void): () => void {
+  findListeners.add(cb)
+  return () => {
+    findListeners.delete(cb)
+  }
+}
+
+/** Paint the find mark layer. No-op without a view; a fresh `EditorState`
+ *  (note switch, empty) builds fresh fields and needs none. */
+export function setFindHighlightInView(
+  query: string,
+  caseSensitive: boolean,
+  from: number,
+  to: number,
+): void {
+  const v = view
+  if (!v) return
+  v.dispatch({
+    effects: setFindHighlight.of({ query, caseSensitive, from, to }),
+  })
 }
 
 /** §7.4's empty state.  Writes nothing, ever. */

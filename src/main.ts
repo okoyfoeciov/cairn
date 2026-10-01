@@ -45,6 +45,9 @@ import {
   configureEditor,
   currentNoteState,
   currentPath,
+  findDocText,
+  findReveal,
+  findSelectionText,
   focusEditor,
   forgetCursor,
   guardDeleteOfOpenNote,
@@ -56,6 +59,7 @@ import {
   markVaultLost,
   mountEditor,
   noteExternalChange,
+  onFindDocChanged,
   onFlushAndClose as editorFlushAndClose,
   openNote,
   reloadFromDisk,
@@ -64,6 +68,7 @@ import {
   saveAs,
   selectRange,
   setEditorHooks,
+  setFindHighlightInView,
   showEmpty,
   flushNow as editorFlush,
   type FlushReason,
@@ -113,6 +118,7 @@ import {
 } from './ipc'
 import type { VaultInfo } from './ipc'
 import { modalIsOpen, openModal } from './modal'
+import { mountFind, type FindPanel } from './find'
 import { mountSearch, type SearchPanel } from './search'
 import { configurePersist, discardPendingUi, flushUi, patchUi } from './state'
 import { createTabStrip, type TabId, type TabStrip } from './tabstrip'
@@ -139,6 +145,7 @@ let probeDone = false
 
 let tree: TreeController
 let search: SearchPanel
+let find: FindPanel | null = null
 let tabs: TabStrip
 let bar: VaultBar
 let chromeHandle: ChromeHandle
@@ -768,14 +775,14 @@ async function deleteFlow(path: string, isDir: boolean): Promise<'deleted' | 'fa
     // explicitly to drop it ("Delete without saving").  Leaving it on screen
     // would be the state that LOOKS recoverable and is not, which is the exact
     // shape of the bug this function is fixing.
-    if (hitsOpen) showEmpty()
+    if (hitsOpen) { showEmpty(); hideFind() }
     // The pane is settled BEFORE the dialog goes up, so the modal is the last
     // thing drawn and the user is not answering a question over a stale pane.
     await reportDeleteFailure(path, isDir, err)
     return 'failed'
   }
   forgetCursor(path)
-  if (hitsOpen) showEmpty()
+  if (hitsOpen) { showEmpty(); hideFind() }
   await refreshTree()
   return 'deleted'
 }
@@ -919,9 +926,32 @@ function deleteSubject(path: string, isDir: boolean): { path: string; isDir: boo
  *  aside, aborting on a refused write.  The tab-only version of this lived in
  *  `switchTab` and missed the tree entirely (reported 2026-09-17: selecting a
  *  row from inside Memoir kept the page on screen). */
+function hideFind(): void {
+  find?.hide()
+}
+
+/**
+ * In-note find is NOTE VIEWER ONLY (user clarification on X-13): Mod-F opens
+ * the overlay bar over the CodeMirror note and never over the Memoir page,
+ * which is a plain textarea outside the editor.  The toggle is refused while
+ * the page is visible, and every route to the page hides the bar.
+ *
+ * SHOW-OR-FOCUS, never a close: with the bar open and the caret in the note,
+ * a second Mod-F hands the focus back to the field (the query selected) rather
+ * than dismissing the bar it just opened.  Esc and × are the closes.
+ */
+function toggleFind(): void {
+  if (vaultLostPath !== null) return
+  if (memoir !== null && memoir.visible()) return
+  if (currentPath() === null) return
+  if (findDocText() === null) return
+  find?.toggle()
+}
+
 async function openNoteAt(path: string): Promise<boolean> {
   if (vaultLostPath !== null) return false
   if (path === MEMOIR_PATH) return openMemoir()
+  hideFind()
   if (memoir !== null && memoirPane !== null && memoir.visible()) {
     // F47: a journal that will not save (an outside edit conflicted it) must
     // not trap the user on the page with no visible reason. The buffer stays
@@ -963,6 +993,7 @@ async function openNoteAt(path: string): Promise<boolean> {
 async function openMemoir(): Promise<boolean> {
   if (vaultLostPath !== null || vault === null || memoir === null || memoirPane === null) return false
   if (memoir.visible()) return true
+  hideFind()
   try {
     await editorFlush('switch')
   } catch {
@@ -1144,6 +1175,7 @@ async function releaseVault(reason: string): Promise<void> {
   //    `view.destroy()`: there is exactly ONE EditorView for the process
   //    lifetime (M70), and `showEmpty()` is that call.
   showEmpty()
+  hideFind()
   // 4. Cancel the search and clear the panel.
   search.reset(null)
   // 5. Drop the blob and the per-vault view state.  The next `applySnapshot`
@@ -1516,6 +1548,20 @@ function boot(): void {
   // the strip takes no flush/close deps — only tab selection.  Delete, vault
   // switch and quit all go through `showEmpty` and leave the pane empty with
   // Memoir one click away.
+  // In-note find is NOTE VIEWER ONLY: the bar overlays `main.editor` (which
+  // also hosts the Memoir page), so it is mounted on the pane but the toggle
+  // refuses while the page is visible and every route to the page hides it.
+  const editorPane = document.querySelector<HTMLElement>('main.editor')
+  if (!editorPane) throw new Error('main.ts: main.editor is missing from index.html')
+  find = mountFind(editorPane, {
+    getText: () => findDocText(),
+    getSelection: () => findSelectionText(),
+    reveal: (from, to) => findReveal(from, to),
+    setHighlight: (query, caseSensitive, from, to) =>
+      setFindHighlightInView(query, caseSensitive, from, to),
+    focusEditor: () => focusEditor(),
+    onDocChanged: (cb) => onFindDocChanged(cb),
+  })
   tabs = createTabStrip({
     // §0.30 E71 — NO `newNote` HERE ANY MORE.  It was the tab strip's `+`, and
     // that button is deleted; Mod-N below is unchanged and still carries the
@@ -1534,7 +1580,7 @@ function boot(): void {
     onError: reportError,
   })
 
-  /* ── the chrome: the banners, the window controls, six shortcuts. ─────── */
+  /* ── the chrome: the banners, the window controls, seven shortcuts. ─────── */
   chromeHandle = wireChrome({
     // Mod-N creates BESIDE the cursor, which is what `destinationFor(_, false)`
     // computed before §0.16 E18 deleted it: that helper's only other caller was
@@ -1551,6 +1597,7 @@ function boot(): void {
     // `rescan_all` re-emits it (see this file's header, rule 2).
     rescanAll: async () => { await rescanAll() },
     toggleSearch: () => search.toggle(),
+    toggleFind: () => toggleFind(),
     switchVault: () => bar.openPopup(),
     // User ruling 2026-09-16: Mod-1 / Mod-2 select the note / Memoir tab —
     // the same flush-first `switchTab` the tab clicks go through.
@@ -1571,11 +1618,12 @@ function boot(): void {
     keepMine: () => keepMine().catch((e: unknown) => reportError(e, 'keep-mine')),
     reloadFromDisk: () => reloadFromDisk().catch((e: unknown) => reportError(e, 'reload-note')),
     saveAsPrompt,
-    discardNote: () => showEmpty(),
+    discardNote: () => { hideFind(); showEmpty() },
     onVaultLost: (path) => {
       // §7.3 case 8, the half that is not chrome's: stop autosave and mark the
       // buffer read-only.  The tree freezes through `isFrozen` above.
       vaultLostPath = path
+      hideFind()
       markVaultLost()
     },
     onError: reportError,
