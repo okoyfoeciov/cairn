@@ -307,7 +307,7 @@ test('F48: a hung Check disables nothing after reset(), and the abort lands', as
 })
 
 /* F48's deadline must outlast a real check: a full-size entry (12000
- * characters) takes about 210 s at llm-service, and a deadline shorter than
+ * characters) takes about 210 s at ai-service, and a deadline shorter than
  * that aborts an answer that was on its way. */
 test('F48: the Check deadline outlasts a full-size check and still fires', async (ctx) => {
   const t = makeTransport()

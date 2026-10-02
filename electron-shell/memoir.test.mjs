@@ -202,10 +202,10 @@ test('Memoir — the note tab brings the note back and hides the page', { skip: 
   assert.equal(d.backOnNote.title, 'Memory', 'the note tab forgot its note across a memoir visit')
 })
 
-// THE LIVE LEG (gated: it bills one Cerebras turn through llm-service, so it
+// THE LIVE LEG (gated: it bills one Cerebras turn through ai-service, so it
 // runs only with CAIRN_MEMOIR_LIVE=1). What it proves end to end, in the real
 // engine: typing in the page autosaves through the real addon (proved from
-// DISK, not the DOM), and Check reaches llm-service over localhost and renders
+// DISK, not the DOM), and Check reaches ai-service over localhost and renders
 // issue cards back into the drawer.
 test('Memoir — typing autosaves to disk and Check returns issues', {
   skip: SKIP || (process.env.CAIRN_MEMOIR_LIVE === '1'

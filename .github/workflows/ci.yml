@@ -4,7 +4,7 @@
 # builds (the "does it build" gates).
 #
 # Out of scope here on purpose: the Electron launch suites and G9 (need a
-# display) and the Memoir live test (needs llm-service + CAIRN_MEMOIR_LIVE=1).
+# display) and the Memoir live test (needs ai-service + CAIRN_MEMOIR_LIVE=1).
 
 name: CI
 

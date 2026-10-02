@@ -9,7 +9,7 @@
  * proofread) and `Other ways` (rephrase the selection) over localhost, each
  * rendering into its own drawer.  The entry text is vault-root `Memoir.md`
  * (path arrives via deps — this module does not name it); the two LLM calls
- * are llm-service's `/api/memoir/check` + `/api/memoir/paraphrase` on
+ * are ai-service's `/api/memoir/check` + `/api/memoir/paraphrase` on
  * `127.0.0.1:8770`.  Server-side entry storage (`/api/entry`) was NOT ported:
  * the vault is the store.
  *
@@ -40,7 +40,7 @@
 
 export const MEMOIR_API = 'http://127.0.0.1:8770/api/memoir'
 
-/** Client-side mirrors of the server's caps (llm-service enforces them). */
+/** Client-side mirrors of the server's caps (ai-service enforces them). */
 export const MEMOIR_CHECK_MAX = 12000
 export const MEMOIR_PARA_MAX = 600
 
@@ -200,7 +200,7 @@ export function resolveRange(value: string, selStart: number, selEnd: number): R
   return { start, end, text, kind, truncated }
 }
 
-/* ── wire types (llm-service's shapes, structurally) ─────────────────────── */
+/* ── wire types (ai-service's shapes, structurally) ─────────────────────── */
 
 interface CheckIssue {
   category?: unknown

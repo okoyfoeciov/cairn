@@ -3906,7 +3906,7 @@ coverage.
 #### Standing user features
 
 Each is a deliberate user feature with no E-number of its own, and each is specified where it lives:
-**the Memoir page** — a fixed second tab over `llm-service` at `127.0.0.1:8770` (§0.6, §7.4);
+**the Memoir page** — a fixed second tab over `ai-service` at `127.0.0.1:8770` (§0.6, §7.4);
 **secret notes** — `cairn-type: secrets` files with a credentials viewer, command 25, a tree mark and
 a content-search exclusion (§1.3, §3.6, §4.1, §7.3 case 18); **drag-to-move** — command 24,
 Obsidian's drop with uniquification (§1.3, §7.3 case 17); **two fixed tabs** — the note tab and
