@@ -99,6 +99,7 @@ import {
   openVault,
   pickVault,
   readNote,
+  readText,
   recentVaults,
   forgetVault,
   renameEntry,
@@ -1460,7 +1461,7 @@ function boot(): void {
   configurePersist(saveUiState, (err) => reportError(err, 'save-ui-state'))
 
   /* ── the editor.  EXACTLY ONE EditorView for the process lifetime (M70). ── */
-  configureEditor({ readNote, writeNote, renameEntry, createNote })
+  configureEditor({ readNote, writeNote, renameEntry, createNote, readClipboardText: readText, writeClipboardText: copyText })
   setEditorHooks({
     onPathChanged: (path) => {
       // `Memoir.md` never arrives here: `openNoteAt` intercepts it into the
@@ -1501,6 +1502,8 @@ function boot(): void {
         void refreshTree()
       },
       onError: reportError,
+      readClipboardText: readText,
+      writeClipboardText: copyText,
     })
   }
   // §0.38 E85.  AFTER `tree` exists?  No — the host reads `tree` lazily on each

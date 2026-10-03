@@ -99,7 +99,7 @@ emulation is not a rasterisation scale.
 | Do not infer identity | Never infer identity, ownership or affiliation from a path, hostname, git config or login name. |
 | Mouse, never a trackpad | Trackpad scroll feel is out of scope. |
 | No memory or size goals | Retired by user ruling; optimise later. |
-| IPC table closed at 25 | The three shell-owned commands are `pick_vault`, `open_external`, `copy_text`. `open_external`'s http/https/mailto allowlist is enforced in the MAIN process and is a ruling, not an accident. |
+| IPC table closed at 26 | The four shell-owned commands are `pick_vault`, `open_external`, `copy_text`, `read_text`. `open_external`'s http/https/mailto allowlist is enforced in the MAIN process and is a ruling, not an accident. |
 | No inert controls | §9 E4. The one recorded exception: `Show in Finder` on Linux errors by ruling, because the fix was cancelled. |
 | Deliberate behaviours | Fixed non-closable tabs (Mod-1/Mod-2); maximized launch except under `--pixeltest`/headless; global transition ban with named exemptions; collapse-all removed; a network vault has no refresh (never draw its banner while `watching` is true); a clicked bare url does not navigate; a wikilink to a missing note does nothing. |
 | User features that are NOT Obsidian's | The `totp` block, secret files (`cairn-type: secrets`), and the Memoir journal page over the local ai-service at `127.0.0.1:8770`. These are design, not transcription. |

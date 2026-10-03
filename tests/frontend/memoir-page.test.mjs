@@ -352,6 +352,29 @@ test('F48: the Check deadline outlasts a full-size check and still fires', async
   }
 })
 
+/* A right mousedown on selected journal text must not collapse it:
+ * Chromium moves the caret as the mousedown's default action, so without the
+ * guard the selection is gone by `contextmenu` time and Copy could never be
+ * offered. With no selection the default stands (the caret lands at the
+ * click point, the Paste target). */
+test('right mousedown keeps a live journal selection, collapses nothing else', async () => {
+  const t = makeTransport()
+  const { editor } = await shown(t)
+  editor.value = 'journal line one'
+  const press = (button) => {
+    let prevented = false
+    editor.dispatch('mousedown', { button, preventDefault: () => { prevented = true } })
+    return prevented
+  }
+  editor.selectionStart = 0
+  editor.selectionEnd = 7
+  assert.equal(press(2), true, 'a right press on a selection must be prevented')
+  editor.selectionStart = 5
+  editor.selectionEnd = 5
+  assert.equal(press(2), false, 'a right press with no selection keeps native caret placement')
+  assert.equal(press(0), false, 'a left press is never interfered with')
+})
+
 /* A blank journal (only whitespace, e.g. a stray newline autosaved into
  * Memoir.md) must open on the FIRST line, not past the blank: the fresh load
  * used to place the caret at the end unconditionally, so "\n" opened with the

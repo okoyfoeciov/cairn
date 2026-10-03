@@ -69,6 +69,10 @@ import { isSecretText, renderSecrets } from './secrets'
    `livepreview.ts`: `block: true` decorations may not come from a `ViewPlugin`,
    which is what `livePreview` is. */
 import { properties } from './properties'
+/* `openMenu`/`clipMenu` is THE ONE context-menu primitive (owner 04): the
+ * note viewer's Copy/Paste rows are built by it, never as a second floating
+ * list.  `menu.ts` imports only `icons.ts`, so this is not a cycle. */
+import { clipMenu, openMenu } from './menu'
 /* §7.3 case 3's prompt.  `src/modal.ts` (owner 01) is THE ONLY MODAL IN THE APP
  * (§1.6.1, errata 3 Z4); this module does not draw one and must never grow one.
  * The import is a VALUE import, not a type import, because the guard below
@@ -123,6 +127,21 @@ export interface EditorIpc {
    * it the backup is skipped and the overwrite still proceeds.
    */
   createNote?(parent: string, name?: string): Promise<{ path: string }>
+  /**
+   * §1.3 command 26, optional so older test transports keep working.
+   * The note viewer's context menu probes this to decide whether the
+   * clipboard holds text (the Paste row); without it the probe falls back
+   * to `navigator.clipboard.readText()` and treats a refusal as empty.
+   */
+  readClipboardText?(): Promise<string>
+  /**
+   * §1.3 command 23, optional so older test transports keep working.
+   * Copy's fallback when `navigator.clipboard.writeText()` rejects — an
+   * unfocused window answers "Document is not focused", while the
+   * main-process clipboard has no focus requirement (but refuses more than
+   * 4096 characters, so the unbounded async clipboard stays the first try).
+   */
+  writeClipboardText?(text: string): Promise<void>
 }
 
 export type FlushReason =
@@ -777,6 +796,12 @@ export function mountEditor(host: HTMLElement): void {
     { passive: true }
   )
 
+  // THE NOTE VIEWER'S CONTEXT MENU (Copy/Paste).  Guarded: the unit harness
+  // mounts with a `dom` that has no `addEventListener`.
+  if (typeof (view.dom as unknown as { addEventListener?: unknown }).addEventListener === 'function') {
+    view.dom.addEventListener('contextmenu', onEditorContextMenu)
+  }
+
   registerTitleRenameHost({ begin: beginTitleRename })
 
   // §7.2's unconditional flush points that belong to the window, not the shell.
@@ -791,6 +816,94 @@ export function mountEditor(host: HTMLElement): void {
 export function focusEditor(): void {
   if (secretMode) return
   view?.focus()
+}
+
+/**
+ * THE NOTE VIEWER'S CONTEXT MENU (2026-10-03): Copy and/or Paste over
+ * `menu.ts`'s one primitive.
+ *
+ * `preventDefault()` is synchronous and unconditional (the tree's §0.13 E15
+ * rationale applies verbatim: without it the engine opens its own menu as
+ * well as ours).  The rows are decided ASYNCHRONOUSLY — the clipboard probe
+ * is an IPC round trip — and the menu opens at the event's own point, so no
+ * caret is moved and no layout is read to get there.
+ *
+ * Copy is offered on a non-empty selection in ANY state that holds text,
+ * including the read-only ones: `detached`/`vault-lost` keep their selection
+ * precisely so it can still be copied out (see `reconfigureEditable`).
+ * Paste additionally needs an editable document, so the read-only states
+ * never offer it.  When neither holds, no menu opens at all.
+ */
+function onEditorContextMenu(ev: MouseEvent): void {
+  if (!view || secretMode || open === null) return
+  ev.preventDefault()
+  const x = ev.clientX
+  const y = ev.clientY
+  // Decided twice: this synchronous pass only skips the probe when there is
+  // provably nothing to offer (no selection, and paste refused) — the rows
+  // themselves are read after the probe lands, against the live state.
+  if (view.state.selection.main.empty && view.state.readOnly) return
+  void (async () => {
+    let clip = ''
+    try {
+      clip = ipc?.readClipboardText
+        ? await ipc.readClipboardText()
+        : await navigator.clipboard.readText()
+    } catch {
+      clip = ''
+    }
+    const v = view
+    if (!v || secretMode || open === null) return
+    const hasSelection = !v.state.selection.main.empty
+    const canPaste = !v.state.readOnly && clip.length > 0
+    if (!hasSelection && !canPaste) return
+    const clipText = clip
+    openMenu(
+      clipMenu({
+        hasSelection,
+        canPaste,
+        copy: () => {
+          const vv = view
+          const s = vv?.state.selection.main
+          if (!vv || !s || s.empty) return
+          const text = vv.state.doc.sliceString(s.from, s.to)
+          // `navigator.clipboard` first: it has no length cap (command 23
+          // refuses more than 4096 characters).  `activate()` in menu.ts runs
+          // this synchronously inside the click task, preserving the
+          // transient activation the async clipboard is gated on.  When the
+          // window is unfocused the write rejects ("Document is not
+          // focused") and the IPC fallback — which has no focus requirement
+          // — takes over instead of failing silently.
+          const fallback = (): void => {
+            if (ipc?.writeClipboardText) {
+              void ipc.writeClipboardText(text).catch((e: unknown) => {
+                console.error('cairn[editor-copy]: ' + (e instanceof Error ? e.message : String(e)))
+              })
+            } else {
+              console.error('cairn[editor-copy]: clipboard write failed and no IPC fallback is configured')
+            }
+          }
+          try {
+            void navigator.clipboard.writeText(text).catch(() => fallback())
+          } catch {
+            fallback()
+          }
+        },
+        paste: () => {
+          const vv = view
+          if (!vv || secretMode || open === null || vv.state.readOnly) return
+          if (!clipText) return
+          const s = vv.state.selection.main
+          vv.dispatch({
+            changes: { from: s.from, to: s.to, insert: clipText },
+            scrollIntoView: true,
+            userEvent: 'input.paste',
+          })
+        },
+      }),
+      { x, y, label: 'Note actions', cls: 'ctx-clip' }
+    )
+  })()
 }
 
 export function isDirty(): boolean {

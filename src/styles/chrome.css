@@ -757,6 +757,16 @@
   color: var(--text-muted);              /* [S] .menu-item-icon                */
 }
 .ctx-label { flex: 1 1 auto; min-width: 0; }
+/* The viewer Copy/Paste menu (2026-10-03): two short iconless rows.
+ *
+ * SCOPED, not global — the row menus keep Obsidian's content-sized box and
+ * E16's 4px/8px rows, and chrome-ui.test.mjs's §7.6 row pins those by slicing
+ * this sheet positionally (`.ctx-item {` … `.ctx-icon {`), so this override
+ * lives BELOW that slice rather than inside it.  The menu is deliberately
+ * tighter than the transcription: a 120px floor instead of content width,
+ * 4px box padding instead of 6px, 2px rows instead of 4px. */
+.ctx-menu.ctx-clip { min-width: 120px; padding: 4px; }
+.ctx-menu.ctx-clip .ctx-item { padding: 2px 8px; }
 /* §0.30 E70 — the row's trailing button (the vault popover's `Close`).
  *
  * ABSOLUTELY POSITIONED, AND THAT IS THE WHOLE POINT.  Obsidian has no button

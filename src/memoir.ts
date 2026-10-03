@@ -38,6 +38,12 @@
  *   there was no behaviour to transcribe.
  */
 
+/* `openMenu`/`clipMenu` is THE ONE context-menu primitive (owner 04): the
+ * journal's Copy/Paste rows are built by it, never as a second floating
+ * list.  `menu.ts` imports only `icons.ts`, so this is not a cycle — and
+ * like the transport, `ipc.ts` itself is never imported here (§6.4). */
+import { clipMenu, openMenu } from './menu'
+
 export const MEMOIR_API = 'http://127.0.0.1:8770/api/memoir'
 
 /** Client-side mirrors of the server's caps (ai-service enforces them). */
@@ -65,6 +71,19 @@ export interface MemoirDeps {
   /** After the lazy first create, so the shell can refresh the tree. */
   onFirstCreate(): void
   onError(err: unknown, ctx: string): void
+  /**
+   * §1.3 command 26, optional so older transports keep working. The journal's
+   * context menu probes this to decide whether the clipboard holds text (the
+   * Paste row); without it the probe falls back to
+   * `navigator.clipboard.readText()` and treats a refusal as empty.
+   */
+  readClipboardText?(): Promise<string>
+  /**
+   * §1.3 command 23, optional so older transports keep working. Copy's
+   * fallback when `navigator.clipboard.writeText()` rejects (see the note
+   * viewer's menu for why the async clipboard stays the first try).
+   */
+  writeClipboardText?(text: string): Promise<void>
 }
 
 export interface MemoirView {
@@ -578,9 +597,146 @@ export function mountMemoir(pane: HTMLElement, deps: MemoirDeps): MemoirView {
   editor.addEventListener('blur', () => {
     if (dirty) scheduleSave(0)
   });
+  // Right-clicking selected text must not collapse it: Chromium moves the
+  // caret on a right mousedown as its default action, so by `contextmenu`
+  // time the selection the user right-clicked is already gone and Copy could
+  // never be offered.  Preventing the default keeps a live selection; with
+  // no selection the caret still lands at the click point (the Paste target),
+  // which is the native behaviour the Paste row relies on.
+  editor.addEventListener('mousedown', (ev) => {
+    const e = ev as MouseEvent
+    if (e.button !== 2) return
+    let s0 = 0
+    let e0 = 0
+    try {
+      s0 = editor.selectionStart ?? 0
+      e0 = editor.selectionEnd ?? s0
+    } catch {
+      return
+    }
+    if (e0 > s0) e.preventDefault()
+  });
+  // THE JOURNAL'S CONTEXT MENU (Copy/Paste, 2026-10-03): the same two rows
+  // as the note viewer, built by the same `clipMenu` primitive so the two
+  // cannot drift. `preventDefault()` replaces the engine's own menu (the
+  // tree's §0.13 E15 rationale); the clipboard probe is async, so the menu
+  // opens after it lands, at the event's own point.
+  editor.addEventListener('contextmenu', (ev) => {
+    onContextMenu(ev as MouseEvent)
+  });
   document.addEventListener('visibilitychange', () => {
     if (document.hidden && dirty) scheduleSave(0)
   })
+
+  /**
+   * Copy is offered on a non-empty selection; Paste additionally needs an
+   * editable journal (before the first load it is `readOnly`) and text on
+   * the clipboard.  When neither holds, no menu opens at all.  The rows are
+   * read AFTER the probe lands, against the live state — the selection may
+   * have moved while the IPC was in flight.
+   */
+  function onContextMenu(ev: MouseEvent): void {
+    ev.preventDefault()
+    const x = ev.clientX
+    const y = ev.clientY
+    let start = 0
+    let end = 0
+    try {
+      start = editor.selectionStart ?? 0
+      end = editor.selectionEnd ?? start
+    } catch {
+      /* a shim textarea may not implement selection */
+    }
+    if (end <= start && editor.readOnly) return
+    void (async () => {
+      let clip = ''
+      try {
+        clip = deps.readClipboardText
+          ? await deps.readClipboardText()
+          : await navigator.clipboard.readText()
+      } catch {
+        clip = ''
+      }
+      if (host.hidden) return
+      let s0 = start
+      let e0 = end
+      try {
+        s0 = editor.selectionStart ?? start
+        e0 = editor.selectionEnd ?? end
+      } catch {
+        /* keep the open-time range */
+      }
+      const hasSelection = e0 > s0
+      const canPaste = !editor.readOnly && clip.length > 0
+      if (!hasSelection && !canPaste) return
+      const clipText = clip
+      openMenu(
+        clipMenu({
+          hasSelection,
+          canPaste,
+          copy: () => {
+            let a = s0
+            let b = e0
+            try {
+              a = editor.selectionStart ?? s0
+              b = editor.selectionEnd ?? e0
+            } catch {
+              /* keep the open-time range */
+            }
+            if (b <= a) return
+            const text = editor.value.slice(a, b)
+            // `navigator.clipboard` first, the IPC write as fallback (see
+            // the note viewer's menu for why the unbounded async clipboard
+            // stays the first try and command 23 the second).
+            const fallback = (): void => {
+              if (deps.writeClipboardText) {
+                void deps.writeClipboardText(text).catch((err: unknown) => {
+                  deps.onError(err, 'memoir-copy')
+                })
+              } else {
+                deps.onError(new Error('clipboard write failed'), 'memoir-copy')
+              }
+            }
+            try {
+              void navigator.clipboard.writeText(text).catch(() => fallback())
+            } catch (err) {
+              fallback()
+            }
+          },
+          paste: () => {
+            if (editor.readOnly || !clipText) return
+            try {
+              editor.focus()
+            } catch {
+              /* a shim textarea may not implement focus */
+            }
+            let a = s0
+            let b = e0
+            try {
+              a = editor.selectionStart ?? s0
+              b = editor.selectionEnd ?? e0
+            } catch {
+              /* keep the open-time range */
+            }
+            // `setRangeText` is undoable and keeps the caret; the manual
+            // `input` event is what marks the buffer dirty and re-arms the
+            // autosave beat, exactly as a typed keystroke would.
+            try {
+              editor.setRangeText(clipText, a, b, 'end')
+            } catch {
+              return
+            }
+            try {
+              editor.dispatchEvent(new Event('input', { bubbles: true }))
+            } catch {
+              /* without Event there is no dispatch to perform */
+            }
+          },
+        }),
+        { x, y, label: 'Journal actions', cls: 'ctx-clip' }
+      )
+    })()
+  }
 
   /* drawers */
 

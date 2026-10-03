@@ -1816,10 +1816,11 @@ bus; it uses the per-call subscription `searchStart` registers and tears down it
 
 ### 1.3 The command table
 
-**THE TABLE IS CLOSED AT TWENTY-FIVE.** Five commands were added after the original twenty —
+**THE TABLE IS CLOSED AT TWENTY-SIX.** Six commands were added after the original twenty —
 **21 `forget_vault`** (§0.30 E70), **22 `open_external`** (§0.38 E85, shell-implemented),
-**23 `copy_text`** (§0.46 E94, shell-implemented), **24 `move_entry`** (drag-to-move) and
-**25 `secret_notes`** (secret files, user ruling). Every *"§1.3 stays closed at twenty"* in this
+**23 `copy_text`** (§0.46 E94, shell-implemented), **24 `move_entry`** (drag-to-move),
+**25 `secret_notes`** (secret files, user ruling) and **26 `read_text`**
+(note/memoir context menu, shell-implemented). Every *"§1.3 stays closed at twenty"* in this
 document is a dated record of a ruling that added none.
 
 | # | Command | TypeScript signature | Transport |
@@ -1849,6 +1850,7 @@ document is a dated record of a ruling that added none.
 | 23 | `copy_text` | `copyText(text: string): Promise<void>` | **shell** (main-process `clipboard`); no allowlist, a 4,096-char sanity cap (§0.46 E94) |
 | 24 | `move_entry` | `moveEntry(path: VaultPath, destParent: VaultPath): Promise<RenameResult>` | JSON; drag-to-move |
 | 25 | `secret_notes` | `secretNotes(): Promise<string[]>` | JSON; `[]` with no vault open, never an error |
+| 26 | `read_text` | `readText(): Promise<string>` | **shell** (main-process `clipboard`); the note/memoir context menu's Paste probe — the renderer is never granted `clipboard-read`, so `navigator.clipboard.readText()` rejects there |
 
 **There are no others.** `list_tree`, `set_expanded`, `reveal`, `tree_load`, `fs_create_note`,
 `fs_create_folder`, `fs_rename`, `fs_delete`, `fs_reveal`, `vault_pick`, `vault_recents`,

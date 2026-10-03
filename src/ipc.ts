@@ -18,10 +18,12 @@
  * it and the redirect plugin is gone with it.
  * ============================================================================
  *
- * The command table is CLOSED AT TWENTY-FIVE.  `list_tree`, `set_expanded`,
+ * The command table is CLOSED AT TWENTY-SIX.  `list_tree`, `set_expanded`,
  * `reveal`, `tree_load`, `fs_*`, `vault_*`, `tree_set_sort` and `scan_vault`
  * DO NOT EXIST.  Adding a command touches `core/napi/src/lib.rs`
- * and `electron-shell/native.mjs` — both owner 07's — and one logic module.
+ * and `electron-shell/native.mjs` — both owner 07's — and one logic module,
+ * unless it is shell-implemented like `open_external`, `copy_text` and
+ * `read_text`, which touch only `electron-shell/app-main.mjs` and this file.
  *
  * THREE THINGS THAT LOOK LIKE STYLE AND ARE NOT:
  *
@@ -399,6 +401,15 @@ export function openExternal(url: string): Promise<void> {
  *  launches nothing. */
 export function copyText(text: string): Promise<void> {
   return call<void>('copy_text', { text })
+}
+
+/** §1.3 command 26 (note/memoir context menu).  Read text from the system
+ *  clipboard, for the Paste row.  **SHELL-IMPLEMENTED, not Rust**, like
+ *  `copy_text` and for the mirror reason: the renderer is never granted the
+ *  `clipboard-read` permission, so `navigator.clipboard.readText()` rejects
+ *  and the Paste row could never be offered.  Non-text content reads as `''`. */
+export function readText(): Promise<string> {
+  return call<string>('read_text')
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════

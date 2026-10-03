@@ -281,6 +281,19 @@ const COMMANDS = {
     clipboard.writeText(text)
   },
 
+  /** Command 26 (note/memoir context menu, 2026-10-03). Read text from the
+      system clipboard. Shell-implemented, like commands 22 and 23.
+
+      THE RENDERER CANNOT READ THE CLIPBOARD ITSELF: that needs the
+      `clipboard-read` permission, which the page is never granted (app-main.mjs
+      probes note this where they read the clipboard back from the main side).
+      Electron's own `clipboard` has no such requirement, so the read lives
+      here beside the write. No cap: the bytes originate from the user's own
+      copy gesture, not from renderer input, and truncating a paste would lose
+      data the user explicitly asked to insert. Non-text clipboard content
+      (images, files) reads back as `''`, which correctly hides the Paste row. */
+  read_text: async () => clipboard.readText(),
+
   open_external: async (args) => {
     const url = typeof args.url === 'string' ? args.url : ''
     let parsed

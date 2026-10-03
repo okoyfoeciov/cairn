@@ -280,6 +280,33 @@ test('§0.16 E18 — a FILE row offers no create rows; a FOLDER row does', () =>
   assert.equal(empty.some((e) => e.disabled), false)
 })
 
+test('note/memoir context menu — Copy on selection, Paste on clipboard text, both at once', () => {
+  const calls = []
+  const acts = { copy: () => calls.push('copy'), paste: () => calls.push('paste') }
+  const labels = (m) => m.filter((e) => !e.separator).map((e) => e.label)
+
+  // The four states of the two independent conditions. Neither condition
+  // implies the other, and neither alone is "no menu".
+  assert.deepEqual(labels(M.clipMenu({ hasSelection: true, canPaste: false, ...acts })), ['Copy'])
+  assert.deepEqual(labels(M.clipMenu({ hasSelection: false, canPaste: true, ...acts })), ['Paste'])
+  assert.deepEqual(labels(M.clipMenu({ hasSelection: true, canPaste: true, ...acts })), ['Copy', 'Paste'])
+  assert.deepEqual(M.clipMenu({ hasSelection: false, canPaste: false, ...acts }), [],
+    'no selection and an empty clipboard is no menu, not an empty box')
+
+  // Every row is wired to its OWN action.
+  for (const e of M.clipMenu({ hasSelection: true, canPaste: true, ...acts })) {
+    if (!e.separator) e.onSelect()
+  }
+  assert.deepEqual(calls, ['copy', 'paste'])
+
+  // Copy before Paste, and neither row is ever disabled or separated: an
+  // unofferable row is omitted, not greyed (§9 E4 — the empty-space menu's
+  // own rule, applied here too).
+  const both = M.clipMenu({ hasSelection: true, canPaste: true, ...acts })
+  assert.equal(both.some((e) => e.separator), false)
+  assert.equal(both.some((e) => e.disabled), false)
+})
+
 test('§0.12 E14 — the sort menu is deleted, not merely unwired', () => {
   // The user pinned sorting to file name A-Z, so `sortMenu`/`SORT_LABELS` are
   // gone from menu.ts rather than left as unreferenced exports that a later
@@ -1303,6 +1330,23 @@ test('§5.1 — openMenu renders the row menu as ONE box, Delete last and in --t
 
   C.closeMenu()
   assert.equal(doc.body.children.length, 0, 'the menu element outlived the menu')
+})
+
+test('the viewer Copy/Paste menu carries its width-floor class; row menus carry none', () => {
+  const { doc } = installDom()
+  const noop = () => {}
+  const acts = { newNote: noop, newFolder: noop, newSecret: noop, rename: noop, copyPath: noop, remove: noop }
+  const plain = C.openMenu(C.folderRowMenu(acts), { x: 100, y: 100, label: 'Folder' })
+  assert.equal(plain.element.classList.contains('ctx-clip'), false,
+    'the row menus keep Obsidian\'s content-sized box')
+  C.closeMenu()
+  const clip = C.openMenu(
+    C.clipMenu({ hasSelection: true, canPaste: true, copy: noop, paste: noop }),
+    { x: 100, y: 100, label: 'Note actions', cls: 'ctx-clip' })
+  assert.equal(clip.element.classList.contains('ctx-clip'), true)
+  assert.deepEqual(labelsOf(clip.element), ['Copy', 'Paste'])
+  C.closeMenu()
+  assert.equal(doc.body.children.length, 0)
 })
 
 test('§0.14 E16 — every row carries Obsidian\'s own glyph, painted through icons.ts', () => {

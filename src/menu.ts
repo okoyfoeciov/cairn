@@ -168,6 +168,10 @@ export interface MenuOptions {
   y: number
   /** Accessible name for the list. */
   label?: string
+  /** Extra class on the box, for a menu-scoped width floor or similar.
+   *  Unset everywhere except the viewer Copy/Paste menu: the row menus keep
+   *  Obsidian's content-sized box (see chrome.css). */
+  cls?: string
   /** Called after the menu closes, however it closed. */
   onClose?(): void
 }
@@ -362,7 +366,7 @@ export function openMenu(entries: MenuEntry[], opts: MenuOptions): MenuHandle {
   closeMenu()
 
   const el = document.createElement('div')
-  el.className = 'ctx-menu'
+  el.className = 'ctx-menu' + (opts.cls ? ' ' + opts.cls : '')
   el.setAttribute('role', 'menu')
   el.tabIndex = -1
   if (opts.label !== undefined) el.setAttribute('aria-label', opts.label)
@@ -640,4 +644,37 @@ export function emptySpaceMenu(
     { label: 'New folder', onSelect: a.newFolder, icon: 'folder-open' },
     { label: 'New secret file', onSelect: a.newSecret, icon: 'lock' },
   ]
+}
+
+/**
+ * The note/memoir viewer menu (2026-10-03): Copy and/or Paste, and nothing
+ * else.  ONE PRIMITIVE, NOT THREE: the note viewer (CodeMirror) and the
+ * Memoir page (a plain textarea) both build their rows here, so the two
+ * viewers cannot drift apart.
+ *
+ * A row is offered only when it can act, and both may appear at once:
+ * `hasSelection` (the viewer holds selected text) draws Copy;
+ * `canPaste` (the viewer is editable AND the clipboard holds text) draws
+ * Paste.  Neither condition alone implies the other, and when neither holds
+ * there is no menu at all — the caller opens nothing rather than an empty
+ * box.  Pure, so the row rule is testable without a clipboard.
+ *
+ * NO ICONS, deliberately.  Every `IconName` is an Obsidian transcription
+ * audited by grep against its bundle (§0.15 E17); Copy/Paste have no
+ * counterpart in the row menus to transcribe, and inventing glyphs from
+ * memory is the `refresh-cw` residual all over again.
+ */
+export interface ClipMenuActions {
+  copy(): void
+  paste(): void
+}
+
+export function clipMenu(o: {
+  hasSelection: boolean
+  canPaste: boolean
+} & ClipMenuActions): MenuEntry[] {
+  const out: MenuEntry[] = []
+  if (o.hasSelection) out.push({ label: 'Copy', onSelect: o.copy })
+  if (o.canPaste) out.push({ label: 'Paste', onSelect: o.paste })
+  return out
 }
