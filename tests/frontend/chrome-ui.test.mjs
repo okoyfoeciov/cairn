@@ -2232,7 +2232,8 @@ test('Memoir — source conformance: NO close button, a fixed label, inactive CS
 
 /* ---- Mod-1 / Mod-2 tab switching (user ruling 2026-09-16) -----------------
  * Ctrl/Cmd+1 selects the note tab, Ctrl/Cmd+2 the fixed Memoir tab — the same
- * flush-first `switchTab` the tab clicks go through.  `chrome.ts` owns the
+ * flush-first `switchTab` the tab clicks go through — and Alt+1/Alt+2 do the
+ * same on non-macOS (user ruling 2026-10-03).  `chrome.ts` owns the
  * keystroke, `main.ts` owns the switch; these rows pin the keystroke half
  * (which tab is named, which keystrokes are ignored) and the wiring half. */
 
@@ -2304,6 +2305,63 @@ test('Ctrl-1 / Ctrl-2 select the tabs on Linux', () => {
   handle.destroy()
 })
 
+test('Alt-1 / Alt-2 switch tabs on Linux, interchangeably with Ctrl', () => {
+  const { doc } = installDom()
+  doc.documentElement.setAttribute('data-os', 'linux')
+  const root = doc.createElement('div')
+  const { calls, deps } = chromeDeps()
+  const handle = C.wireChrome(deps, root)
+
+  const alt = (key) => {
+    const ev = {
+      key, metaKey: false, ctrlKey: false, altKey: true, shiftKey: false,
+      repeat: false, defaultPrevented: false,
+      preventDefault() { this.defaultPrevented = true }, stopPropagation() {},
+    }
+    doc.fire('keydown', ev)
+    return ev
+  }
+  const e1 = alt('1')
+  assert.equal(e1.defaultPrevented, true, 'Alt-1 did not suppress the webview default')
+  alt('2')
+  // Interchangeably: the Ctrl bindings keep working beside the Alt ones.
+  modKey(doc, '1', 'mod')
+  modKey(doc, '2', 'mod')
+  assert.deepEqual(calls, ['tab:note', 'tab:memoir', 'tab:note', 'tab:memoir'])
+  handle.destroy()
+})
+
+test('Alt-digit is no tab switch on macOS, and Ctrl+Alt+digit is nobody\'s', () => {
+  // macOS: Option+1 is ¡, typed text — stealing it would eat a character.
+  // Everywhere: both modifiers at once, or Shift beside Alt, selects nothing.
+  for (const os of ['macos', 'linux']) {
+    const { doc } = installDom()
+    doc.documentElement.setAttribute('data-os', os)
+    const root = doc.createElement('div')
+    const { calls, deps } = chromeDeps()
+    const handle = C.wireChrome(deps, root)
+    const fire = (init) => {
+      const ev = {
+        key: '1', metaKey: false, ctrlKey: false, altKey: false,
+        shiftKey: false, repeat: false, defaultPrevented: false,
+        preventDefault() { this.defaultPrevented = true }, stopPropagation() {},
+        ...init,
+      }
+      doc.fire('keydown', ev)
+      return ev
+    }
+    if (os === 'macos') {
+      const e = fire({ altKey: true })
+      assert.equal(e.defaultPrevented, false, 'macOS Option-1 must keep typing text')
+    }
+    const both = fire({ ctrlKey: true, altKey: true })
+    assert.equal(both.defaultPrevented, false, os + ' Ctrl+Alt-1 must not preventDefault')
+    fire({ altKey: true, shiftKey: true })
+    assert.deepEqual(calls, [], os + ': an unowned keystroke reached selectTab')
+    handle.destroy()
+  }
+})
+
 test('Mod-1 / Mod-2 ignore the keystrokes they do not own', () => {
   const { doc } = installDom()
   doc.documentElement.setAttribute('data-os', 'macos')
@@ -2337,8 +2395,9 @@ test('Mod-1 / Mod-2 are wired to the tab switch in main.ts', () => {
   const mainTs = read('src/main.ts')
   assert.match(mainTs, /selectTab:\s*\(which\)\s*=>\s*switchTab\(which\)/)
   assert.match(read('src/chrome.ts'), /selectTab\(which: TabId\): void/)
-  assert.match(read('src/chrome.ts'), /deps\.selectTab\('note'\)/)
-  assert.match(read('src/chrome.ts'), /deps\.selectTab\('memoir'\)/)
+  // One call names both tabs — 1 -> note, 2 -> memoir — whatever the
+  // modifier was (Ctrl, Alt, or ⌘); the behaviour rows above pin the mapping.
+  assert.match(read('src/chrome.ts'), /deps\.selectTab\(tabKey === '1' \? 'note' : 'memoir'\)/)
 })
 
 /* =========================================================================

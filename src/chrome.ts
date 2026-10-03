@@ -898,6 +898,16 @@ export function wireChrome(deps: ChromeDeps, root: ParentNode = document): Chrom
     // F56: shortcuts stay dead under a modal. Vault switching under a delete
     // confirm re-resolves the pending relative path in the NEW vault.
     if (modalIsOpen()) return
+    // Tab switching answers Ctrl AND Alt interchangeably on non-macOS (user
+    // ruling 2026-10-03) and is checked BEFORE the Mod gate below, which
+    // rejects every Alt keystroke.  Shift splits to the F/O bindings, so it
+    // is excluded here rather than switching.
+    const tabKey = e.key.toLowerCase()
+    if (!e.shiftKey && (tabKey === '1' || tabKey === '2') && isTabMod(e)) {
+      e.preventDefault()
+      deps.selectTab(tabKey === '1' ? 'note' : 'memoir')
+      return
+    }
     if (!isMod(e) || e.altKey) return
     const k = e.key.toLowerCase()
     if (e.shiftKey) {
@@ -916,12 +926,6 @@ export function wireChrome(deps: ChromeDeps, root: ParentNode = document): Chrom
       // them before this branch is reached).
       e.preventDefault()
       deps.toggleFind()
-    } else if (k === '1') {                                                   // ⌘1   note tab
-      e.preventDefault()
-      deps.selectTab('note')
-    } else if (k === '2') {                                                   // ⌘2   Memoir tab
-      e.preventDefault()
-      deps.selectTab('memoir')
     } else if (k === 's') {                                                   // ⌘S   save
       // §7.2: Mod-s flushes AND suppresses the webview's own save dialog.
       // preventDefault is the load-bearing half — without it WebKit opens a
@@ -956,6 +960,18 @@ export function wireChrome(deps: ChromeDeps, root: ParentNode = document): Chrom
 function isMod(e: KeyboardEvent): boolean {
   const os = document.documentElement.getAttribute('data-os')
   return os === 'macos' ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey
+}
+
+/**
+ * Tab switching (user ruling 2026-10-03): Ctrl and Alt interchangeably on
+ * non-macOS, ⌘-only on macOS — where Option+1 is `¡`, typed text, and
+ * stealing it would eat a character.  Exactly one modifier counts: with both
+ * Ctrl and Alt held the keystroke belongs to nobody here.
+ */
+function isTabMod(e: KeyboardEvent): boolean {
+  const os = document.documentElement.getAttribute('data-os')
+  if (os === 'macos') return e.metaKey && !e.ctrlKey && !e.altKey
+  return !e.metaKey && e.ctrlKey !== e.altKey
 }
 
 /* ── §5.11 the --pixeltest probe ───────────────────────────────────────────── */
