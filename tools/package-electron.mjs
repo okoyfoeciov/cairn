@@ -288,11 +288,12 @@ function packageMac() {
   const contents = join(app, 'Contents')
   renameSync(join(contents, 'MacOS', 'Electron'), join(contents, 'MacOS', NAME))
   rmSync(join(contents, 'Resources', 'default_app.asar'), { force: true })
-  // macOS ONLY: `core/icons/icon.icns` is the full-bleed stone-on-dark-tile,
-  // because the bare stone gets auto-plated by Tahoe's icon modes -- the tile is
-  // drawn by us. Derived from core/icons/source/full-bleed-1024.png via sips +
-  // iconutil, all 10 slots. Linux never reads this file (it takes the sized
-  // PNGs below).
+  // macOS uses the SAME tight transparent stone as Linux
+  // (`core/icons/icon.icns` is the Linux cutout re-packed: 16/32/64/128/256/512
+  // slots are the sized Linux PNGs byte for byte, 1024 is
+  // `source/logo-tight-native.png` centred on a transparent 1024 canvas at the
+  // same ~4% padded framing; retina slots duplicate their base size). No dark
+  // tile, no bounding box: Tahoe plates the bare stone itself, like Linux.
   cpSync(join(ROOT, 'core', 'icons', 'icon.icns'), join(contents, 'Resources', 'cairn.icns'))
   stageApp(join(contents, 'Resources', 'app'))
 
