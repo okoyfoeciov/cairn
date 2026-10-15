@@ -1319,6 +1319,15 @@ const CB_FIRST = Decoration.line({ class: 'nc-cb nc-cb-first' })
 const CB_MID = Decoration.line({ class: 'nc-cb' })
 const CB_LAST = Decoration.line({ class: 'nc-cb nc-cb-last' })
 const CB_ONLY = Decoration.line({ class: 'nc-cb nc-cb-only' })
+/* The text of a code line sits in a span of its own, with no rule behind it.
+   CM6's `measureTextSize` takes the first rendered line of 20 characters or
+   fewer made of PLAIN TEXT as its sample for `heightOracle.lineHeight`, and a
+   change of more than 0.3px rebuilds the whole height map and drops every height
+   measured so far.  A code line is 21px against a paragraph's 24, so a bare one
+   made the oracle flip as code blocks came and went from the rendered range, and
+   a long note could not be scrolled to its end (electron-shell/scroll-converge
+   .test.mjs).  A mark is not a text child, so no code line is a sample. */
+const CB_TEXT = Decoration.mark({ class: 'nc-cb-text' })
 
 const HR_LINE = Decoration.line({ class: 'nc-hr' })
 const LIST_LINE = Decoration.line({ class: 'nc-li' })
@@ -1956,6 +1965,7 @@ export function buildDecorations(
         const line = lineAt(pos)
         const d = lineDeco(c, line)
         if (d) add(line.from, line.from, d)
+        if (c.kind === 'codeblock' && line.to > line.from) add(line.from, line.to, CB_TEXT)
         pos = line.to + 1
       }
     }

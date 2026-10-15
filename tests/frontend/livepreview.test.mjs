@@ -111,11 +111,15 @@ test('blocks: a heading inside a fence is code, never a heading (§5.3)', () => 
   built.decorations.between(0, state.doc.length, (from, to, v) => {
     classes.push([from, to, v.spec.class ?? null])
   })
-  // every one of the three lines is nc-cb, and no nc-hN appears anywhere
-  assert.equal(classes.length, 3)
-  assert.equal(classes[0][2], 'nc-cb nc-cb-first')
-  assert.equal(classes[1][2], 'nc-cb')
-  assert.equal(classes[2][2], 'nc-cb nc-cb-last')
+  // every one of the three lines is nc-cb, and no nc-hN appears anywhere.  The
+  // text of each line also sits in an `nc-cb-text` mark (see CB_TEXT): that is
+  // all a code line gets besides its line class.
+  const lines = classes.filter((c) => c[2] !== 'nc-cb-text')
+  assert.equal(lines.length, 3)
+  assert.equal(lines[0][2], 'nc-cb nc-cb-first')
+  assert.equal(lines[1][2], 'nc-cb')
+  assert.equal(lines[2][2], 'nc-cb nc-cb-last')
+  assert.equal(classes.length - lines.length, 3, 'one text mark per non-empty code line')
   assert.ok(!classes.some((c) => /nc-h[1-6]/.test(c[2] ?? '')))
 })
 
@@ -126,7 +130,7 @@ test('blocks: a one-line block is nc-cb-only', () => {
   const built = LP.buildDecorations(state, [{ from: 0, to: state.doc.length }])
   const classes = []
   built.decorations.between(0, state.doc.length, (f, t, v) => classes.push(v.spec.class))
-  assert.deepEqual(classes, ['nc-cb nc-cb-only'])
+  assert.deepEqual(classes, ['nc-cb nc-cb-only', 'nc-cb-text'])
 })
 
 test('blockAt: binary search agrees with a linear scan', () => {
@@ -1149,7 +1153,13 @@ test('reveal: every range counts, not only the primary one', () => {
 test('code block: nothing inside one is tokenised (§5.3, §9 E4)', () => {
   const doc = '```\n**b** - x > q\n```'
   assert.deepEqual(constructs(doc).map((c) => c.kind), ['codeblock'])
-  assert.deepEqual(clsAt(doc), ['0-0:nc-cb nc-cb-first', '4-4:nc-cb', '18-18:nc-cb nc-cb-last'])
+  // The line classes, and the one mark per line that keeps a code line from
+  // being CM6's height sample (CB_TEXT) — no bold, no marker, nothing tokenised.
+  assert.deepEqual(clsAt(doc), [
+    '0-0:nc-cb nc-cb-first', '0-3:nc-cb-text',
+    '4-4:nc-cb', '4-17:nc-cb-text',
+    '18-18:nc-cb nc-cb-last', '18-21:nc-cb-text',
+  ])
 })
 
 /* -- the borrow rule, which a pool bug broke once already ----------------- */
