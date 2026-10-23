@@ -678,3 +678,18 @@ export function clipMenu(o: {
   if (o.canPaste) out.push({ label: 'Paste', onSelect: o.paste })
   return out
 }
+
+/**
+ * §0.54 E107 — the note viewer's menu over a pasted IMAGE: one row, Copy
+ * image, which puts the image itself on the clipboard (editor.ts, command 27).
+ * It stands in for `clipMenu`'s rows rather than joining them, as Obsidian's
+ * image menu is a menu of its own: a right-click on an image is about the
+ * image, whatever text happens to be selected elsewhere.
+ *
+ * The label is Obsidian's (`interface.menu.copyImage`, app.js 1.13.7).  Its
+ * `lucide-copy` glyph is not drawn [C]: no glyph, like `clipMenu`'s rows, for
+ * the reason given above them.
+ */
+export function imageMenu(o: { copy(): void }): MenuEntry[] {
+  return [{ label: 'Copy image', onSelect: o.copy }]
+}

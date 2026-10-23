@@ -14,7 +14,7 @@
  * so nothing reaches the display at all.
  */
 
-import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, screen, shell } from 'electron'
+import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, screen, shell } from 'electron'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -221,10 +221,10 @@ const send = (event, payload) => {
  * same reason: the scaffold could not see an external edit at all.
  */
 
-/* ── the twenty commands (§1.3) ────────────────────────────────────────────
-      Eighteen of them are `native.mjs`'s and reach `app.rs` directly. The two
-      below are the shell's own and are named in that file's header: there is no
-      window in Rust to show, and the picker is Electron's. ─────────────────── */
+/* ── the commands (§1.3) ───────────────────────────────────────────────────
+      Most are `native.mjs`'s and reach `app.rs` directly. The ones below are
+      the shell's own: there is no window in Rust to show, and the picker, the
+      OS's url handler and the clipboard are Electron's. ────────────────────── */
 const COMMANDS = {
   ...nativeCommands(addon),
 
@@ -293,6 +293,36 @@ const COMMANDS = {
       data the user explicitly asked to insert. Non-text clipboard content
       (images, files) reads back as `''`, which correctly hides the Paste row. */
   read_text: async () => clipboard.readText(),
+
+  /** Command 27 (§0.54 E107). Put an IMAGE on the system clipboard, for the
+      note viewer's Copy image. Shell-implemented for command 23's
+      measured reason: the renderer's `navigator.clipboard.write` rejects
+      "Document is not focused" in an unfocused window, and Electron's own
+      `clipboard` has no focus requirement. Obsidian writes images the same way
+      (`nativeImage` + `clipboard.writeImage`, app.js 1.13.7).
+
+      BASE64 PNG OR JPEG ONLY: those are what `nativeImage` decodes (GIF, WEBP,
+      BMP and SVG come back empty, measured), so the renderer redraws anything
+      else as PNG first. A data URL that still decodes to nothing is refused
+      rather than written as an empty image; `createFromDataURL` trusts the
+      label, so the renderer redraws a refused pass-through once. The cap is a
+      sanity bound like command 23's, far above what a note can carry: a note
+      is at most 8 MiB (M27), so only a redraw is larger, and a PNG redraw of
+      a photo-like WEBP runs to tens of MiB (24 MP: ~57 MiB, measured). */
+  copy_image: async (args) => {
+    const url = typeof args.data_url === 'string' ? args.data_url : ''
+    if (!/^data:image\/(?:png|jpeg);base64,/.test(url)) {
+      throw vaultError('invalidPath', { path: '', reason: 'Only a PNG or JPEG data URL can be copied as an image.' })
+    }
+    if (url.length > 256 * 1024 * 1024) {
+      throw vaultError('invalidPath', { path: '', reason: 'Refusing to copy an image over 256 MiB.' })
+    }
+    const image = nativeImage.createFromDataURL(url)
+    if (image.isEmpty()) {
+      throw vaultError('invalidPath', { path: '', reason: 'The image could not be decoded.' })
+    }
+    clipboard.writeImage(image)
+  },
 
   open_external: async (args) => {
     const url = typeof args.url === 'string' ? args.url : ''

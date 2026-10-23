@@ -19,7 +19,7 @@ remain: every escalation is settled in §9.**
 One row per ruling id, with the rule as it stands and where it lives. **Section numbers and ids are
 never renumbered or reused** — code cites them (ids like `E14` and section numbers like `§7.3`), so a
 superseded id points at the rule that replaced it or at its own tombstone rather than disappearing.
-Sections are numbered in the order below: §0's passes are §0.1–§0.53, then the body is §1–§10.
+Sections are numbered in the order below: §0's passes are §0.1–§0.54, then the body is §1–§10.
 
 | Id | Current rule | Where |
 |---|---|---|
@@ -229,6 +229,7 @@ Sections are numbered in the order below: §0's passes are §0.1–§0.53, then 
 | E104 | CDP emulation is not a rasterisation scale | §0.53.5 |
 | E105 | The frontend count is 509; the built-page SVG row matches per `url()` | §0.53.6 |
 | E106 | Canonical roots; `forget_vault`'s silent no-op; the scroll driver above 120 Hz | §0.53.7 |
+| E107 | Copy image on a pasted image: one row, command 27, PNG/JPEG as they are, the rest redrawn | §0.54 |
 
 ### §0.1 — DELETED (the errata changelog; the X/Y/Z ids it alone defined are folded into §0's index).
 
@@ -1770,6 +1771,43 @@ wheel events measured **120.2/s**. With a 144/s trusted CDP wheel, Cairn's tree 
 **143.99 fps, 0 of 864 janky, 0 dropped**, and the compositor animation is ~143.9 in both apps.
 KNOWN-ISSUES V-6.
 
+### §0.54 — Copy image on a pasted image (E107)
+
+**User ruling (2026-10-23).** A right-click on a pasted image in the note viewer opens the viewer's
+menu (`.ctx-clip`) with ONE row, **Copy image**, which puts the IMAGE on the system clipboard. The row
+stands in for the Copy/Paste rows (`clipMenu`) rather than joining them: a right-click on an image is
+about the image, whatever text is selected elsewhere. It is offered in every note state, read-only
+included. Over an image that did not decode, the right-click falls through to the Copy/Paste rows,
+because a Copy image that cannot act is an inert control (§9 E4).
+
+- **The label is Obsidian's**, "Copy image" (`interface.menu.copyImage`, app.js 1.13.7). **Its
+  glyph is `[C]`:** Obsidian draws `lucide-copy` on the row; Cairn draws none, like the Copy/Paste
+  rows. Both pinned by `tests/frontend/chrome-ui.test.mjs`.
+- **The write is command 27, `copy_image`** (§1.3, reopened by this ruling): main-process
+  `clipboard.writeImage(nativeImage.createFromDataURL(url))`. Obsidian also writes through
+  `nativeImage` + `clipboard.writeImage` (via `createFromBuffer`). The renderer's
+  `navigator.clipboard.write` was MEASURED to reject *"Document is not focused"* in an unfocused
+  window — the failure that made command 23 (§0.46 E94).
+- **PNG and JPEG cross as they are; anything else is redrawn as PNG** in the renderer, at natural
+  size, because `nativeImage` decodes those two only (GIF, WEBP, BMP and SVG measured `isEmpty()`).
+  Command 27 refuses any other data URL, one that does not decode, and one over 256 MiB (a sanity
+  bound: a note is at most 8 MiB, M27, and a PNG redraw of a 24 MP WEBP measured ~57 MiB).
+  `createFromDataURL` trusts the label while the engine sniffs the bytes, so a misnamed file's
+  paste (JPEG bytes labelled `image/png`) renders and is refused; the renderer then redraws it
+  once.
+- **The X removes on a plain LEFT press only.** A right press on it deleted the image (measured,
+  and autosave wrote the deletion) before any menu could open; macOS's Ctrl+click arrives as a
+  button-0 mousedown and is the menu gesture too. The X takes no focus from any press, so closing
+  the menu hands focus back to the editor. It is part of the image for the menu.
+- **What is measured, and what is not.** `electron-shell/image-copy.test.mjs` (9 tests)
+  right-clicks the image, clicks Copy image and pastes the image back through the app's own paste
+  handler, compared pixel for pixel (JPEG within 1: the main process and the page decode the same
+  lossy bytes); each guard above is mutation-tested. That receipt is Electron's clipboard. On Wayland — the default backend on the Debian
+  machine — an offscreen window has no input serial, so neither path's write reaches the desktop
+  clipboard (0 `set_selection` in the protocol log). Under `--ozone-platform=x11` the main-process
+  write was measured landing in every focus state (`xclip` and `wl-paste`, pixels identical). That a
+  real click's Copy image reaches the Wayland desktop is not measured by automation.
+
 ## 1. The IPC contract
 
 ### 1.1 Conventions (normative)
@@ -1816,11 +1854,12 @@ bus; it uses the per-call subscription `searchStart` registers and tears down it
 
 ### 1.3 The command table
 
-**THE TABLE IS CLOSED AT TWENTY-SIX.** Six commands were added after the original twenty —
+**THE TABLE IS CLOSED AT TWENTY-SEVEN.** Seven commands were added after the original twenty —
 **21 `forget_vault`** (§0.30 E70), **22 `open_external`** (§0.38 E85, shell-implemented),
 **23 `copy_text`** (§0.46 E94, shell-implemented), **24 `move_entry`** (drag-to-move),
-**25 `secret_notes`** (secret files, user ruling) and **26 `read_text`**
-(note/memoir context menu, shell-implemented). Every *"§1.3 stays closed at twenty"* in this
+**25 `secret_notes`** (secret files, user ruling), **26 `read_text`**
+(note/memoir context menu, shell-implemented) and **27 `copy_image`** (§0.54 E107,
+shell-implemented). Every *"§1.3 stays closed at twenty"* in this
 document is a dated record of a ruling that added none.
 
 | # | Command | TypeScript signature | Transport |
@@ -1851,6 +1890,7 @@ document is a dated record of a ruling that added none.
 | 24 | `move_entry` | `moveEntry(path: VaultPath, destParent: VaultPath): Promise<RenameResult>` | JSON; drag-to-move |
 | 25 | `secret_notes` | `secretNotes(): Promise<string[]>` | JSON; `[]` with no vault open, never an error |
 | 26 | `read_text` | `readText(): Promise<string>` | **shell** (main-process `clipboard`); the note/memoir context menu's Paste probe — the renderer is never granted `clipboard-read`, so `navigator.clipboard.readText()` rejects there |
+| 27 | `copy_image` | `copyImage(dataUrl: string): Promise<void>` | **shell** (main-process `clipboard.writeImage`); a base64 PNG or JPEG data URL, refused when it does not decode or is over 256 MiB (§0.54 E107) |
 
 **There are no others.** `list_tree`, `set_expanded`, `reveal`, `tree_load`, `fs_create_note`,
 `fs_create_folder`, `fs_rename`, `fs_delete`, `fs_reveal`, `vault_pick`, `vault_recents`,
@@ -3277,7 +3317,7 @@ electron-shell/build-native.mjs 07  core/cairn.node, release by default
 electron-shell/app-chrome.css 07  the drag region (§5.7)
 electron-shell/*.test.mjs     07  native, close-handshake, lifecycle, window-control, menu,
                                   live-preview, indent, pane-paint, fold, empty-pane, totp,
-                                  sync-client, package, shipped-binary
+                                  sync-client, package, shipped-binary, image-copy
 tools/verify-geometry.js      01  the G9 probe (§5.11)
 tools/scroll-bench.mjs        06  the scroll bench (§5.12.6(d))
 tools/package-electron.mjs    07  the .deb / macOS package, no electron-builder

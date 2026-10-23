@@ -307,6 +307,18 @@ test('note/memoir context menu — Copy on selection, Paste on clipboard text, b
   assert.equal(both.some((e) => e.disabled), false)
 })
 
+test('§0.54 E107 — a pasted image\'s menu is ONE row, Copy image, wired to the image copy', () => {
+  const calls = []
+  const m = M.imageMenu({ copy: () => calls.push('copy') })
+  // Obsidian's label (`interface.menu.copyImage`).  Its `lucide-copy` glyph is
+  // the [C] part: no glyph, like the Copy/Paste rows this row stands in for.
+  assert.deepEqual(m.map((e) => e.label), ['Copy image'])
+  assert.equal(m[0].icon, undefined, 'no glyph, like the Copy/Paste rows it stands in for')
+  assert.equal(m.some((e) => e.separator || e.disabled), false)
+  m[0].onSelect()
+  assert.deepEqual(calls, ['copy'])
+})
+
 test('§0.12 E14 — the sort menu is deleted, not merely unwired', () => {
   // The user pinned sorting to file name A-Z, so `sortMenu`/`SORT_LABELS` are
   // gone from menu.ts rather than left as unreferenced exports that a later

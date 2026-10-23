@@ -1665,15 +1665,17 @@ const TASK_ON = Decoration.replace({ widget: new TaskWidget(true) })
  * A pasted clipboard image (`data:` URL only — §3 emits nothing else as
  * `'image'`).  The whole `![…](…)` run is one atomic replace, so Backspace and
  * Delete take it in a single keystroke and the caret can never land inside
- * 200 kB of base64.  A click anywhere but the X places the caret and reveals
- * the source, like the table widget.
+ * 200 kB of base64.  A click anywhere but the X places the caret beside the
+ * run; the source is never revealed (`revealScope`).  A right-click anywhere
+ * on the image, the X included, opens the viewer's image menu (editor.ts,
+ * §0.54 E107).
  *
  * The X is Cairn's, not Obsidian's [C]: Obsidian draws no remove control on
- * images.  It is a real `<button>` (focusable, labelled) whose mousedown
- * deletes the run through the ordinary dispatch + autosave path — §9 E4
- * forbids drawing a control that does nothing, so this one works.  `mousedown`,
- * not `click`, like the task checkbox: the caret must not land in the run
- * first and reveal the source under the pointer.  No innerHTML anywhere (B12):
+ * images.  It is a real `<button>` (focusable, labelled) whose plain left
+ * mousedown deletes the run through the ordinary dispatch + autosave path —
+ * §9 E4 forbids drawing a control that does nothing, so this one works.
+ * `mousedown`, not `click`, like the task checkbox: the caret must not land in
+ * the run first and reveal the source under the pointer.  No innerHTML anywhere (B12):
  * the glyph is a text node, not markup, and `src` is set as a property.
  */
 export class ImageWidget extends WidgetType {
@@ -1697,7 +1699,14 @@ export class ImageWidget extends WidgetType {
     x.setAttribute('aria-label', 'Remove image')
     x.setAttribute('title', 'Remove image')
     x.addEventListener('mousedown', (e) => {
+      // Every press: focus must stay in the editor, or the image's menu hands
+      // it back to this button on close and typing goes nowhere.
       e.preventDefault()
+      // Only a plain left press deletes.  A right press opens the image's
+      // menu, and so does macOS's Ctrl+click, whose mousedown is button 0; a
+      // menu gesture must never delete what it was opened on.
+      if (e.button !== 0) return
+      if (e.ctrlKey && document.documentElement.getAttribute('data-os') === 'macos') return
       const hit = imageRangeAt(view.state, view.posAtDOM(x, 0))
       if (hit === null) return
       view.dispatch({ changes: { from: hit.from, to: hit.to }, userEvent: 'delete.image' })

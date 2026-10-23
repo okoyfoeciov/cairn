@@ -56,7 +56,8 @@ structurally blocked.
 *Pasted clipboard images are the exception (2026-09-24, user ruling):* Ctrl/Cmd-V writes
 `![pasted image](data:image/…)` into the note and it renders as an inline widget — an `<img>` is a
 renderer the engine has always had, so no second parser was owed. One atomic replace: Backspace/Delete
-takes the whole run, and a Cairn `[C]` X (Obsidian draws none) removes it by mouse. File, remote and
+takes the whole run, and a Cairn `[C]` X (Obsidian draws none) removes it by mouse. A right-click on
+one offers **Copy image**, which puts the image on the clipboard (CONTRACT §0.54 E107). File, remote and
 reference images stay raw source.
 
 ### LP-11 · The task tick is the app's one remaining SVG image, and it can poison a strike 🟡
@@ -443,15 +444,16 @@ CLAUDE.md §2 and the contract sections it names. **Collapse all is gone** (§0.
 `tree.collapseAll()` is callerless. **A network vault has no refresh at all** (§0.12.2) and its
 banner must not be drawn while `watching` is true.
 
-**③ THERE IS NO CONTEXT MENU ANYWHERE THE APP DOES NOT DRAW ONE, AND ON ELECTRON THAT INCLUDES THE
-EDITOR.** The old note here said the engine's menu remained reachable as a fallback; that was true
-of WebKitGTK, which drew Back / Forward / Reload / Inspect Element on its own. **Electron draws no
-default context menu at all** — `app-main.mjs` registers no `context-menu` handler, verified — so a
-right-click over the editor, the search panel, the tab strip or the vault bar now shows *nothing*,
-and with it goes the only mouse-driven cut/copy/paste the app had. The tree's own row menus still
-work (`tree.ts`'s own `contextmenu` listener). The Reload exposure is gone with the menu; what
-replaces cut/copy/paste is an open question. CONTRACT §0.13 describes the old stack and needs a
-ruling.
+**③ THERE IS NO CONTEXT MENU ANYWHERE THE APP DOES NOT DRAW ONE.** The old note here said the
+engine's menu remained reachable as a fallback; that was true of WebKitGTK, which drew Back /
+Forward / Reload / Inspect Element on its own. **Electron draws no default context menu at all** —
+`app-main.mjs` registers no `context-menu` handler, verified — so a right-click over the search
+panel, the tab strip or the vault bar shows *nothing*. The editor and the Memoir page draw their
+own through `menu.ts`: Copy on a selection and Paste when the clipboard holds text (`clipMenu`),
+and over a pasted image one Copy image row (`imageMenu`, CONTRACT §0.54 E107). The
+tree's row menus still work (`tree.ts`'s own `contextmenu` listener). The Reload exposure is gone
+with the engine's menu, and **Cut has no mouse path**. CONTRACT §0.13 describes the old stack and
+needs a ruling.
 
 ### X-6 · "Reveal in Finder" errors on Debian, and the button is still there — by ruling
 

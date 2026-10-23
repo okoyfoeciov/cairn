@@ -2,7 +2,7 @@
  * src/ipc.ts
  * Owner: 02 (MOVED from 06 — CONTRACT.md §6.4, M41).
  * Spec: CONTRACT.md §1.1 (conventions), §1.2 (transport), §1.3 (the twenty-
- * five commands), §1.4 (the event table), §1.5 (the wire types), §2.3 (the exact
+ * seven commands), §1.4 (the event table), §1.5 (the wire types), §2.3 (the exact
  * `write_note` call), §5.11 (emitGeometryReport).
  *
  * THE ONLY MODULE IN THE APP THAT TALKS TO THE SHELL.  Every other frontend
@@ -18,12 +18,13 @@
  * it and the redirect plugin is gone with it.
  * ============================================================================
  *
- * The command table is CLOSED AT TWENTY-SIX.  `list_tree`, `set_expanded`,
+ * The command table is CLOSED AT TWENTY-SEVEN.  `list_tree`, `set_expanded`,
  * `reveal`, `tree_load`, `fs_*`, `vault_*`, `tree_set_sort` and `scan_vault`
  * DO NOT EXIST.  Adding a command touches `core/napi/src/lib.rs`
  * and `electron-shell/native.mjs` — both owner 07's — and one logic module,
- * unless it is shell-implemented like `open_external`, `copy_text` and
- * `read_text`, which touch only `electron-shell/app-main.mjs` and this file.
+ * unless it is shell-implemented like `open_external`, `copy_text`,
+ * `read_text` and `copy_image`, which touch only `electron-shell/app-main.mjs`
+ * and this file.
  *
  * THREE THINGS THAT LOOK LIKE STYLE AND ARE NOT:
  *
@@ -410,6 +411,16 @@ export function copyText(text: string): Promise<void> {
  *  and the Paste row could never be offered.  Non-text content reads as `''`. */
 export function readText(): Promise<string> {
   return call<string>('read_text')
+}
+
+/** §1.3 command 27 (§0.54 E107).  Put an IMAGE on the system clipboard, for
+ *  the note viewer's Copy image.  **SHELL-IMPLEMENTED, not Rust**,
+ *  for command 23's measured reason: the renderer's async clipboard rejects in
+ *  an unfocused window, and the main process's has no focus requirement.
+ *  Takes a base64 PNG or JPEG data URL — what `nativeImage` decodes — so the
+ *  caller redraws any other format as PNG first. */
+export function copyImage(dataUrl: string): Promise<void> {
+  return call<void>('copy_image', { data_url: dataUrl })
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════

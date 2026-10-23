@@ -94,6 +94,7 @@ import {
   onVaultLost,
   onVaultOpened,
   onWatchDegraded,
+  copyImage,
   copyText,
   openExternal,
   openVault,
@@ -1461,7 +1462,10 @@ function boot(): void {
   configurePersist(saveUiState, (err) => reportError(err, 'save-ui-state'))
 
   /* ── the editor.  EXACTLY ONE EditorView for the process lifetime (M70). ── */
-  configureEditor({ readNote, writeNote, renameEntry, createNote, readClipboardText: readText, writeClipboardText: copyText })
+  configureEditor({
+    readNote, writeNote, renameEntry, createNote,
+    readClipboardText: readText, writeClipboardText: copyText, writeClipboardImage: copyImage,
+  })
   setEditorHooks({
     onPathChanged: (path) => {
       // `Memoir.md` never arrives here: `openNoteAt` intercepts it into the

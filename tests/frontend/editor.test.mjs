@@ -2090,3 +2090,23 @@ test('image paste: blobToDataUrl carries the MIME and the bytes', async () => {
   const url = await ED.blobToDataUrl(new Blob([new Uint8Array([137, 80, 78, 71])], { type: 'image/png' }))
   assert.equal(url, 'data:image/png;base64,iVBORw==')
 })
+
+/* §0.54 E107 — Copy image.  Command 27 hands the data URL to
+ * `nativeImage`, which decodes PNG and JPEG only, so those cross byte for byte
+ * and every other format is redrawn as PNG first. */
+test('image copy: PNG and JPEG cross as they are, anything else is redrawn as PNG', () => {
+  let drawn = 0
+  const toPng = () => { drawn++; return 'data:image/png;base64,UkVEUkFXTg==' }
+  const png = 'data:image/png;base64,iVBORw=='
+  const jpeg = 'data:image/jpeg;base64,/9j/4A=='
+  assert.equal(ED.clipboardImageUrl(png, toPng), png)
+  assert.equal(ED.clipboardImageUrl(jpeg, toPng), jpeg)
+  assert.equal(drawn, 0, 'a PNG or JPEG is never re-encoded')
+  for (const mime of ['gif', 'webp', 'bmp', 'svg+xml', 'avif']) {
+    assert.equal(ED.clipboardImageUrl(`data:image/${mime};base64,AAAA`, toPng),
+      'data:image/png;base64,UkVEUkFXTg==', mime)
+  }
+  // Not base64: command 27 parses base64 only, so this is redrawn too.
+  assert.equal(ED.clipboardImageUrl('data:image/png,raw', toPng), 'data:image/png;base64,UkVEUkFXTg==')
+  assert.equal(drawn, 6)
+})

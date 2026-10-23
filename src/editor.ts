@@ -69,10 +69,11 @@ import { isSecretText, renderSecrets } from './secrets'
    `livepreview.ts`: `block: true` decorations may not come from a `ViewPlugin`,
    which is what `livePreview` is. */
 import { properties } from './properties'
-/* `openMenu`/`clipMenu` is THE ONE context-menu primitive (owner 04): the
- * note viewer's Copy/Paste rows are built by it, never as a second floating
- * list.  `menu.ts` imports only `icons.ts`, so this is not a cycle. */
-import { clipMenu, openMenu } from './menu'
+/* `openMenu` is THE ONE context-menu primitive (owner 04): the note viewer's
+ * Copy/Paste rows (`clipMenu`) and its image row (`imageMenu`) are built by
+ * it, never as a second floating list.  `menu.ts` imports only `icons.ts`, so
+ * this is not a cycle. */
+import { clipMenu, imageMenu, openMenu } from './menu'
 /* §7.3 case 3's prompt.  `src/modal.ts` (owner 01) is THE ONLY MODAL IN THE APP
  * (§1.6.1, errata 3 Z4); this module does not draw one and must never grow one.
  * The import is a VALUE import, not a type import, because the guard below
@@ -142,6 +143,13 @@ export interface EditorIpc {
    * 4096 characters, so the unbounded async clipboard stays the first try).
    */
   writeClipboardText?(text: string): Promise<void>
+  /**
+   * §1.3 command 27 (§0.54 E107), optional so older test transports keep
+   * working.  Copy image: a base64 PNG or JPEG data URL, put on the
+   * clipboard by the main process.  There is no renderer fallback — the
+   * async clipboard is the path that fails in an unfocused window.
+   */
+  writeClipboardImage?(dataUrl: string): Promise<void>
 }
 
 export type FlushReason =
@@ -609,8 +617,8 @@ export function refuseDrop(
 /**
  * Pasted clipboard images land inline as `![pasted image](data:…)` — the one
  * image use case.  A data URL keeps the image in the note's own text, so no
- * core change (the tree holds `.md` only), no IPC addition (the table is
- * closed at 25) and no attachment folder are owed.
+ * core change (the tree holds `.md` only), no IPC addition and no attachment
+ * folder are owed.
  *
  * `firstClipboardImage` is the pure pick rule — the first `image/*` file, or
  * null — unit-testable without manufacturing a ClipboardEvent, like
@@ -643,6 +651,86 @@ export async function blobToDataUrl(blob: ClipboardImageLike): Promise<string> {
     bin += String.fromCharCode.apply(null, Array.from(buf.subarray(i, i + CHUNK)) as number[])
   }
   return `data:${blob.type};base64,${btoa(bin)}`
+}
+
+/**
+ * §0.54 E107 — the data URL command 27 is handed for Copy image.
+ * The main process decodes through `nativeImage`, which reads PNG and JPEG
+ * only (GIF, WEBP, BMP and SVG come back empty, measured), so those two cross
+ * byte for byte — Obsidian's own copy does the same — and anything else goes
+ * through `toPng`.  The pattern is command 27's own guard, so the two ends
+ * agree on what passes through; a pass-through it still cannot decode is
+ * redrawn by `copyPastedImage`.  Pure, like `firstClipboardImage`.
+ */
+const CLIPBOARD_IMAGE_RE = /^data:image\/(?:png|jpeg);base64,/
+
+export function clipboardImageUrl(src: string, toPng: (src: string) => string): string {
+  return CLIPBOARD_IMAGE_RE.test(src) ? src : toPng(src)
+}
+
+/** `toPng` for a rendered image: its decoded pixels, redrawn at natural
+ *  size.  A data URL never taints the canvas (measured, SVG included). */
+function redrawAsPng(img: HTMLImageElement): string {
+  const c = document.createElement('canvas')
+  c.width = img.naturalWidth
+  c.height = img.naturalHeight
+  const g = c.getContext('2d')
+  if (!g) throw new Error('no 2d canvas to redraw the image on')
+  g.drawImage(img, 0, 0)
+  const url = c.toDataURL('image/png')
+  // An over-large canvas answers `data:,` instead of throwing.
+  if (!CLIPBOARD_IMAGE_RE.test(url)) throw new Error('the image is too large to redraw')
+  return url
+}
+
+/**
+ * The pasted image under a right-click, or null.  The X is part of the image
+ * here: its own mousedown takes the left button only.  An image that did not
+ * decode is not offered — Copy image could not act (§9 E4) — and the click
+ * falls through to the Copy/Paste rows.
+ */
+function pastedImageAt(target: EventTarget | null): HTMLImageElement | null {
+  if (!(target instanceof Element)) return null
+  const img = target.closest('.nc-img-wrap')?.querySelector('.nc-img')
+  return img instanceof HTMLImageElement && img.naturalWidth > 0 && img.naturalHeight > 0 ? img : null
+}
+
+function copyPastedImage(img: HTMLImageElement): void {
+  const report = (e: unknown): void => {
+    let msg: string
+    try { msg = e instanceof Error ? e.message : JSON.stringify(e) ?? String(e) } catch { msg = String(e) }
+    console.error('cairn[image-copy]: ' + msg)
+  }
+  const write = ipc?.writeClipboardImage
+  if (!write) {
+    report('no clipboard IPC is configured')
+    return
+  }
+  const src = img.src
+  let url: string
+  try {
+    url = clipboardImageUrl(src, () => redrawAsPng(img))
+  } catch (e) {
+    report(e)
+    return
+  }
+  void write(url).catch((e: unknown) => {
+    // A pass-through the main process could not decode: the label said PNG or
+    // JPEG and `nativeImage` trusts it, while the engine sniffed the bytes and
+    // decoded them (a misnamed file pastes that way).  Redraw it once.
+    if (url !== src) {
+      report(e)
+      return
+    }
+    let png: string
+    try {
+      png = redrawAsPng(img)
+    } catch (e2) {
+      report(e2)
+      return
+    }
+    void write(png).catch(report)
+  })
 }
 
 const EXTENSIONS: Extension[] = [
@@ -818,9 +906,14 @@ export function focusEditor(): void {
   view?.focus()
 }
 
+/** Counts right-clicks, so a clipboard probe that lands late can tell it was
+ *  superseded. */
+let menuSeq = 0
+
 /**
  * THE NOTE VIEWER'S CONTEXT MENU (2026-10-03): Copy and/or Paste over
- * `menu.ts`'s one primitive.
+ * `menu.ts`'s one primitive — or, over a pasted image, its Copy image
+ * (§0.54 E107).
  *
  * `preventDefault()` is synchronous and unconditional (the tree's §0.13 E15
  * rationale applies verbatim: without it the engine opens its own menu as
@@ -839,6 +932,15 @@ function onEditorContextMenu(ev: MouseEvent): void {
   ev.preventDefault()
   const x = ev.clientX
   const y = ev.clientY
+  const seq = ++menuSeq
+  // §0.54 E107: a pasted image answers first, and in every state — copying an
+  // image out of a read-only note is still only a copy.  No clipboard probe is
+  // owed, so its menu opens now.
+  const img = pastedImageAt(ev.target)
+  if (img !== null) {
+    openMenu(imageMenu({ copy: () => copyPastedImage(img) }), { x, y, label: 'Image actions', cls: 'ctx-clip' })
+    return
+  }
   // Decided twice: this synchronous pass only skips the probe when there is
   // provably nothing to offer (no selection, and paste refused) — the rows
   // themselves are read after the probe lands, against the live state.
@@ -853,7 +955,9 @@ function onEditorContextMenu(ev: MouseEvent): void {
       clip = ''
     }
     const v = view
-    if (!v || secretMode || open === null) return
+    // A later right-click supersedes this one while its probe was in flight:
+    // its menu (an image's opens at once) must not be replaced by this one.
+    if (!v || secretMode || open === null || seq !== menuSeq) return
     const hasSelection = !v.state.selection.main.empty
     const canPaste = !v.state.readOnly && clip.length > 0
     if (!hasSelection && !canPaste) return
