@@ -626,23 +626,26 @@ export function folderRowMenu(a: RowMenuActions): MenuEntry[] {
   ]
 }
 
-/** Right-click on the tree's empty space: create at the vault root, and nothing
- *  else.  There is nothing to rename or delete, so those rows are absent rather
- *  than disabled — a permanently greyed row is the inert decoration §9 E4
- *  rejects.
+/** Right-click on the tree's empty space: create at the vault root, and copy
+ *  that root's absolute path.  There is nothing to rename or delete, so those
+ *  rows are absent rather than disabled — a permanently greyed row is the
+ *  inert decoration §9 E4 rejects.
  *
- *  User ruling, 2026-09-14: NO `Copy absolute path` here either.  It used to
- *  copy the vault root's own path, which is always a valid string and never
- *  what anyone right-clicking empty space is reaching for — there is no
- *  file or folder under the cursor to copy.  File and folder rows keep theirs;
- *  only the subject-less menu loses the row, separator with it. */
+ *  User ruling, 2026-10-23: `Copy absolute path` RETURNS to this menu, with the
+ *  vault root as its subject.  The 2026-09-14 ruling removed it because there
+ *  is no entry under the cursor; that is exactly why the root is the one
+ *  honest target — the scroller's empty space belongs to the vault, not to a
+ *  row.  `main.ts` passes `''`, which `absolutePath` resolves to the root
+ *  without a trailing slash.  File and folder rows keep their own path. */
 export function emptySpaceMenu(
-  a: Pick<RowMenuActions, 'newNote' | 'newFolder' | 'newSecret'>,
+  a: Pick<RowMenuActions, 'newNote' | 'newFolder' | 'newSecret' | 'copyPath'>,
 ): MenuEntry[] {
   return [
     { label: 'New note', onSelect: a.newNote, icon: 'edit' },
     { label: 'New folder', onSelect: a.newFolder, icon: 'folder-open' },
     { label: 'New secret file', onSelect: a.newSecret, icon: 'lock' },
+    { separator: true },
+    { label: 'Copy absolute path', onSelect: a.copyPath, icon: 'clipboard' },
   ]
 }
 

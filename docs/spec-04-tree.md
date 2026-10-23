@@ -691,7 +691,8 @@ The rows, in order:
 
 * **File** — `Rename…` · `Copy absolute path` · separator · `Delete`.
 * **Folder** — `New note` · `New folder` · `New secret file` · separator · the file menu's three.
-* **Empty space** — `New note` · `New folder` · `New secret file`.
+* **Empty space** — `New note` · `New folder` · `New secret file` · separator ·
+  `Copy absolute path` (the vault root).
 
 There is no *Reveal in Finder* row and no per-folder *Expand all* / *Collapse all* (CONTRACT §5.2).
 *Copy absolute path* needs no command and crosses no IPC: it composes `VaultInfo.root` plus the

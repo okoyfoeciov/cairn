@@ -272,12 +272,17 @@ test('§0.16 E18 — a FILE row offers no create rows; a FOLDER row does', () =>
 
   // The empty-space menu OMITS rename/delete rather than disabling them: a
   // permanently greyed row is the inert decoration §9 E4 rejects. It offers
-  // just the creates — user ruling, 2026-09-14: `Copy absolute path` is gone
-  // here too, since there is no file or folder under the cursor to copy (file
-  // and folder rows keep theirs).
+  // the creates and, since user ruling 2026-10-23, `Copy absolute path` for the
+  // vault root — its subject is the vault when no row is under the cursor.
   const empty = M.emptySpaceMenu(acts)
-  assert.deepEqual(labels(empty), ['New note', 'New folder', 'New secret file'])
+  assert.deepEqual(labels(empty), ['New note', 'New folder', 'New secret file', 'Copy absolute path'])
   assert.equal(empty.some((e) => e.disabled), false)
+  assert.equal(empty.filter((e) => e.separator).length, 1)
+
+  // Every row is wired to its own action, including the root copy.
+  calls.length = 0
+  for (const e of empty.filter((x) => !x.separator)) e.onSelect()
+  assert.deepEqual(calls, ['newNote', 'newFolder', 'newSecret', 'copyPath'])
 })
 
 test('note/memoir context menu — Copy on selection, Paste on clipboard text, both at once', () => {
@@ -2006,16 +2011,14 @@ test('§0.12 E14 — Copy absolute path writes the clipboard from the click, wit
   assert.match(fn, /try \{[\s\S]*\} catch \(err\) \{[\s\S]*reportError\(err, 'copy-path'\)/)
 
   // 4. The ROW menus are wired to it — file and folder both target their own
-  //    path — and the empty-space menu is NOT.  User ruling, 2026-09-14: with
-  //    no entry under the cursor there is nothing to copy, so `rowMenu` must
-  //    not build a `copyPath` for the root at all (the forbidden wiring is
-  //    named here the way `destinationFor` is elsewhere in this file: the
-  //    pattern is the assertion, and a bare-substring future grep is the
-  //    documented hazard).
+  //    path — and, since user ruling 2026-10-23, so is EMPTY SPACE, with `''`
+  //    as the subject.  `absolutePath(root, '')` is the vault root itself, so
+  //    the empty-space row copies the vault path.  The exact call is asserted
+  //    rather than the word `copyPath`, which also appears on the row wiring.
   const rowMenu = mainTs.slice(mainTs.indexOf('function rowMenu('),
                                mainTs.indexOf('/** The one route into the editor.'))
-  assert.equal(/copyPath: \(\) => copyAbsolutePath\(''\)/.test(rowMenu), false,
-    'empty space copies the vault root again')
+  assert.match(rowMenu, /copyPath: \(\) => copyAbsolutePath\(''\)/,
+    'empty space no longer copies the vault root')
   assert.match(rowMenu, /copyPath: \(\) => copyAbsolutePath\(path\)/)
   assert.equal(/reveal:/.test(rowMenu), false, 'the row menus still wire Reveal in Finder')
 

@@ -337,12 +337,13 @@ coverage and NO caller.
 |---|---|
 | file | Rename… · Copy absolute path ‖ Delete |
 | folder | New note · New folder · New secret file ‖ Rename… · Copy absolute path ‖ Delete |
-| empty space | New note · New folder · New secret file |
+| empty space | New note · New folder · New secret file ‖ Copy absolute path |
 
 `fileRowMenu` takes `EntryActions` — `rename`, `copyPath`, `remove` — and nothing else, so a file
 menu has nowhere to put a create row (§0.16 E18). `New secret file` (a Cairn-only `cairn-type:
-secrets` note) is a later addition; `Copy absolute path` was REMOVED from the empty-space menu. Row
-glyphs are named for the string Obsidian's own `setIcon()` receives, minus `lucide-` (§0.15 E17).
+secrets` note) is a later addition. `Copy absolute path` is in all three menus; on empty space its
+subject is the vault root, `''` (user ruling, 2026-10-23, restoring the row removed on 2026-09-14).
+Row glyphs are named for the string Obsidian's own `setIcon()` receives, minus `lucide-` (§0.15 E17).
 
 **Sorting is pinned in the UI only.** `SortMode`, §1.3 command 7 and the persisted per-vault `sort`
 all stay; the menu is gone and the frontend only ever sends 0, which is file name A–Z.
@@ -413,9 +414,9 @@ destination: on a folder row (inside that folder) and on empty space (at the vau
 right-click on a FILE offers `Rename… · Copy absolute path ‖ Delete` and nothing else. This is
 Obsidian's own behaviour: its create rows sit inside a folder-type guard while Rename and Delete sit
 outside it. `fileRowMenu` carries the rule in the type; `folderRowMenu` is the file menu with the
-creates above it; `emptySpaceMenu` offers the creates only. `destinationFor()` is deleted — Mod-N
-calls `parentOf` directly. **Reported, not changed:** with the cursor on a FOLDER, Mod-N still
-creates in that folder's parent.
+creates above it; `emptySpaceMenu` offers the creates plus `Copy absolute path` for the vault root.
+`destinationFor()` is deleted — Mod-N calls `parentOf` directly. **Reported, not changed:** with the
+cursor on a FOLDER, Mod-N still creates in that folder's parent.
 
 ### §0.17 — Four rulings read out of Obsidian's own bundle (E19–E22)
 

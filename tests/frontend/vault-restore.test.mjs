@@ -390,12 +390,15 @@ test('§0.12 E14 — Copy absolute path composes root + rel and writes THAT to t
   actionsFrom(calls, 'folderRowMenu').copyPath()
   assert.deepEqual(calls.clipboard, ['ABS(/home/j/Vault|Projects/2026)'])
 
-  // EMPTY SPACE offers no copy row at all (user ruling, 2026-09-14): there is
-  // no entry under the cursor, so the action object must not even carry one —
-  // or reinstating the row in menu.ts would silently light it up again.
-  calls.clear()
+  // EMPTY SPACE copies the vault ROOT (user ruling, 2026-10-23).  `''` is the
+  // root's vault-relative path, and the sentinel makes the empty subject
+  // explicit: a wiring that passed the vault name, a slash, or a stale row
+  // path would not produce `ABS(/home/j/Vault|)`.
+  calls.clear(); calls.clipboard.length = 0
   rowMenu({ clientX: 10, clientY: 20 }, null, false)
-  assert.equal('copyPath' in actionsFrom(calls, 'emptySpaceMenu'), false)
+  actionsFrom(calls, 'emptySpaceMenu').copyPath()
+  assert.deepEqual(calls.clipboard, ['ABS(/home/j/Vault|)'],
+    'empty space did not copy the vault root')
 })
 
 test('§0.16 E18 — main.ts hands a FILE only the three entry actions, a FOLDER all six', async () => {
@@ -448,13 +451,13 @@ test('§0.16 E18 — main.ts hands a FILE only the three entry actions, a FOLDER
     'destinationFor is back; its isDir branch died with the file menu\'s creates')
 
   // The empty-space menu omits rename/delete rather than disabling them, and
-  // offers just the creates — user ruling, 2026-09-14: with no entry under the
-  // cursor there is nothing to copy either, so `copyPath` is gone from the
-  // action object, not only from the rendered rows.
+  // offers the creates plus `Copy absolute path` for the vault root (user
+  // ruling, 2026-10-23).  The action object carries all four: the copy row has
+  // a subject — the root — even with no entry under the cursor.
   calls.clear()
   rowMenu({ clientX: 1, clientY: 1 }, null, false)
   assert.deepEqual(Object.keys(actionsFrom(calls, 'emptySpaceMenu')).sort(),
-    ['newFolder', 'newNote', 'newSecret'])
+    ['copyPath', 'newFolder', 'newNote', 'newSecret'])
 })
 
 test('New secret file names through the inline row, with the dialog fallback', async () => {

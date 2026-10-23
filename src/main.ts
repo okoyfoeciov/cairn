@@ -873,6 +873,9 @@ function rowMenu(ev: MouseEvent, path: string | null, isDir: boolean): void {
         newNote: () => newNoteIn(''),
         newFolder: () => newFolderIn(''),
         newSecret: () => newSecretIn(''),
+        // '' IS the vault root (§1.1), and `absolutePath(root, '')` is the
+        // root alone — no trailing slash.  User ruling, 2026-10-23.
+        copyPath: () => copyAbsolutePath(''),
       }),
       opts
     )
