@@ -9,9 +9,11 @@
  * been wrong once (2026-09-30):
  *
  *   1. `--ozone-platform=wayland` when a Wayland socket is advertised and no
- *      X display exists. With no X server the default X11 backend dies before
- *      any window; an appendSwitch in app-main was measured too late (still
- *      X11, still dead) while the command-line flag works.
+ *      X display exists. With no X server an X11 backend dies before any
+ *      window ("Missing X server or $DISPLAY"); this Electron (39.8.3) picks
+ *      Wayland there by itself (measured), so the flag pins that choice. An
+ *      appendSwitch in app-main was measured too late while the command-line
+ *      flag works.
  *
  *   2. `--disable-gpu` when the DRM driver is `virtio-pci`. On the portability
  *      VM the virtio GL path cannot initialise: Chromium's own SwiftShader

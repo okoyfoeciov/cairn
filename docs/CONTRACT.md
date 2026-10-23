@@ -1897,6 +1897,12 @@ document is a dated record of a ruling that added none.
 `tree_set_sort` and `scan_vault` do not exist — including `fs_reveal`, whose *function* is
 `reveal_in_os` under a different name.
 
+**One more name reaches `cairn:invoke` and is not a command: `show_main_window`.** It is the
+shell's window-show hook (`app-main.mjs`; `ipc.ts`'s `showMainWindow`, which `main.ts` calls once
+at boot beside `emitFrontendReady`): no arguments, no vault data, no wire type, a no-op under
+`CAIRN_HEADLESS`, and a caller without a shell swallows its failure. It stands outside the numbered
+table and its count.
+
 **Command 20 is the restored "Reveal in Finder" affordance (X11).** It resolves the path through
 the arena exactly as `read_note` does (so §7.3 case 13's traversal guarantee is unchanged) and
 spawns `/usr/bin/open -R`; a non-existent path is `notFound` before anything is spawned. Its only

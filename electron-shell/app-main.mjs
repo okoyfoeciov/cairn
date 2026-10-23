@@ -26,10 +26,12 @@ const ROOT = dirname(HERE)
 const HEADLESS = process.env.CAIRN_HEADLESS === '1'
 const addon = loadAddon()
 
-// NOTE: the ozone backend is chosen in the /usr/bin/cairn launcher, not here.
-// Chromium reads it before app code runs -- an appendSwitch at this spot was
-// measured too late on 2026-09-30 (still X11, still dead) while the identical
-// command-line flag works. See tools/package-electron.mjs.
+// NOTE: the ozone backend is not chosen here. Chromium reads it before app
+// code runs -- an appendSwitch at this spot was measured too late while the
+// identical command-line flag works -- so any flag belongs in the
+// /usr/bin/cairn launcher (tools/package-electron.mjs). With no flag this
+// Electron picks Wayland on a Wayland session, XWayland's DISPLAY or not
+// (measured: no X11 window exists unless X11 is forced).
 
 // The macOS app-menu title still reads "Electron": that name comes from the
 // bundle's Info.plist, and this runs unpackaged. setName fixes the About panel

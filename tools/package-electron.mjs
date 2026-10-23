@@ -148,11 +148,13 @@ function buildDeb(stage) {
   // Two launcher policies, both measured, both impossible in app code (see
   // tools/verify-launcher.mjs for the gate that pins them):
   //
-  // 1. Wayland-first on a Wayland session whose X layer isn't up yet
-  //    (2026-09-30: the default X11 backend dies with no X server, while
-  //    this flag opens at once). Chromium reads the ozone backend before app
-  //    code runs -- an appendSwitch in app-main was measured too late (still
-  //    X11, still dead) while the identical command-line flag works.
+  // 1. Wayland-first on a Wayland session whose X layer isn't up yet. This
+  //    Electron (39.8.3) already picks Wayland there by itself, with DISPLAY
+  //    set or not, while a forced X11 backend dies with no X server ("Missing
+  //    X server or $DISPLAY", measured), so the flag pins the choice rather
+  //    than making it. Chromium reads the ozone backend before app code runs
+  //    -- an appendSwitch in app-main was measured too late while the
+  //    identical command-line flag works.
   //
   // 2. Software rendering on a virtual (virtio) GPU. MEASURED 2026-09-30 on
   //    the portability VM: with the virtio adapter, GPU-process init fails
