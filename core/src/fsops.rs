@@ -1151,6 +1151,20 @@ fn rename_entry_locked(
         return Ok(src_abs.to_path_buf());
     }
 
+    /* THE FINGERPRINTS AND THE RENAME ARE ONE CRITICAL SECTION.
+     *
+     * notify delivers our own rename on its own thread, and the coalescer
+     * classifies it the moment it arrives.  If the command records the
+     * fingerprints afterwards, an event that wins that race finds no entry,
+     * surfaces the renamed note as an EXTERNAL change, and on a dirty buffer
+     * raises a conflict bar the user did nothing to earn.  That is the same
+     * class of bug `replace_file` closes for writes by recording before its
+     * rename; here the operation IS the rename (one syscall, or two for a
+     * case-only rename), so holding the lock across it and the two records is
+     * simpler and leaves no stale entry behind when the rename fails.
+     * `classify` blocks on this mutex until the records exist. */
+    let mut sw = self_writes.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+
     if let Ok(dst_md) = fs::symlink_metadata(dst_abs) {
         if !same_file(&src_md, &dst_md) {
             return Err(VaultError::already_exists(dst_name));
@@ -1177,8 +1191,13 @@ fn rename_entry_locked(
         fs::rename(src_abs, dst_abs).map_err(|e| VaultError::from_io(dst_name, &e))?;
     }
 
-    crate::watcher::record_self_write(self_writes, SelfWrite::removed(src_abs));
-    record_existing(dst_abs, self_writes);
+    // A rename preserves the inode's mtime and length, so `src_md` IS the
+    // destination's post-rename metadata — and taking it from before the
+    // syscall means a genuine write that lands immediately afterwards cannot
+    // be swallowed by a fingerprint read after it.
+    sw.record(SelfWrite::removed(src_abs));
+    sw.record(SelfWrite::existing(dst_abs, mtime_ns(&src_md), src_md.len()));
+    drop(sw);
     Ok(true_abs(dst_abs))
 }
 
