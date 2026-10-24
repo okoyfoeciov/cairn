@@ -69,10 +69,6 @@ before(async () => {
     setTimeout: (...a) => setTimeout(...a),
     clearTimeout: (...a) => clearTimeout(...a),
   }
-  // The paraphrase arming path schedules a frame; the tests never read it.
-  if (typeof globalThis.requestAnimationFrame !== 'function') {
-    globalThis.requestAnimationFrame = (fn) => setTimeout(fn, 0)
-  }
 })
 
 /** A transport whose disk enforces the base mtime like `fsops.rs` step 1. */
@@ -262,9 +258,9 @@ test('F50: a write that fails after reset() leaves the new session clean', async
   assert.equal(editor.value, '', 'a retired write touched the new buffer')
 })
 
-/* F48: an LLM request that never answers must not disable Check and Other
- * ways for the rest of the session — every request carries a deadline, and
- * leaving the page cancels it. */
+/* F48: an LLM request that never answers must not disable Check for the rest
+ * of the session — every request carries a deadline, and leaving the page
+ * cancels it. */
 test('F48: a hung Check disables nothing after reset(), and the abort lands', async () => {
   const t = makeTransport()
   const pane = globalThis.document.createElement('div')
@@ -296,7 +292,7 @@ test('F48: a hung Check disables nothing after reset(), and the abort lands', as
     await settle()
     assert.equal(btn.disabled, true, 'Check never started')
     v.reset()
-    assert.equal(btn.disabled, false, 'reset() left the buttons dead')
+    assert.equal(btn.disabled, false, 'reset() left the button dead')
     await settle()
     await settle()
     assert.equal(aborted, true, 'leaving the page never cancelled the request')

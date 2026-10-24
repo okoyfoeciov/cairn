@@ -18,7 +18,7 @@ and no other engine.
 | Rust write serialisation | `cd core && cargo test --test write_serialisation` | concurrent same-base writes |
 | Rust watcher lifecycle | `cd core && cargo test --test watch_lifecycle` | ancestor rename, external rename-over, refresh re-arm, symlinked trees |
 | Rust special files | `cd core && cargo test --test special_files` | FIFO / socket / device entries named `*.md` |
-| Frontend | `node --test tests/frontend/*.test.mjs` | modal, dirty-delete, open-atomic, editor-recovery, main-flows, conflict-bars, memoir, ipc-timeout, secrets-writers |
+| Frontend | `node --test tests/frontend/*.test.mjs` | modal, dirty-delete, open-atomic, editor-recovery, main-flows, conflict-bars, memoir page/wiring, ipc-timeout, secrets-writers |
 | Shell, headless | `node --test electron-shell/note-frame-edges.test.mjs electron-shell/secret-parity.test.mjs electron-shell/note-extension-case.test.mjs` | frame edges, secret parity, extension case |
 | Shell, windowed | `node --test electron-shell/close-handshake.test.mjs electron-shell/sync-client.test.mjs electron-shell/shipped-binary.test.mjs` | quit handshake, real sync client, shipped artefact |
 | Whole Rust suite | `cd core && cargo test` | includes the above plus unit tests |

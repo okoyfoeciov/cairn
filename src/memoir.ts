@@ -5,11 +5,10 @@
  * the fixed Memoir tab shows a journal page, not a CodeMirror note.
  *
  * A faithful clone of memoir's single-page UI (`~/Downloads/memoir`, one
- * self-contained `public/index.html`): a serif textarea, `Check` (whole-entry
- * proofread) and `Other ways` (rephrase the selection) over localhost, each
- * rendering into its own drawer.  The entry text is vault-root `Memoir.md`
- * (path arrives via deps — this module does not name it); the two LLM calls
- * are ai-service's `/api/memoir/check` + `/api/memoir/paraphrase` on
+ * self-contained `public/index.html`): a serif textarea and `Check`
+ * (whole-entry proofread) over localhost, rendering into its own drawer.  The
+ * entry text is vault-root `Memoir.md` (path arrives via deps — this module
+ * does not name it); the LLM call is ai-service's `/api/memoir/check` on
  * `127.0.0.1:8770`.  Server-side entry storage (`/api/entry`) was NOT ported:
  * the vault is the store.
  *
@@ -23,7 +22,7 @@
  *
  * §6.1: no innerHTML assignment anywhere here — DOM is built with
  * `createElement` and all model text lands via `textContent`, which is also
- * what makes a variant containing `<` or `&` unable to inject markup.
+ * what makes a correction containing `<` or `&` unable to inject markup.
  * §6.4: this module never imports `ipc.ts`; the transport arrives via deps
  * from `main.ts`, whose whole job is wiring (same seam as the totp/secrets
  * hosts).
@@ -46,9 +45,8 @@ import { clipMenu, openMenu } from './menu'
 
 export const MEMOIR_API = 'http://127.0.0.1:8770/api/memoir'
 
-/** Client-side mirrors of the server's caps (ai-service enforces them). */
+/** Client-side mirror of the server's cap (ai-service enforces it). */
 export const MEMOIR_CHECK_MAX = 12000
-export const MEMOIR_PARA_MAX = 600
 
 /** Structural transport — `main.ts` hands down `ipc.ts`'s own functions. */
 export interface MemoirTransport {
@@ -104,121 +102,6 @@ export interface MemoirView {
   reset(): void
 }
 
-/* ── pure sentence helpers (unit-tested, no DOM) ─────────────────────────── */
-
-const WORD_RE = /[\p{L}\p{N}'’-]/u
-const ABBR = new Set(['mr', 'mrs', 'ms', 'dr', 'prof', 'st', 'sr', 'jr', 'vs', 'eg', 'ie'])
-
-/** Is the punctuation at `idx` really the end of a sentence? */
-export function isTerminator(text: string, idx: number): boolean {
-  const c = text[idx] ?? ''
-  if (!/[.!?…]/.test(c)) return false
-  if (c === '.') {
-    const w = /([A-Za-z]+)$/.exec(text.slice(0, idx))
-    const word = w?.[1] ?? ''
-    // A title or an initial: "Dr. Nguyen", "J. Smith".
-    if (word && (word.length === 1 || ABBR.has(word.toLowerCase()))) return false
-  }
-  // A lower-case or digit continuation means the dot was internal: "v2.3.1".
-  const after = text.slice(idx + 1).replace(/^["'’)\]\s]*/, '')[0] ?? ''
-  if (after && WORD_RE.test(after) && after === after.toLowerCase()) return false
-  return true
-}
-
-/** Grow a sloppy drag outward to whole words, then trim back in. Never shrinks
- *  what the user actually selected. */
-export function snapToWords(text: string, start: number, end: number): { start: number; end: number } {
-  while (start > 0 && WORD_RE.test(text[start - 1] ?? '')) start--
-  while (end < text.length && WORD_RE.test(text[end] ?? '')) end++
-  while (start < end && /\s/.test(text[start] ?? '')) start++
-  while (end > start && /\s/.test(text[end - 1] ?? '')) end--
-  return { start, end }
-}
-
-/** The sentence containing `caret`. A newline is a hard boundary in both
- *  directions: the diary writes note-style lines ("Rain. Coffee, then
- *  standup."), and swallowing the next line would paraphrase two ideas at once. */
-export function sentenceAt(text: string, caret: number): { start: number; end: number } {
-  let i = Math.min(Math.max(caret, 0), text.length)
-  // A caret parked just after a finished sentence should take that sentence,
-  // so step back over trailing space and its closing punctuation first.
-  while (i > 0 && /[ \t]/.test(text[i - 1] ?? '')) i--
-  while (i > 0 && /[.!?…"'’)\]]/.test(text[i - 1] ?? '')) i--
-  let start = i
-  while (start > 0) {
-    if (text[start - 1] === '\n') break
-    if (isTerminator(text, start - 1)) break
-    start--
-  }
-  let end = i
-  while (end < text.length) {
-    if (text[end] === '\n') break
-    end++
-    if (isTerminator(text, end - 1)) break
-  }
-  while (start < end && /\s/.test(text[start] ?? '')) start++
-  while (end > start && /\s/.test(text[end - 1] ?? '')) end--
-  return { start, end }
-}
-
-export type RangeKind = 'selection' | 'sentence'
-
-export interface ResolvedRange {
-  start: number
-  end: number
-  text: string
-  kind: RangeKind
-  truncated: boolean
-}
-
-/** What gets sent: the selection if there is one, else the sentence at the
- *  caret, else the nearest non-empty line above. Null only when the whole
- *  entry is blank. */
-export function resolveRange(value: string, selStart: number, selEnd: number): ResolvedRange | null {
-  let start = selStart
-  let end = selEnd
-  let kind: RangeKind = 'selection'
-  if (start === end || !WORD_RE.test(value.slice(start, end))) {
-    ;({ start, end } = sentenceAt(value, selStart))
-    kind = 'sentence'
-    if (start >= end) {
-      // Blank line: walk back to the last line that has words on it.
-      let p = value.lastIndexOf('\n', Math.max(selStart - 1, 0))
-      while (p > 0) {
-        const q = value.lastIndexOf('\n', p - 1)
-        const line = value.slice(q + 1, p)
-        if (WORD_RE.test(line)) {
-          start = q + 1
-          end = p
-          break
-        }
-        p = q
-      }
-    }
-  } else {
-    ;({ start, end } = snapToWords(value, start, end))
-  }
-  let text = value.slice(start, end)
-  if (!WORD_RE.test(text)) return null
-  // Strip edge whitespace here rather than asking the model to reason about
-  // it; the prompt states the markers touch the span directly.
-  const lead = text.length - text.trimStart().length
-  const trail = text.length - text.trimEnd().length
-  start += lead
-  end -= trail
-  text = value.slice(start, end)
-  if (!text) return null
-  let truncated = false
-  if (text.length > MEMOIR_PARA_MAX) {
-    let cut = text.lastIndexOf(' ', MEMOIR_PARA_MAX)
-    if (cut < 300) cut = MEMOIR_PARA_MAX
-    text = text.slice(0, cut).trimEnd()
-    end = start + cut
-    truncated = true
-  }
-  return { start, end, text, kind, truncated }
-}
-
 /* ── wire types (ai-service's shapes, structurally) ─────────────────────── */
 
 interface CheckIssue {
@@ -234,13 +117,6 @@ interface CheckResult {
   issues?: unknown
   raw?: unknown
   warning?: unknown
-}
-
-interface Variant {
-  label?: unknown
-  text?: unknown
-  focus?: unknown
-  note?: unknown
 }
 
 /* ── the view ───────────────────────────────────────────────────────────── */
@@ -268,21 +144,9 @@ export function mountMemoir(pane: HTMLElement, deps: MemoirDeps): MemoirView {
   checkBtn.id = 'mm-checkBtn'
   checkBtn.textContent = 'Check'
   checkBtn.title = 'Check grammar, spelling and flow with AI'
-  const sep = el('span', 'mm-sep', '·')
-  sep.setAttribute('aria-hidden', 'true')
-  const waysBtn = document.createElement('button')
-  waysBtn.type = 'button'
-  waysBtn.id = 'mm-waysBtn'
-  waysBtn.title = 'Other ways to say the selected text — or the sentence at your cursor (Cmd/Ctrl+Shift+Enter)'
-  const waysFull = el('span', 'mm-full', 'Other ways')
-  const waysShort = el('span', 'mm-short', 'Ways')
-  waysBtn.appendChild(waysFull)
-  waysBtn.appendChild(waysShort)
   tools.appendChild(checkBtn)
-  tools.appendChild(sep)
-  tools.appendChild(waysBtn)
   // User ruling 2026-09-17: NO date and NO sync status on the page.  The bar
-  // holds the two verbs alone; save state rides the tab's dirty dot.
+  // holds the verb alone; save state rides the tab's dirty dot.
   bar.appendChild(tools)
 
   // Not shown (user ruling above) but still updated: the engine's live leg
@@ -329,25 +193,12 @@ export function mountMemoir(pane: HTMLElement, deps: MemoirDeps): MemoirView {
   }
 
   const check = drawer('mm-checkPanel', 'Writing check', 'Writing check')
-  const ways = drawer('mm-waysPanel', 'Other ways to say it', 'Other ways')
-  const waysSource = el('div', '')
-  waysSource.id = 'mm-waysSource'
-  waysSource.hidden = true
-  const waysSourceLabel = el('span', 'mm-src-label')
-  const waysSourceText = el('span', '')
-  waysSourceText.id = 'mm-waysSourceText'
-  waysSource.appendChild(waysSourceLabel)
-  waysSource.appendChild(waysSourceText)
-  // Source sits between head and scroll, like the original's layout.
-  const waysScroll = ways.aside.children[1] ?? null
-  ways.aside.insertBefore(waysSource, waysScroll)
 
   host.appendChild(bar)
   host.appendChild(statusEl)
   host.appendChild(frame)
   host.appendChild(backdrop)
   host.appendChild(check.aside)
-  host.appendChild(ways.aside)
   pane.appendChild(host)
 
   /* state */
@@ -364,16 +215,14 @@ export function mountMemoir(pane: HTMLElement, deps: MemoirDeps): MemoirView {
   // session's buffer, baseline or flags when it lands. `reset()` retires the
   // token; every application point below checks it after its await.
   let generation = 0
-  // One gateway, one turn: Check and Other ways share this, so pressing the
-  // other button mid-run does nothing rather than billing two calls at once.
+  // One gateway, one turn: a second Check mid-run does nothing rather than
+  // billing two calls at once.
   let busy = false
-  let waysReq = 0
-  let waysRange: ResolvedRange | null = null
   // F48: the one live LLM request, if any. A hung service must not disable
-  // both buttons for the rest of the session: every request carries a
-  // deadline, and leaving the UI (drawer close, tab leave, vault switch)
-  // cancels it. A full-size entry (12000 characters) takes about 210 s to
-  // check, so the deadline sits well past that.
+  // the button for the rest of the session: every request carries a deadline,
+  // and leaving the UI (drawer close, tab leave, vault switch) cancels it. A
+  // full-size entry (12000 characters) takes about 210 s to check, so the
+  // deadline sits well past that.
   const LLM_DEADLINE_MS = 300_000
   let llmAbort: AbortController | null = null
 
@@ -738,32 +587,27 @@ export function mountMemoir(pane: HTMLElement, deps: MemoirDeps): MemoirView {
     })()
   }
 
-  /* drawers */
+  /* drawer */
 
-  function openPanel(which: 'check' | 'ways'): void {
-    const isCheck = which === 'check'
-    host.classList.toggle('mm-check-open', isCheck)
-    host.classList.toggle('mm-ways-open', !isCheck)
-    check.aside.setAttribute('aria-hidden', String(!isCheck))
-    ways.aside.setAttribute('aria-hidden', String(isCheck))
+  function openPanel(): void {
+    host.classList.add('mm-check-open')
+    check.aside.setAttribute('aria-hidden', 'false')
     backdrop.setAttribute('aria-hidden', 'false')
   }
 
   function closePanels(): void {
     // F48: leaving the UI cancels the request behind it.
     abortLlm()
-    host.classList.remove('mm-check-open', 'mm-ways-open')
+    host.classList.remove('mm-check-open')
     check.aside.setAttribute('aria-hidden', 'true')
-    ways.aside.setAttribute('aria-hidden', 'true')
     backdrop.setAttribute('aria-hidden', 'true')
   }
 
   check.close.addEventListener('click', closePanels)
-  ways.close.addEventListener('click', closePanels)
   backdrop.addEventListener('click', closePanels)
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && host.contains(document.activeElement)) {
-      if (host.classList.contains('mm-check-open') || host.classList.contains('mm-ways-open')) closePanels()
+      if (host.classList.contains('mm-check-open')) closePanels()
     }
   })
 
@@ -772,10 +616,7 @@ export function mountMemoir(pane: HTMLElement, deps: MemoirDeps): MemoirView {
     if (!mod || e.key !== 'Enter') return
     e.preventDefault()
     e.stopPropagation()
-    // Shift does not change e.key, so without this split Cmd+Shift+Enter would
-    // fire a whole-entry check as well as the paraphrase.
-    if (e.shiftKey) void runParaphrase(captureRange())
-    else void runCheck()
+    void runCheck()
   })
 
   function emptyState(html: string): HTMLElement {
@@ -784,15 +625,10 @@ export function mountMemoir(pane: HTMLElement, deps: MemoirDeps): MemoirView {
     const parts = html.split('<br>')
     parts.forEach((p, i) => {
       if (i > 0) d.appendChild(document.createElement('br'))
-      // Bold segments are marked with <strong> in the literals below.
-      const b = p.split(/<\/?strong>/)
-      b.forEach((seg, j) => {
-        if (seg) {
-          const node: HTMLElement = j % 2 === 1 ? document.createElement('strong') : el('span', '')
-          node.textContent = seg
-          d.appendChild(node)
-        }
-      })
+      if (p) {
+        const node = el('span', '', p)
+        d.appendChild(node)
+      }
     })
     return d
   }
@@ -869,13 +705,13 @@ export function mountMemoir(pane: HTMLElement, deps: MemoirDeps): MemoirView {
     if (busy) return
     const content = editor.value
     if (!content.trim()) {
-      openPanel('check')
+      openPanel()
       check.list.textContent = ''
       check.list.appendChild(emptyState('Your entry is empty.'))
       return
     }
     if (content.length > MEMOIR_CHECK_MAX) {
-      openPanel('check')
+      openPanel()
       check.list.textContent = ''
       check.list.appendChild(emptyState('That entry is too long to check.'))
       return
@@ -885,7 +721,7 @@ export function mountMemoir(pane: HTMLElement, deps: MemoirDeps): MemoirView {
     checkBtn.classList.add('mm-checking')
     const prevText = checkBtn.textContent
     checkBtn.textContent = 'Checking…'
-    openPanel('check')
+    openPanel()
     check.list.textContent = ''
     check.list.appendChild(checkingAnim('Reading your entry…', 'This takes a few seconds'))
     const llm = armLlmDeadline()
@@ -922,133 +758,6 @@ export function mountMemoir(pane: HTMLElement, deps: MemoirDeps): MemoirView {
 
   checkBtn.addEventListener('click', () => {
     void runCheck()
-  })
-
-  /* other ways */
-
-  // Gold only while a live selection exists. rAF-coalesced because
-  // selectionchange fires on every caret move.
-  let armFrame = 0
-  function refreshArmed(): void {
-    if (armFrame) return
-    armFrame = requestAnimationFrame(() => {
-      armFrame = 0
-      if (document.activeElement !== editor) return
-      const sel = editor.value.slice(editor.selectionStart, editor.selectionEnd)
-      waysBtn.classList.toggle('mm-armed', !!sel && WORD_RE.test(sel))
-    })
-  }
-  document.addEventListener('selectionchange', refreshArmed)
-  for (const ev of ['select', 'keyup', 'mouseup', 'touchend', 'input', 'focus']) {
-    editor.addEventListener(ev, refreshArmed)
-  }
-
-  function renderVariants(variants: Variant[]): void {
-    ways.list.textContent = ''
-    if (variants.length === 0) {
-      ways.list.appendChild(emptyState('No other way worth showing for this one.<br>Often that means it is already the plainest way to say it.'))
-      return
-    }
-    variants.forEach((v, i) => {
-      const label = String(v.label ?? 'natural')
-      const text = String(v.text ?? '')
-      const focus = String(v.focus ?? '')
-      const note = String(v.note ?? '')
-      const card = el('div', 'mm-variant')
-      const head = el('div', 'mm-variant-head')
-      head.appendChild(el('span', 'mm-variant-tag ' + label, label))
-      head.appendChild(el('span', '', '#' + (i + 1)))
-      const body = el('div', 'mm-variant-text')
-      // Escape first, then wrap the focus phrase, so a variant containing <
-      // or & can never inject markup: everything lands via textContent.
-      if (focus && text.includes(focus)) {
-        const at = text.indexOf(focus)
-        body.appendChild(document.createTextNode(text.slice(0, at)))
-        body.appendChild(el('mark', '', focus))
-        body.appendChild(document.createTextNode(text.slice(at + focus.length)))
-      } else {
-        body.textContent = text
-      }
-      card.appendChild(head)
-      card.appendChild(body)
-      if (note) card.appendChild(el('div', 'mm-variant-note', note))
-      ways.list.appendChild(card)
-    })
-  }
-
-  function captureRange(): ResolvedRange | null {
-    try {
-      return resolveRange(editor.value, editor.selectionStart, editor.selectionEnd)
-    } catch {
-      return null
-    }
-  }
-
-  async function runParaphrase(range: ResolvedRange | null): Promise<void> {
-    if (busy) return
-    if (!range) {
-      openPanel('ways')
-      waysSource.hidden = true
-      ways.list.textContent = ''
-      ways.list.appendChild(emptyState('Nothing to rephrase yet.<br>Write a sentence, then press <strong>Other ways</strong>.'))
-      return
-    }
-    busy = true
-    waysBtn.classList.add('mm-working')
-    waysBtn.disabled = true
-    openPanel('ways')
-    waysSource.hidden = false
-    waysSourceLabel.textContent =
-      (range.kind === 'selection' ? 'You wrote' : 'Sentence at your cursor') +
-      (range.truncated ? ' · sent the first 600 characters' : '')
-    waysSourceText.textContent = range.text
-    ways.list.textContent = ''
-    ways.list.appendChild(checkingAnim('Finding other ways…', 'This takes a few seconds'))
-    const my = ++waysReq
-    const llm = armLlmDeadline()
-    try {
-      const r = await fetch(MEMOIR_API + '/paraphrase', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: range.text }),
-        signal: llm.abort.signal,
-      })
-      const data = (await r.json().catch(() => ({}))) as { variants?: unknown; error?: unknown }
-      if (my !== waysReq) return // a newer run won; drop this answer
-      if (!r.ok) {
-        const msg = typeof data.error === 'string' ? data.error : 'HTTP ' + r.status
-        ways.list.textContent = ''
-        const err = el('div', 'mm-empty')
-        err.textContent = 'Could not rephrase right now. ' + msg
-        ways.list.appendChild(err)
-        return
-      }
-      renderVariants(Array.isArray(data.variants) ? (data.variants as Variant[]) : [])
-    } catch (e) {
-      if (my !== waysReq) return
-      ways.list.textContent = ''
-      const err = el('div', 'mm-empty')
-      err.textContent = 'Network error — ' + (e instanceof Error ? e.message : String(e))
-      ways.list.appendChild(err)
-    } finally {
-      llm.done()
-      if (my === waysReq) {
-        busy = false
-        waysBtn.classList.remove('mm-working')
-        waysBtn.disabled = false
-      }
-    }
-  }
-
-  // Capture the range on pointerdown, before focus can leave the textarea.
-  waysBtn.addEventListener('pointerdown', (e) => {
-    e.preventDefault()
-    waysRange = captureRange()
-  })
-  waysBtn.addEventListener('click', () => {
-    const range = waysRange ?? captureRange() // keyboard activation fires no pointerdown
-    waysRange = null
-    void runParaphrase(range)
   })
 
   /* visibility + lifecycle */
@@ -1128,7 +837,6 @@ export function mountMemoir(pane: HTMLElement, deps: MemoirDeps): MemoirView {
       abortLlm()
       busy = false
       checkBtn.disabled = false
-      waysBtn.disabled = false
       if (saveTimer !== null) {
         window.clearTimeout(saveTimer)
         saveTimer = null
@@ -1147,8 +855,6 @@ export function mountMemoir(pane: HTMLElement, deps: MemoirDeps): MemoirView {
       editor.value = ''
       editor.readOnly = true
       check.list.textContent = ''
-      ways.list.textContent = ''
-      waysSource.hidden = true
       closePanels()
       setStatus('')
     },

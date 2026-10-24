@@ -67,9 +67,9 @@
    it for the autosaved signal) but renders nothing. */
 #mm-status { display: none; }
 
-/* The two verbs share one absolutely-centred wrapper and sit in normal flow
-   inside it. Centring each button on its own would need a hand-tuned translate
-   per button, and every :active/:disabled state would have to repeat it. */
+/* The verb sits in an absolutely-centred wrapper. Centring it directly would
+   need a hand-tuned translate, and every :active/:disabled state would have to
+   repeat it. */
 .mm-tools {
   position: absolute;
   left: 50%;
@@ -77,10 +77,9 @@
   transform: translate(-50%, -50%);
   display: flex;
   align-items: center;
-  gap: 14px;
 }
 
-#mm-checkBtn, #mm-waysBtn {
+#mm-checkBtn {
   font-family: var(--font-ui);
   /* User ruling 2026-09-17: bigger — the tab label's own 13px, not the
      original 11px. */
@@ -102,21 +101,6 @@
 #mm-checkBtn:active { transform: scale(0.97); }
 #mm-checkBtn:disabled { opacity: 0.45; cursor: wait; }
 #mm-checkBtn.mm-checking { color: var(--text-faint); border-bottom-color: transparent; }
-
-/* Muted at rest, so CHECK stays the only accent-coloured control on the page.
-   Accent only while a selection is live — that colour change IS the affordance,
-   which is why there is no floating bubble over the prose. */
-#mm-waysBtn { color: var(--text-muted); }
-#mm-waysBtn:hover { color: var(--text-normal); border-bottom-color: var(--bg-modifier-border-hover); }
-#mm-waysBtn:active { transform: scale(0.97); }
-#mm-waysBtn:disabled { opacity: 0.45; cursor: wait; }
-#mm-waysBtn.mm-armed {
-  color: var(--text-accent);
-  border-bottom-color: color-mix(in srgb, var(--text-accent) 35%, transparent);
-}
-#mm-waysBtn.mm-working { color: var(--text-faint); border-bottom-color: transparent; }
-#mm-waysBtn .mm-short { display: none; }
-.mm-sep { color: var(--bg-modifier-border-hover); font-size: var(--fs-ui-smaller); user-select: none; }
 
 /* THE NOTE ALIGNMENT (user ruling, 2026-09-17): the journal's first glyph
    column is the note's — the frame spends exactly the editor's own insets,
@@ -173,13 +157,10 @@
   transition: opacity 0.25s ease;
   z-index: 19;
 }
-#memoir.mm-check-open #mm-backdrop,
-#memoir.mm-ways-open #mm-backdrop { opacity: 1; pointer-events: auto; }
+#memoir.mm-check-open #mm-backdrop { opacity: 1; pointer-events: auto; }
 
-/* One drawer geometry, two drawers. The ways panel is a sibling of the check
-   panel, not a mode of it, so a check result survives a paraphrase and is
-   still there when reopened. */
-#mm-checkPanel, #mm-waysPanel {
+/* One drawer geometry. */
+#mm-checkPanel {
   position: fixed;
   top: 0;
   right: 0;
@@ -196,8 +177,7 @@
   overflow: hidden;
   font-family: var(--font-ui);
 }
-#memoir.mm-check-open #mm-checkPanel,
-#memoir.mm-ways-open #mm-waysPanel { transform: translateX(0); }
+#memoir.mm-check-open #mm-checkPanel { transform: translateX(0); }
 
 .mm-panel-head {
   display: flex;
@@ -315,88 +295,7 @@
   letter-spacing: 0.01em;
 }
 
-/* --- Other ways (paraphrase) --- */
-#mm-waysSource {
-  padding: 12px 18px;
-  border-bottom: 1px solid var(--bg-modifier-border);
-  font-family: inherit;
-  font-size: var(--fs-ui-medium);
-  line-height: var(--lh-text);
-  color: var(--text-muted);
-  white-space: pre-wrap;
-  word-break: break-word;
-  max-height: 22vh;
-  overflow-y: auto;
-}
-/* The sentence heuristic will split wrong on an ellipsis or a quoted line. Show
-   the whole span rather than an ellipsised hint: a wrong split has to be
-   visible, not mysterious. */
-#mm-waysSource .mm-src-label {
-  display: block;
-  font-family: var(--font-ui);
-  font-size: var(--fs-ui-smaller);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--text-faint);
-  margin-bottom: 6px;
-}
-
-.mm-variant {
-  background: var(--bg-form-field);
-  border: 1px solid var(--bg-modifier-border);
-  border-radius: var(--radius-m);
-  padding: 12px 12px 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.mm-variant-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  font-family: var(--font-ui);
-  font-size: var(--fs-ui-smaller);
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--text-faint);
-}
-.mm-variant-tag {
-  display: inline-flex;
-  align-items: center;
-  padding: 3px 8px;
-  border-radius: 999px;
-  background: var(--bg-modifier-hover);
-  border: 1px solid var(--bg-modifier-border);
-  color: var(--text-muted);
-}
-.mm-variant-tag.natural {
-  border-color: color-mix(in srgb, var(--text-accent) 35%, transparent);
-  color: var(--text-accent);
-}
-/* Prose reads as prose: the alternative is set in the journal's own serif, not
-   in the sans used for chrome and explanations. */
-.mm-variant-text {
-  font-family: inherit;
-  font-size: var(--fs-text);
-  line-height: var(--lh-text);
-  color: var(--text-normal);
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-/* An accent underline, not a highlighter block — the phrase stays readable. */
-.mm-variant-text mark {
-  background: transparent;
-  color: var(--text-accent);
-  box-shadow: inset 0 -1px 0 color-mix(in srgb, var(--text-accent) 45%, transparent);
-}
-.mm-variant-note {
-  font-family: var(--font-ui);
-  font-size: var(--fs-ui-smaller);
-  line-height: 1.5;
-  color: var(--text-muted);
-  letter-spacing: 0.01em;
-}
+/* --- Check panel cards --- */
 
 .mm-empty {
   font-family: var(--font-ui);
@@ -511,7 +410,7 @@
 #memoir .mm-lines span { animation: mm-shimmer 1.3s ease-in-out infinite !important; }
 
 @media (max-width: 860px) {
-  #mm-checkPanel, #mm-waysPanel {
+  #mm-checkPanel {
     top: auto;
     width: 100%;
     height: min(72vh, 640px);
@@ -520,22 +419,17 @@
     border-radius: 18px 18px 0 0;
     transform: translateY(100%);
   }
-  #memoir.mm-check-open #mm-checkPanel,
-  #memoir.mm-ways-open #mm-waysPanel { transform: translateY(0); }
+  #memoir.mm-check-open #mm-checkPanel { transform: translateY(0); }
   .mm-frame { padding-bottom: 32px; }
 }
 
-/* Required, not cosmetic: CHECK · OTHER WAYS at 0.26em tracking needs its
-   short form in a narrow pane. */
+/* Required, not cosmetic: CHECK at 0.26em tracking needs the narrower tracking
+   in a narrow pane. */
 @media (max-width: 600px) {
-  .mm-tools { gap: 10px; }
-  .mm-sep { display: none; }
-  #mm-waysBtn .mm-full { display: none; }
-  #mm-waysBtn .mm-short { display: inline; }
-  #mm-checkBtn, #mm-waysBtn { letter-spacing: 0.08em; }
+  #mm-checkBtn { letter-spacing: 0.08em; }
 }
 
-/* 320px (an old SE): the centred pair clears with room from the bar's own
+/* 320px (an old SE): the centred verb clears with room from the bar's own
    inset, which now matches the editor's. */
 @media (max-width: 360px) {
   .mm-bar { padding-inline: 14px; }
