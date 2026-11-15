@@ -220,7 +220,8 @@ test('§0.16 E18 — a FILE row offers no create rows; a FOLDER row does', () =>
   const rec = (k) => () => calls.push(k)
   const acts = {
     newNote: rec('newNote'), newFolder: rec('newFolder'), newSecret: rec('newSecret'),
-    rename: rec('rename'), copyPath: rec('copyPath'), remove: rec('remove'),
+    rename: rec('rename'), copyPath: rec('copyPath'), copyContent: rec('copyContent'),
+    remove: rec('remove'),
   }
   const file = M.fileRowMenu(acts)
   const folder = M.folderRowMenu(acts)
@@ -229,7 +230,8 @@ test('§0.16 E18 — a FILE row offers no create rows; a FOLDER row does', () =>
   // A USER DECISION, and Obsidian's own shape: `app.js` builds the two create
   // rows inside `if (t instanceof ZT)` — the folder branch — while Rename and
   // Delete sit outside it.
-  assert.deepEqual(labels(file), ['Rename…', 'Copy absolute path', 'Delete'])
+  assert.deepEqual(labels(file),
+    ['Rename…', 'Copy absolute path', 'Copy file content', 'Delete'])
   assert.deepEqual(labels(folder),
     ['New note', 'New folder', 'New secret file', 'Rename…', 'Copy absolute path', 'Delete'])
 
@@ -241,9 +243,10 @@ test('§0.16 E18 — a FILE row offers no create rows; a FOLDER row does', () =>
   assert.equal(labels(file).includes('New folder'), false)
   assert.equal(labels(file).includes('New secret file'), false)
 
-  // The folder menu is the file menu with three rows on top: same three actions,
-  // same order, so a change to one cannot drift the other.
-  assert.deepEqual(labels(folder).slice(3), labels(file))
+  // `Copy file content` is FILE-ONLY (user feature, 2026-11-15): a folder has
+  // no body to copy. The folder keeps the shared row order under its creates.
+  assert.equal(labels(folder).includes('Copy file content'), false)
+  assert.deepEqual(labels(folder).slice(3), labels(file).filter((l) => l !== 'Copy file content'))
 
   // §0.12 E14: "Reveal in Finder" is GONE and `Copy absolute path` stands where
   // it stood. X11 restored the reveal row in errata 1 and these menus were its
@@ -256,7 +259,7 @@ test('§0.16 E18 — a FILE row offers no create rows; a FOLDER row does', () =>
   assert.deepEqual(calls, ['newNote', 'newFolder', 'newSecret', 'rename', 'copyPath', 'remove'])
   calls.length = 0
   for (const e of file.filter((x) => !x.separator)) e.onSelect()
-  assert.deepEqual(calls, ['rename', 'copyPath', 'remove'])
+  assert.deepEqual(calls, ['rename', 'copyPath', 'copyContent', 'remove'])
 
   // §5.1 X3: Delete is the one --text-error row, in BOTH menus, and only it.
   for (const m of [file, folder]) {

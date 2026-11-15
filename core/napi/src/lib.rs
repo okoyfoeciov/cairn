@@ -370,11 +370,16 @@ pub async fn secret_notes() -> napi::Result<Value> {
 /// of the two runtime workers blocks every other command behind it, and a slow
 /// or networked vault (§0.12.2) is exactly where that shows.
 #[napi]
-pub async fn read_note(path: String) -> napi::Result<Buffer> {
+pub async fn read_note(path: String, claim_open: Option<bool>) -> napi::Result<Buffer> {
     let ctx = ctx()?.clone();
-    let framed = cairn_lib::spawn_blocking(move || app::read_note(ctx.app_state(), &path))
-        .await
-        .map_err(|e| napi::Error::new(Status::GenericFailure, format!("cairn: read_note panicked: {e}")))?;
+    // `Copy file content` passes `false`: reading a note to copy it must not
+    // make it THE open note the §1.4 external-change filter is keyed on.
+    let claim_open = claim_open.unwrap_or(true);
+    let framed = cairn_lib::spawn_blocking(move || {
+        app::read_note_with_claim(ctx.app_state(), &path, claim_open)
+    })
+    .await
+    .map_err(|e| napi::Error::new(Status::GenericFailure, format!("cairn: read_note panicked: {e}")))?;
     Ok(Buffer::from(v(framed)?))
 }
 

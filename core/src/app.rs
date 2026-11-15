@@ -906,13 +906,28 @@ pub fn set_sort(app: &impl AppCtx, state: &AppState, sort: u8) -> Result<u64, Va
 /// Command 8.  RAW OUT, the §2 frame.  Opening a note is what makes it THE open
 /// note, which is what `nc://note-external-change` is filtered by (§1.4).
 pub fn read_note(state: &AppState, path: &str) -> Result<Vec<u8>, VaultError> {
+    read_note_with_claim(state, path, true)
+}
+
+/// The one implementation behind both forms; `claim_open_note` is what command
+/// 8's optional second argument selects.  `Copy file content` passes `false`
+/// because a copy is not an open: if it moved `open_note`, the watcher would
+/// stop reporting external changes to the note the editor actually holds and
+/// start reporting the copied one instead.
+pub fn read_note_with_claim(
+    state: &AppState,
+    path: &str,
+    claim_open_note: bool,
+) -> Result<Vec<u8>, VaultError> {
     let vault = state.require_vault()?;
     let (abs, is_dir) = resolve(&vault, path)?;
     if is_dir {
         return Err(VaultError::not_found(path));
     }
     let framed = fsops::read_note_framed(&abs, path)?;
-    state.set_open_note(Some(path.to_string()));
+    if claim_open_note {
+        state.set_open_note(Some(path.to_string()));
+    }
     Ok(framed)
 }
 
@@ -1823,6 +1838,25 @@ mod tests {
         // A directory is `notFound`, never a frame full of nothing.
         assert!(read_note(&state, "Projects").is_err());
         // …and the failed read did not steal the open note.
+        assert!(state.open_note_is("Projects/Plan.md"));
+    }
+
+    /// `Copy file content` reads a file without making it the open note: the
+    /// §1.4 external-change filter is keyed on `open_note`, so a copy must not
+    /// move it away from the editor's own path.
+    #[test]
+    fn read_note_with_claim_false_does_not_steal_the_open_note() {
+        let (_d, state) = fixture();
+        state.set_open_note(Some("Projects/Plan.md".into()));
+        let framed = read_note_with_claim(&state, "Top.md", false).expect("read");
+        let (_mtime, flags, body) = crate::note_frame::decode_note(&framed).expect("decode");
+        assert_eq!(body, b"# top\n");
+        assert_eq!(flags, 0);
+        assert!(state.open_note_is("Projects/Plan.md"));
+
+        // A failed unclaimed read is still a normal §1.5 error and still does
+        // not disturb the editor's note.
+        assert!(read_note_with_claim(&state, "Projects", false).is_err());
         assert!(state.open_note_is("Projects/Plan.md"));
     }
 

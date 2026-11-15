@@ -75,8 +75,9 @@
  *     recents popover   9 x 24.9 + 13 + 12 = 249.1px   (was 269)
  *     a FOLDER menu     6 x 24.9 + 26 + 12 = 187.4px   (was 162.5: the secret
  *                                                       file row arrived)
- *     a FILE menu       3 x 24.9 + 13 + 12 =  99.7px   (§0.16 E18 — the two
- *                                                       create rows are gone)
+ *     a FILE menu       4 x 24.9 + 13 + 12 = 124.6px   (§0.16 E18 removed the
+ *                                                       two creates; Copy file
+ *                                                       content added one back)
  *
  * plus 2px of border on each, which the sums above deliberately omit because the
  * assertion in chrome-ui.test.mjs omits it too.  249.1px against the 919px pane
@@ -536,11 +537,11 @@ export function openMenu(entries: MenuEntry[], opts: MenuOptions): MenuHandle {
 /* ── the menus themselves, as data ─────────────────────────────────────────── */
 
 /**
- * The five actions a tree row's menu can perform (§0.12 E14).  There is no
+ * The six actions a tree row's menu can perform (§0.12 E14).  There is no
  * settings UI and, since E14 deleted the nav toolbar, THE CONTEXT MENU IS THE
- * ONLY ROUTE to New folder, Rename, Copy absolute path and Delete — New note
- * alone has three others (Mod-N, the tab strip's `+`, and this menu).  That is
- * why nothing here may be dropped for want of an owner.
+ * ONLY ROUTE to New folder, Rename, Copy absolute path, Copy file content and
+ * Delete — New note alone has three others (Mod-N, the tab strip's `+`, and this
+ * menu).  That is why nothing here may be dropped for want of an owner.
  */
 export interface RowMenuActions {
   newNote(): void
@@ -550,6 +551,9 @@ export interface RowMenuActions {
   newSecret(): void
   rename(): void
   copyPath(): void
+  /** A user feature (2026-11-15): copy the file's name and body, in that order.
+   *  FILE ONLY — a folder has no content to copy. */
+  copyContent(): void
   remove(): void
 }
 
@@ -557,6 +561,16 @@ export interface RowMenuActions {
  *  so the type system carries the rule: a file row cannot be handed a `newNote`
  *  it must not offer, because `fileRowMenu` has nowhere to put one. */
 export type EntryActions = Pick<RowMenuActions, 'rename' | 'copyPath' | 'remove'>
+
+/** A FILE adds its own body to the shared entry rows.  The extra member is in
+ *  the type rather than a flag so a folder cannot accidentally be offered a
+ *  copy of content it does not have. */
+export type FileActions = EntryActions & Pick<RowMenuActions, 'copyContent'>
+
+/** A FOLDER owns the shared entry rows plus the three creates that land INSIDE
+ *  it.  `copyContent` is deliberately absent. */
+export type FolderActions = EntryActions &
+  Pick<RowMenuActions, 'newNote' | 'newFolder' | 'newSecret'>
 
 /**
  * §0.16 E18 — THE FILE ROW OFFERS NO CREATE ROWS.  A user decision, and it is
@@ -572,8 +586,8 @@ export type EntryActions = Pick<RowMenuActions, 'rename' | 'copyPath' | 'remove'
  * word only ever means one thing — inside this folder, or at the root from empty
  * space — so the two menus can finally differ and the label stops lying.
  *
- * Delete last, and it is the only --text-error row.  `Copy absolute path` sits
- * with Rename because both act on THIS entry.
+ * Delete last, and it is the only --text-error row.  `Copy absolute path` and
+ * `Copy file content` sit with Rename because they act on THIS entry.
  *
  * THE GLYPHS ARE OBSIDIAN'S OWN, AND THEY ARE VERIFIABLE BY GREP (§0.15 E17).
  * Every name is the string Obsidian's `setIcon()` is called with, minus its
@@ -584,6 +598,7 @@ export type EntryActions = Pick<RowMenuActions, 'rename' | 'copyPath' | 'remove'
  *     Rename     setTitle(…menuOptRename()).setIcon("lucide-edit-3")
  *     Delete     setTitle(…menuOptDelete()).setIcon("lucide-trash-2")
  *     Copy path  setSectionSubmenu("info.copy", { …, icon: "lucide-clipboard" })
+ *     Drag file  setIcon("lucide-file")   — Copy file content's glyph
  *
  * §0.14 E16 GOT FOUR OF THE FIVE WRONG and asserted in this very comment that
  * they were Obsidian's — it read them off a screenshot instead of the source it
@@ -595,34 +610,49 @@ export type EntryActions = Pick<RowMenuActions, 'rename' | 'copyPath' | 'remove'
  * what Cairn's flat `Copy absolute path` stands in for. Its `link` is on that
  * row's CHILD, `Copy Obsidian URL`, which Cairn does not have.
  *
+ * `Copy file content` is a CAIRN user feature (2026-11-15), not a
+ * transcription: Obsidian has no such row.  It carries `file`, the glyph
+ * Obsidian's own drag ghost uses (`lucide-file`), rather than inventing one
+ * from memory — E17's rule still governs the NAME even where no row exists to
+ * copy.
+ *
  * `New secret file` carries `lock`: secret files are Cairn-only (Obsidian has
  * no counterpart), so E17's grep-audit does not apply — and recalling a key
  * glyph from memory is the `refresh-cw` residual all over again.  The lock is
  * transcribed byte for byte from `lucide-static@0.469.0` (see icons.ts), at
  * the row menus' 16/2.
  */
-export function fileRowMenu(a: EntryActions): MenuEntry[] {
+export function fileRowMenu(a: FileActions): MenuEntry[] {
+  return entryRows(a, [{ label: 'Copy file content', onSelect: a.copyContent, icon: 'file' }])
+}
+
+/** The rows a file and a folder share, with an optional file-only row before
+ *  the Delete seam.  One builder so the shared three can never drift apart. */
+function entryRows(a: EntryActions, extra: MenuAction[] = []): MenuEntry[] {
   return [
     { label: 'Rename…', onSelect: a.rename, icon: 'edit-3' },
     { label: 'Copy absolute path', onSelect: a.copyPath, icon: 'clipboard' },
+    ...extra,
     { separator: true },
     { label: 'Delete', onSelect: a.remove, danger: true, icon: 'trash-2' },
   ]
 }
 
 /**
- * The folder menu: the file menu's three rows, plus the two creates ABOVE them.
+ * The folder menu: the shared three rows, plus the three creates ABOVE them.
  * It is no longer `= fileRowMenu` — §0.16 E18 is exactly the change that made
  * the two differ, and the destination is no longer the caller's to disambiguate
- * because there is only one meaning left: INSIDE this folder.
+ * because there is only one meaning left: INSIDE this folder.  `Copy file
+ * content` is absent by TYPE (`FolderActions` has no `copyContent`), because a
+ * folder has no body to copy.
  */
-export function folderRowMenu(a: RowMenuActions): MenuEntry[] {
+export function folderRowMenu(a: FolderActions): MenuEntry[] {
   return [
     { label: 'New note', onSelect: a.newNote, icon: 'edit' },
     { label: 'New folder', onSelect: a.newFolder, icon: 'folder-open' },
     { label: 'New secret file', onSelect: a.newSecret, icon: 'lock' },
     { separator: true },
-    ...fileRowMenu(a),
+    ...entryRows(a),
   ]
 }
 

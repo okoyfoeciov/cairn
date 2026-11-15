@@ -573,8 +573,8 @@ Target folder, in order:
 2. the vault root, from empty-space's menu;
 3. the vault root, from the global `⌘N`.
 
-**There are no create rows on a file row** — a file's menu is Rename / Copy absolute path / Delete
-only, because there is nothing to create *inside* a file (CONTRACT §5.2).
+**There are no create rows on a file row** — a file's menu is Rename / Copy absolute path / Copy
+file content / Delete only, because there is nothing to create *inside* a file (CONTRACT §5.2).
 
 ```ts
 const { path } = await createNote(parent)      // CONTRACT §1.3 #10 — {path, epoch}, no blob
@@ -689,14 +689,17 @@ implementation serves the file menu, the folder menu, the empty-space menu and t
 
 The rows, in order:
 
-* **File** — `Rename…` · `Copy absolute path` · separator · `Delete`.
-* **Folder** — `New note` · `New folder` · `New secret file` · separator · the file menu's three.
+* **File** — `Rename…` · `Copy absolute path` · `Copy file content` · separator · `Delete`.
+* **Folder** — `New note` · `New folder` · `New secret file` · separator · the shared entry rows
+  (`Rename…` · `Copy absolute path` · `Delete`).
 * **Empty space** — `New note` · `New folder` · `New secret file` · separator ·
   `Copy absolute path` (the vault root).
 
 There is no *Reveal in Finder* row and no per-folder *Expand all* / *Collapse all* (CONTRACT §5.2).
 *Copy absolute path* needs no command and crosses no IPC: it composes `VaultInfo.root` plus the
-vault-relative path and writes it through the shell's clipboard command.
+vault-relative path and writes it through the shell's clipboard command. *Copy file content* (a
+Cairn user feature, CONTRACT §0.12) copies `basename.md`, a blank line, then the body read without
+claiming the note; a folder has no body, so the row is file-only by type.
 
 Opening rewrites `textContent` and reorders via `hidden`; no elements are created or destroyed. A
 menu never scrolls — no `overflow` anywhere on the menu, the modal or the popover — and each row is a

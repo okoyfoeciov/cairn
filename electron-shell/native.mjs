@@ -124,7 +124,8 @@ export function nativeCommands(addon) {
     // tree's row mark.  A plain JSON array — no frame, no blob change.
     secret_notes: () => addon.secretNotes(),
 
-    read_note: async ({ path }) => asArrayBuffer(await addon.readNote(path), 'read_note'),
+    read_note: async ({ path, claim_open }) =>
+      asArrayBuffer(await addon.readNote(path, claim_open ?? true), 'read_note'),
     // `text` arrives as the Uint8Array `ipc-electron.mjs` encoded, not as a
     // string: §2.3's body is BYTES, and re-encoding it here would put a second
     // TextEncoder on the write path.

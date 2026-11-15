@@ -220,9 +220,16 @@ export function secretNotes(): Promise<string[]> {
 
 /** §1.3 command 8 + §2's frame.  `decodeNote` is `src/note_frame.js`'s and is
  *  the ONLY JS copy of the layout — this file must not restate a byte offset
- *  (spec-07 §1, rule 4). */
-export async function readNote(path: VaultPath): Promise<NoteRead> {
-  return decodeNote(await call<ArrayBuffer>('read_note', { path })) as NoteRead
+ *  (spec-07 §1, rule 4).
+ *
+ *  `claimOpen` is the command's optional second argument.  Opening a note claims
+ *  it as THE open note, which §1.4's external-change filter is keyed on; `Copy
+ *  file content` passes `false` because reading a row to copy it is not an
+ *  open.  Defaulting to `true` keeps every existing caller on the old meaning. */
+export async function readNote(path: VaultPath, claimOpen = true): Promise<NoteRead> {
+  return decodeNote(
+    await call<ArrayBuffer>('read_note', { path, claim_open: claimOpen })
+  ) as NoteRead
 }
 
 /**

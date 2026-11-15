@@ -335,14 +335,24 @@ coverage and NO caller.
 
 | target | rows |
 |---|---|
-| file | Rename… · Copy absolute path ‖ Delete |
+| file | Rename… · Copy absolute path · Copy file content ‖ Delete |
 | folder | New note · New folder · New secret file ‖ Rename… · Copy absolute path ‖ Delete |
 | empty space | New note · New folder · New secret file ‖ Copy absolute path |
 
-`fileRowMenu` takes `EntryActions` — `rename`, `copyPath`, `remove` — and nothing else, so a file
-menu has nowhere to put a create row (§0.16 E18). `New secret file` (a Cairn-only `cairn-type:
-secrets` note) is a later addition. `Copy absolute path` is in all three menus; on empty space its
-subject is the vault root, `''` (user ruling, 2026-10-23, restoring the row removed on 2026-09-14).
+`fileRowMenu` takes `FileActions` — the shared `EntryActions` (`rename`, `copyPath`, `remove`) plus
+the file-only `copyContent` — and nothing else, so a file menu has nowhere to put a create row
+(§0.16 E18). `New secret file` (a Cairn-only `cairn-type: secrets` note) is a later addition.
+`Copy absolute path` is in all three menus; on empty space its subject is the vault root, `''` (user
+ruling, 2026-10-23, restoring the row removed on 2026-09-14).
+
+**`Copy file content` is a Cairn user feature (2026-11-15), not an Obsidian transcription.** It
+copies the file's name, a blank line, then its body: `c.md\n\n# body\n`. The read is command 8 with
+`claimOpen: false`, so copying a row does not make it Rust's `open_note` and does not steal the
+watcher's external-change filter from the note the editor actually holds. The write tries
+`navigator.clipboard` first (no length cap) and command 23 second (the unfocused-window fallback,
+which refuses more than 4,096 characters). A folder has no body to copy, so the row is file-only by
+TYPE: `folderRowMenu` takes `FolderActions`, which has no `copyContent`.
+
 Row glyphs are named for the string Obsidian's own `setIcon()` receives, minus `lucide-` (§0.15 E17).
 
 **Sorting is pinned in the UI only.** `SortMode`, §1.3 command 7 and the persisted per-vault `sort`
@@ -405,18 +415,21 @@ Each row-menu glyph is named for the string Obsidian's own `setIcon()` receives,
 prefix, so the mapping is settled by grep and not by judgement: `edit`, `folder-open`, `edit-3`,
 `clipboard`, `trash-2`. **`edit` IS `square-pen`** — Obsidian's registry holds both names against
 character-for-character identical path data. `edit-3` is not `pencil-line`: it has the underline and
-no nib.
+no nib. `Copy file content` (a Cairn-only row, §0.12) carries `file`, the glyph Obsidian's own drag
+ghost uses (`lucide-file`); no menu row exists there to transcribe, so the NAME is still Obsidian's
+rather than recalled from memory.
 
 ### §0.16 — A file row offers no create rows (E18)
 
 `New note` / `New folder` / `New secret file` appear only where a create has an unambiguous
 destination: on a folder row (inside that folder) and on empty space (at the vault root). A
-right-click on a FILE offers `Rename… · Copy absolute path ‖ Delete` and nothing else. This is
-Obsidian's own behaviour: its create rows sit inside a folder-type guard while Rename and Delete sit
-outside it. `fileRowMenu` carries the rule in the type; `folderRowMenu` is the file menu with the
-creates above it; `emptySpaceMenu` offers the creates plus `Copy absolute path` for the vault root.
-`destinationFor()` is deleted — Mod-N calls `parentOf` directly. **Reported, not changed:** with the
-cursor on a FOLDER, Mod-N still creates in that folder's parent.
+right-click on a FILE offers `Rename… · Copy absolute path · Copy file content ‖ Delete` and nothing
+else. This is Obsidian's own behaviour for the create rows: they sit inside a folder-type guard
+while Rename and Delete sit outside it. `Copy file content` is the one Cairn-only addition (§0.12).
+`fileRowMenu` carries the rule in the type; `folderRowMenu` shares its entry rows with the creates
+above them and takes no `copyContent`; `emptySpaceMenu` offers the creates plus `Copy absolute path`
+for the vault root. `destinationFor()` is deleted — Mod-N calls `parentOf` directly. **Reported, not
+changed:** with the cursor on a FOLDER, Mod-N still creates in that folder's parent.
 
 ### §0.17 — Four rulings read out of Obsidian's own bundle (E19–E22)
 
@@ -1872,7 +1885,7 @@ document is a dated record of a ruling that added none.
 | 5 | `rescan_all` | `rescanAll(): Promise<VaultInfo>` | JSON |
 | 6 | `tree_snapshot` | `treeSnapshot(): Promise<ArrayBuffer>` | **raw out** |
 | 7 | `set_sort` | `setSort(sort: SortMode \| number): Promise<number>` → new epoch | JSON |
-| 8 | `read_note` | `readNote(path: VaultPath): Promise<NoteRead>` | **raw out**, §2 frame |
+| 8 | `read_note` | `readNote(path: VaultPath, claimOpen?: boolean): Promise<NoteRead>` | **raw out**, §2 frame; `claimOpen: false` reads without making the note the §1.4 open-note filter's subject |
 | 9 | `write_note` | `writeNote(path, text, flags, baseMtimeMs: number \| null, create: boolean): Promise<WriteReceipt>` | **raw in**, typed args |
 | 10 | `create_note` | `createNote(parent: VaultPath, name?: string): Promise<CreateResult>` | JSON |
 | 11 | `create_folder` | `createFolder(parent: VaultPath, name?: string): Promise<CreateResult>` | JSON |

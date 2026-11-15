@@ -814,6 +814,41 @@ async function deleteTargets(entries: { path: string; isDir: boolean }[]): Promi
 }
 
 /**
+ * User feature (2026-11-15) — `Copy file content`.  The pasted text is the
+ * FILE NAME, a blank line, then the body as it sits on disk, so a snippet
+ * pasted elsewhere still says which note it came from.
+ *
+ * THE READ DOES NOT CLAIM THE NOTE.  `readNote(path, false)` is command 8's
+ * unclaimed form: reading a row to copy it must not make it Rust's `open_note`,
+ * or the watcher would stop reporting external changes to the note the editor
+ * actually holds.
+ *
+ * THE WRITE TRIES THE ASYNC CLIPBOARD FIRST and command 23 second, the note
+ * viewer's Copy order: `navigator.clipboard` has no length cap, while
+ * `copy_text` refuses more than 4,096 characters.  Unlike `copyAbsolutePath`,
+ * this handler has already awaited the file read before it has text to write,
+ * so the IPC fallback is what carries an unfocused window.
+ */
+async function copyFileContent(path: string): Promise<void> {
+  let text: string
+  try {
+    const read = await readNote(path, false)
+    text = basename(path) + '\n\n' + read.text
+  } catch (err) {
+    reportError(err, 'copy-content')
+    return
+  }
+  const fallback = (): void => {
+    void copyText(text).catch((err: unknown) => reportError(err, 'copy-content'))
+  }
+  try {
+    void navigator.clipboard.writeText(text).catch(() => fallback())
+  } catch (err) {
+    fallback()
+  }
+}
+
+/**
  * §0.12 E14 — `Copy absolute path`.  The row's whole implementation.
  *
  * NO IPC AND NO COMMAND: `VaultInfo.root` is already the absolute vault root in
@@ -891,7 +926,8 @@ function rowMenu(ev: MouseEvent, path: string | null, isDir: boolean): void {
     remove: () => { void deleteTargets(deleteSubject(path, isDir)) },
   }
   if (!isDir) {
-    openMenu(fileRowMenu(onThis), opts)
+    // A file alone has content to copy; `folderRowMenu` takes no such action.
+    openMenu(fileRowMenu({ ...onThis, copyContent: () => copyFileContent(path) }), opts)
     return
   }
   openMenu(

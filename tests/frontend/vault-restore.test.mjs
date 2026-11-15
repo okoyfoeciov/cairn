@@ -401,18 +401,41 @@ test('§0.12 E14 — Copy absolute path composes root + rel and writes THAT to t
     'empty space did not copy the vault root')
 })
 
-test('§0.16 E18 — main.ts hands a FILE only the three entry actions, a FOLDER all six', async () => {
+test('Copy file content copies the FILE NAME and body, and reads without claiming the note', async () => {
+  const { calls, treeHost, apply } = await bootMain({
+    // `readNote`'s second argument is the command's `claimOpen`; a copy must
+    // pass false or Rust makes the copied file THE open note.
+    './ipc:readNote': (a) => {
+      assert.deepEqual(a, ['a/b/c.md', false], 'copy content read the wrong path or claimed it')
+      return Promise.resolve({ mtimeMs: 1, flags: 0, text: '# body\n' })
+    },
+    './inline-edit:basename': (a) => a[0].split('/').pop(),
+  })
+  await apply(vaultInfo({ root: '/home/j/Vault' }))
+  const rowMenu = rowMenuOf(treeHost)
+  calls.clear(); calls.clipboard.length = 0
+
+  rowMenu({ clientX: 10, clientY: 20 }, 'a/b/c.md', false)
+  await actionsFrom(calls, 'fileRowMenu').copyContent()
+
+  assert.deepEqual(calls.argsOf('readNote'), [['a/b/c.md', false]])
+  assert.deepEqual(calls.clipboard, ['c.md\n\n# body\n'],
+    'the clipboard did not receive the file name, a blank line, then the body')
+})
+
+test('§0.16 E18 — main.ts hands a FILE only its entry actions, a FOLDER all six', async () => {
   const { calls, treeHost, apply } = await bootMain()
   await apply(vaultInfo())
   const rowMenu = rowMenuOf(treeHost)
 
   // A FILE. `newNote`/`newFolder` must not merely be absent from the RENDERED
   // menu — main.ts must not build them at all, or a later reader reinstating the
-  // rows in menu.ts would silently light them up again.
+  // rows in menu.ts would silently light them up again. `copyContent` is the
+  // file-only addition (user feature, 2026-11-15).
   calls.clear()
   rowMenu({ clientX: 1, clientY: 1 }, 'a.md', false)
   const file = actionsFrom(calls, 'fileRowMenu')
-  assert.deepEqual(Object.keys(file).sort(), ['copyPath', 'remove', 'rename'],
+  assert.deepEqual(Object.keys(file).sort(), ['copyContent', 'copyPath', 'remove', 'rename'],
     'the file row menu gained or lost an action')
   assert.equal(calls.countOf('folderRowMenu'), 0, 'a file was given the folder menu')
   assert.equal('reveal' in file, false, 'Reveal in Finder is back in the row menu')
