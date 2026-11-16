@@ -1,5 +1,5 @@
 //! core/src/lib.rs — Owner: 07.
-//! Spec: CONTRACT.md §1.3 (the twenty commands), §1.4 (the event table), §1.6
+//! Spec: CONTRACT.md §1.3 (the twenty-nine commands), §1.4 (the event table), §1.6
 //! (the flush-on-quit handshake, B11/B18/M55).
 //!
 //! The module tree and the ONE entry into the blocking pool.  No logic beyond

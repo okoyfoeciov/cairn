@@ -81,14 +81,16 @@ import {
   messageOf,
   parentOf,
 } from './inline-edit'
-import { emptySpaceMenu, fileRowMenu, folderRowMenu, openMenu } from './menu'
+import { bookRowMenu, emptySpaceMenu, fileRowMenu, folderRowMenu, openMenu } from './menu'
 import {
   confirmClose,
   createFolder,
   createNote,
   deleteEntry,
   emitFrontendReady,
+  emitReloadReady,
   onFlushAndClose,
+  onFlushForReload,
   onNoteExternalChange,
   onTreeChanged,
   onVaultLost,
@@ -99,10 +101,12 @@ import {
   openExternal,
   openVault,
   pickVault,
+  readEpub,
   readNote,
   readText,
   recentVaults,
   forgetVault,
+  importEpub,
   renameEntry,
   moveEntry,
   rescanAll,
@@ -118,13 +122,14 @@ import {
   writeNote,
   currentVault,
 } from './ipc'
-import type { VaultInfo } from './ipc'
+import type { EpubBookmark, VaultInfo } from './ipc'
 import { modalIsOpen, openModal } from './modal'
 import { mountFind, type FindPanel } from './find'
 import { mountSearch, type SearchPanel } from './search'
 import { configurePersist, discardPendingUi, flushUi, patchUi } from './state'
 import { createTabStrip, type TabId, type TabStrip } from './tabstrip'
 import { mountMemoir, type MemoirView } from './memoir'
+import { mountReader, type ReaderView } from './reader'
 import { createTree, MEMOIR_PATH, type TreeController } from './tree'
 import { registerLinkHost } from './livepreview'
 import { registerTotpHost } from './totp'
@@ -155,6 +160,11 @@ let chromeHandle: ChromeHandle
  *  Null until the boot path mounts it beside `#ed`. */
 let memoir: MemoirView | null = null
 let memoirPane: HTMLElement | null = null
+/** §0.55 E108 — the EPUB reader and the current vault's bookmark map. */
+let reader: ReaderView | null = null
+let bookmarks: Record<string, EpubBookmark> = {}
+/** Bumped by every surface change; an in-flight book open may not apply stale. */
+let surfaceSeq = 0
 
 function reportError(err: unknown, context: string): void {
   // There is no error console in the shipped chrome, and inventing one here
@@ -275,6 +285,43 @@ function promptForName(p: NamePrompt): void {
   handle.focus()
 }
 
+/**
+ * §0.55 E108 — `Import EPUB`, on a folder row or the empty space at the root.
+ * The picker is the MAIN process's; this side only names the destination folder.
+ * The core MOVES the chosen file (copy + unlink across filesystems), refreshes
+ * the tree, and the imported row opens in the reader.
+ *
+ * A `null` answer is the user cancelling the dialog: no tree refresh, no
+ * error, no state change.
+ */
+async function importEpubInto(parent: string): Promise<void> {
+  if (vaultLostPath !== null) return
+  const root = vault?.root ?? null
+  try {
+    const r = await importEpub(parent)
+    if (r === null) return
+    if ((vault?.root ?? null) !== root || vaultLostPath !== null) return
+    await refreshTree()
+    // The folder may have been collapsed; an import should be visible even
+    // though the reader takes the pane.  `revealPath` expands ancestors only.
+    tree.revealPath(r.path)
+    await openNoteAt(r.path)
+  } catch (err) {
+    reportError(err, 'import-epub')
+    await refreshTree()
+    const detail =
+      err !== null && typeof err === 'object' && 'message' in err
+        ? String((err as { message: unknown }).message)
+        : String(err)
+    await openModal({
+      title: 'EPUB import failed',
+      detail,
+      buttons: [{ id: 'cancel', label: 'OK' }],
+      defaultId: 'cancel',
+    })
+  }
+}
+
 /* ═══════════════════════════════════════════════════════════════════════════
  * 5.  The flows that span three modules at once.
  * ═══════════════════════════════════════════════════════════════════════════ */
@@ -290,6 +337,80 @@ async function refreshTree(): Promise<void> {
   } catch (err) {
     reportError(err, 'tree-snapshot')
   }
+}
+
+/** §0.55 E108.  A book is a tree file whose trailing `.epub` is ASCII-case
+ *  insensitive, exactly as `core/src/path.rs` scans it. */
+function isBookPath(path: string): boolean {
+  return path.length > 5 && path.slice(-5).toLowerCase() === '.epub'
+}
+
+/** What the note tab currently holds, whichever surface owns it.  The editor's
+ *  `currentPath()` is null while a book is up, and several cross-module flows
+ *  (delete, restore, tab switching) need one answer. */
+function openDocumentPath(): string | null {
+  return reader?.visible() ? reader.path() : currentPath()
+}
+
+/** Persist one book's position.  The whole map is the wire value (§0.55). */
+function rememberBookmark(path: string, position: EpubBookmark): void {
+  bookmarks = { ...bookmarks, [path]: position }
+  patchUi({ bookmarks })
+}
+
+function isUnderPath(path: string, base: string): boolean {
+  return path === base || path.startsWith(base + '/')
+}
+
+function rebasePath(path: string, oldPath: string, newPath: string): string {
+  return path === oldPath ? newPath : newPath + path.slice(oldPath.length)
+}
+
+/** A rename/move keys the SAME bookmark under the new vault path.  A folder
+ *  rebases every descendant key, not just the folder's own (which does not
+ *  exist as a book). */
+function rekeyBookmark(oldPath: string, newPath: string): void {
+  if (oldPath === newPath) return
+  let changed = false
+  const next: Record<string, EpubBookmark> = {}
+  for (const [key, value] of Object.entries(bookmarks)) {
+    if (key === oldPath) {
+      next[newPath] = value
+      changed = true
+    } else if (key.startsWith(oldPath + '/')) {
+      next[newPath + key.slice(oldPath.length)] = value
+      changed = true
+    } else {
+      next[key] = value
+    }
+  }
+  if (!changed) return
+  bookmarks = next
+  patchUi({ bookmarks: next })
+}
+
+function forgetBookmarks(path: string): void {
+  let changed = false
+  const next: Record<string, EpubBookmark> = {}
+  for (const [key, value] of Object.entries(bookmarks)) {
+    if (isUnderPath(key, path)) changed = true
+    else next[key] = value
+  }
+  if (!changed) return
+  bookmarks = next
+  patchUi({ bookmarks: next })
+}
+
+/** Follow a renamed/moved book or a book inside a renamed/moved folder. */
+function adoptReaderPath(oldPath: string, newPath: string): void {
+  if (reader === null) return
+  const current = reader.path()
+  if (current === null || !isUnderPath(current, oldPath)) return
+  const next = rebasePath(current, oldPath, newPath)
+  reader.adoptPath(next)
+  tabs.setNote(next)
+  patchUi({ lastNote: next })
+  if (reader.visible()) tree.setActivePath(next)
 }
 
 /**
@@ -415,7 +536,17 @@ async function createSecretNote(parent: string, name?: string): Promise<void> {
   await refreshTree()
   if (!await openNoteAt(r.path)) return
   if (fillEmptyNote(SECRET_TEMPLATE)) {
-    await editorFlush('manual').catch(() => {})
+    // The first refresh happened while the file was still empty, so it cached
+    // an ordinary verdict — and `Node.mtime` is whole seconds, so a write in
+    // that same second would not move the cache key.  The write path
+    // invalidates the verdict; this second refresh is what asks again, so the
+    // row turns secret when the template lands, not on a later restart.
+    try {
+      await editorFlush('manual')
+      await refreshTree()
+    } catch {
+      /* the flush error is already reported through `onFlushError` */
+    }
   }
 }
 
@@ -473,10 +604,13 @@ function rekeyExpanded(oldPath: string, newPath: string): void {
  */
 function renameFlow(path: string, isDir: boolean): void {
   if (vaultLostPath !== null) return
-  // A folder shows its whole name; a note shows the name the row was drawing,
-  // which never carries the extension (§3.6 keeps `.md` on the wire only).
+  // A folder shows its whole name; a note and a book show the STEM the row
+  // drew (`displayName` strips both extensions).  `inline-edit.ts` always
+  // appends `suffix`, so passing a book's full `Book.epub` would commit
+  // `Book.epub.epub`.
+  const book = !isDir && isBookPath(path)
   const shown = isDir ? basename(path) : displayName(path)
-  const suffix = isDir ? '' : '.md'
+  const suffix = isDir ? '' : book ? basename(path).slice(-5) : '.md'
 
   async function commit(name: string): Promise<void> {
     // F35: the rename runs ON the editor's write chain — a write that passed
@@ -496,6 +630,8 @@ function renameFlow(path: string, isDir: boolean): void {
       if ((vault?.root ?? null) !== root || vaultLostPath !== null) return
       adoptRenamedPath(path, r.path)
       rekeyExpanded(path, r.path)
+      rekeyBookmark(path, r.path)
+      adoptReaderPath(path, r.path)
     })
     await refreshTree()
   }
@@ -518,7 +654,7 @@ function renameFlow(path: string, isDir: boolean): void {
   // landed yet, or it went away under us).  `rowHost` already un-collapses
   // ancestors, so this is not the collapsed-parent case.
   promptForName({
-    title: 'Rename ' + (isDir ? 'folder' : 'note'),
+    title: 'Rename ' + (isDir ? 'folder' : book ? 'book' : 'note'),
     initial: shown,
     select: 'all',
     suffix,
@@ -553,7 +689,11 @@ function moveFlow(sources: { path: string; isDir: boolean }[], destParent: strin
             adoptRenamedPath(s.path, moved.path)
             return moved
           })
-          if (r !== null) rekeyExpanded(s.path, r.path)
+          if (r !== null) {
+            rekeyExpanded(s.path, r.path)
+            rekeyBookmark(s.path, r.path)
+            adoptReaderPath(s.path, r.path)
+          }
         } catch (err) {
           reportError(err, 'move')
         }
@@ -650,7 +790,7 @@ async function reportDeleteFailure(path: string, isDir: boolean, err: unknown): 
   // and a message that told the user to look for it would send them hunting for
   // a file that does not exist.
   const stillThere = kind === 'trashUnavailable' || kind === 'io'
-  const noun = isDir ? 'folder' : 'note'
+  const noun = isDir ? 'folder' : isBookPath(path) ? 'book' : 'note'
   const pick = await openModal({
     title: 'Could not delete ' + displayName(path),
     detail:
@@ -749,13 +889,16 @@ async function deleteFlow(path: string, isDir: boolean): Promise<'deleted' | 'fa
   // path no longer names the file the user was asked about.
   if ((vault?.root ?? null) !== root || vaultLostPath !== null) return 'cancelled'
 
-  // The open note is affected when it IS the deleted thing, or when the deleted
-  // thing is one of its ancestor folders — §7.3 case 6 is case 5 with a folder
-  // in front of it, and both reach here.
-  const openPath = currentPath()
-  const hitsOpen = openPath !== null && (openPath === path || openPath.startsWith(path + '/'))
+  // The open document is affected when it IS the deleted thing, or when the
+  // deleted thing is one of its ancestor folders — §7.3 case 6 is case 5 with a
+  // folder in front of it, and both reach here.  A book lives in the same tab
+  // as a note, but it has no dirty buffer: only the note takes the guard.
+  const editorPath = currentPath()
+  const bookPath = reader?.path() ?? null
+  const hitsEditor = editorPath !== null && (editorPath === path || editorPath.startsWith(path + '/'))
+  const hitsBook = bookPath !== null && (bookPath === path || bookPath.startsWith(path + '/'))
 
-  if (hitsOpen) {
+  if (hitsEditor) {
     // Steps 1-4.  Never throws.  `'abort'` means the user said Cancel, or the
     // flush behind "Save and delete" was REFUSED — and on a refusal the delete
     // MUST NOT happen, because the file on disk is then the only copy of
@@ -777,14 +920,26 @@ async function deleteFlow(path: string, isDir: boolean): Promise<'deleted' | 'fa
     // explicitly to drop it ("Delete without saving").  Leaving it on screen
     // would be the state that LOOKS recoverable and is not, which is the exact
     // shape of the bug this function is fixing.
-    if (hitsOpen) { showEmpty(); hideFind() }
+    if (hitsEditor) {
+      // The file is still there; only the editor's guard may have cleared it.
+      // A book does not need to close for a failed delete.
+      showEmpty()
+      hideFind()
+    }
     // The pane is settled BEFORE the dialog goes up, so the modal is the last
     // thing drawn and the user is not answering a question over a stale pane.
     await reportDeleteFailure(path, isDir, err)
     return 'failed'
   }
   forgetCursor(path)
-  if (hitsOpen) { showEmpty(); hideFind() }
+  if (hitsBook) reader?.close()
+  if (hitsEditor) {
+    showEmpty()
+    hideFind()
+  }
+  // `reader.close()` saves the position before the file is gone; drop every
+  // exact/descendant key after that save so no bookmark outlives its book.
+  forgetBookmarks(path)
   await refreshTree()
   return 'deleted'
 }
@@ -908,6 +1063,7 @@ function rowMenu(ev: MouseEvent, path: string | null, isDir: boolean): void {
         newNote: () => newNoteIn(''),
         newFolder: () => newFolderIn(''),
         newSecret: () => newSecretIn(''),
+        importEpub: () => { void importEpubInto('') },
         // '' IS the vault root (§1.1), and `absolutePath(root, '')` is the
         // root alone — no trailing slash.  User ruling, 2026-10-23.
         copyPath: () => copyAbsolutePath(''),
@@ -926,8 +1082,10 @@ function rowMenu(ev: MouseEvent, path: string | null, isDir: boolean): void {
     remove: () => { void deleteTargets(deleteSubject(path, isDir)) },
   }
   if (!isDir) {
-    // A file alone has content to copy; `folderRowMenu` takes no such action.
-    openMenu(fileRowMenu({ ...onThis, copyContent: () => copyFileContent(path) }), opts)
+    // A note alone has text to copy; a book is a ZIP, and `folderRowMenu`
+    // takes no file-content action.
+    if (isBookPath(path)) openMenu(bookRowMenu(onThis), opts)
+    else openMenu(fileRowMenu({ ...onThis, copyContent: () => copyFileContent(path) }), opts)
     return
   }
   openMenu(
@@ -937,6 +1095,7 @@ function rowMenu(ev: MouseEvent, path: string | null, isDir: boolean): void {
       newNote: () => newNoteIn(path),
       newFolder: () => newFolderIn(path),
       newSecret: () => newSecretIn(path),
+      importEpub: () => { void importEpubInto(path) },
     }),
     opts
   )
@@ -983,6 +1142,10 @@ function hideFind(): void {
  */
 function toggleFind(): void {
   if (vaultLostPath !== null) return
+  if (reader !== null && reader.visible()) {
+    reader.toggleSearch()
+    return
+  }
   if (memoir !== null && memoir.visible()) return
   if (currentPath() === null) return
   if (findDocText() === null) return
@@ -992,6 +1155,11 @@ function toggleFind(): void {
 async function openNoteAt(path: string): Promise<boolean> {
   if (vaultLostPath !== null) return false
   if (path === MEMOIR_PATH) return openMemoir()
+  if (isBookPath(path)) return openBookAt(path)
+  ++surfaceSeq
+  // A note replaces any book, including one still being read; cancel the
+  // in-flight read first so it cannot paint over the note later.
+  reader?.cancelOpen()
   hideFind()
   if (memoir !== null && memoirPane !== null && memoir.visible()) {
     // F47: a journal that will not save (an outside edit conflicted it) must
@@ -1007,15 +1175,97 @@ async function openNoteAt(path: string): Promise<boolean> {
     memoir.hide()
     memoirPane.classList.remove('is-memoir')
   }
+  // A book is only stepped aside AFTER the note read succeeds, so a failed
+  // open leaves the reader exactly where it was.
   const r = await openNote(path)
   if (!r.ok) {
     reportError(r.err, 'open-note')
     // F54: the tree already moved its active row to the clicked note —
     // put it back on the note that is actually open, or a later
     // disappearance of the clicked row detaches a healthy note.
-    tree.setActivePath(currentPath())
+    tree.setActivePath(reader?.path() ?? currentPath())
     return false
   }
+  if ((reader?.path() ?? null) !== null) reader?.close()
+  return true
+}
+
+/**
+ * §0.55 E108 — the note tab's OTHER document type.  The same flush-first rule
+ * as `openNote`: a dirty buffer is written before the book replaces it, and a
+ * refused write aborts with the buffer still on screen.
+ *
+ * The reader itself has no dirty buffer — its position is written through
+ * `patchUi`, which is persisted by `state.json` — so the only data-loss edge is
+ * the editor's.
+ */
+async function openBookAt(path: string): Promise<boolean> {
+  if (vaultLostPath !== null || reader === null) return false
+  const seq = ++surfaceSeq
+  const root = vault?.root ?? null
+  hideFind()
+  if (memoir !== null && memoirPane !== null && memoir.visible()) {
+    try {
+      await memoir.flush()
+    } catch {
+      /* the buffer stays dirty in the hidden page; leaving is safe */
+    }
+    memoir.hide()
+    memoirPane.classList.remove('is-memoir')
+  }
+  try {
+    await editorFlush('switch')
+  } catch (err) {
+    reportError(err, 'open-book-flush')
+    tree.setActivePath(openDocumentPath())
+    return false
+  }
+  if (isDirty()) {
+    reportError(lastNoteError() ?? { kind: 'conflict', message: 'the note was not saved' }, 'open-book')
+    tree.setActivePath(openDocumentPath())
+    return false
+  }
+  let ok = false
+  try {
+    ok = await reader.open(path, bookmarks[path] ?? null)
+  } catch (err) {
+    reportError(err, 'open-book')
+  }
+  if (seq !== surfaceSeq || (vault?.root ?? null) !== root || vaultLostPath !== null) {
+    // A note, another book, a vault switch or a close won the race while the
+    // book was being read.  The surface that won owns the reader slot now;
+    // this request must not close whatever it put there.
+    return false
+  }
+  if (!ok) {
+    tree.setActivePath(openDocumentPath())
+    return false
+  }
+  // The note was still on screen during the read.  Text typed since the first
+  // flush must be written before `showEmpty()` drops the buffer.
+  try {
+    await editorFlush('switch')
+  } catch (err) {
+    reportError(err, 'open-book-flush')
+    if (reader.path() === path) reader.close()
+    tree.setActivePath(openDocumentPath())
+    return false
+  }
+  if (isDirty()) {
+    reportError(lastNoteError() ?? { kind: 'conflict', message: 'the note was not saved' }, 'open-book')
+    if (reader.path() === path) reader.close()
+    tree.setActivePath(openDocumentPath())
+    return false
+  }
+  // The book replaces the editor in the ONE fixed note tab.  `showEmpty()`
+  // clears the editor's open-note state (it is already flushed) and its
+  // `onEmpty` hook clears the tab/active row; the three lines after restore the
+  // tab to the book.
+  showEmpty()
+  tabs.setNote(path)
+  tabs.setActive('note')
+  tree.setActivePath(path)
+  patchUi({ lastNote: path })
   return true
 }
 
@@ -1032,9 +1282,17 @@ async function openNoteAt(path: string): Promise<boolean> {
  * lost race with a watcher refresh).
  */
 async function openMemoir(): Promise<boolean> {
+  ++surfaceSeq
+  reader?.cancelOpen()
   if (vaultLostPath !== null || vault === null || memoir === null || memoirPane === null) return false
   if (memoir.visible()) return true
   hideFind()
+  // The book keeps its position and its rendered text; switching to the journal
+  // must not make it save or re-read.
+  if (reader !== null && reader.visible()) {
+    reader.flushProgress()
+    reader.hide()
+  }
   try {
     await editorFlush('switch')
   } catch {
@@ -1177,6 +1435,7 @@ function linkHost(): void {
  *     1-5 are the FRONTEND's, run before Rust is asked for anything.
  * ═══════════════════════════════════════════════════════════════════════════ */
 async function releaseVault(reason: string): Promise<void> {
+  ++surfaceSeq
   // 1. On REJECT, ABORT the switch and show the error.  Never discard.  This
   //    `await` is the abort: `pickAndSwitch` in vaultbar.ts leaves the current
   //    vault open and untouched when this promise rejects.  A RESOLVED flush
@@ -1200,6 +1459,12 @@ async function releaseVault(reason: string): Promise<void> {
     memoir.reset()
     memoirPane?.classList.remove('is-memoir')
   }
+  // The reader has no unsaved text, only a position.  Queue it under the
+  // OUTGOING vault's key before `flushUi` below, then drop the parsed book and
+  // the bookmark map; both belong to the vault being closed.
+  reader?.flushProgress()
+  reader?.reset()
+  bookmarks = {}
   // 2. Persist state.json for the OUTGOING vault, then stop accepting patches
   //    for it — anything steps 3-5 produce belongs to a vault that is closing
   //    and would be filed under the incoming vault's key.  The tree debounces
@@ -1238,6 +1503,9 @@ async function releaseVault(reason: string): Promise<void> {
 async function applyVaultInfo(info: VaultInfo): Promise<void> {
   const switched = vault === null || vault.root !== info.root
   vault = info
+  // §0.55 E108's READ PATH.  `info.bookmarks` is already sanitised by Rust and
+  // is per-vault keyed; the reader hands positions back through `patchUi`.
+  if (switched) bookmarks = { ...info.bookmarks }
 
   chromeHandle.vaultRestored()
   vaultLostPath = null
@@ -1313,7 +1581,11 @@ async function applyVaultInfo(info: VaultInfo): Promise<void> {
   await refreshTree()
   if (switched) tree.setScrollTop(info.scrollTop)
 
-  if (info.lastNote !== null && currentPath() !== info.lastNote) {
+  if (
+    info.lastNote !== null &&
+    currentPath() !== info.lastNote &&
+    reader?.path() !== info.lastNote
+  ) {
     await openNoteAt(info.lastNote)
   } else if (!switched && currentNoteState() === 'vault-lost') {
     // F66: the vault is back on the same root and the note is still marked
@@ -1362,7 +1634,7 @@ async function applyVaultInfo(info: VaultInfo): Promise<void> {
   // `.empty-state` itself, so BOTH halves of that reason are gone — and the
   // call stays, because `setNote(null)` also hides the TAB, which is §7.4 row 3
   // and is now the only thing that distinguishes "no note open" on screen.
-  if (currentPath() === null) tabs.setNote(null)
+  if (openDocumentPath() === null) tabs.setNote(null)
 
   // §5.11, "run it": on the first animation frame AFTER `nc://vault-opened`,
   // and — per the fixture — after the note is OPEN.  Running it in `boot()`,
@@ -1407,6 +1679,9 @@ async function flushAndClose(): Promise<void> {
       else void openMemoir()
       return
     }
+    // The reader has no buffer to refuse, only a position; queue it before the
+    // one `flushUi` that the quit path waits on.
+    reader?.flushProgress()
     await flushUi()
     await confirmClose(true)
     return
@@ -1451,6 +1726,33 @@ async function flushMemoirForClose(): Promise<{ ok: true } | { ok: false; kind: 
   }
   if (memoir.isDirty()) return { ok: false, kind: 'conflict' }
   return { ok: true }
+}
+
+/** Dev reload's safe half: flush every buffer and state writer, then say
+ *  whether the shell may replace the renderer.  A refused write answers false;
+ *  the old window stays up rather than losing the user's text. */
+async function flushForReload(): Promise<void> {
+  try {
+    await editorFlush('switch')
+    if (isDirty()) {
+      emitReloadReady(false, 'the note was not saved')
+      return
+    }
+    if (memoir !== null) {
+      await memoir.flush()
+      if (memoir.isDirty()) {
+        emitReloadReady(false, 'the journal was not saved')
+        return
+      }
+    }
+    tree.flushPersist()
+    reader?.flushProgress()
+    await flushUi()
+    emitReloadReady(true)
+  } catch (err) {
+    reportError(err, 'reload-flush')
+    emitReloadReady(false, 'a buffer could not be saved')
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
@@ -1548,6 +1850,14 @@ function boot(): void {
       readClipboardText: readText,
       writeClipboardText: copyText,
     })
+    // §0.55 E108 — the EPUB reader, mounted beside the journal and the editor
+    // in the same pane.  Its transport is `ipc.ts`'s own and never imported by
+    // the module itself (§6.4).
+    reader = mountReader(memoirPane, {
+      transport: { readEpub, openExternal },
+      onProgress: rememberBookmark,
+      onError: reportError,
+    })
   }
   // §0.38 E85.  AFTER `tree` exists?  No — the host reads `tree` lazily on each
   // click, so registering here is safe and keeps the editor's wiring together.
@@ -1563,7 +1873,13 @@ function boot(): void {
     // F54: only the disappearance of the note that is actually open detaches
     // it. The clicked row takes the active highlight before its open is known
     // to succeed, so any OTHER row's disappearance must not touch the buffer.
-    onActiveVanished: (p) => { if (p === currentPath()) markDetached() },
+    onActiveVanished: (p) => {
+      const book = reader?.path() ?? null
+      if (book !== null && isUnderPath(book, p)) {
+        reader?.lost()
+        patchUi({ lastNote: null })
+      } else if (p === currentPath()) markDetached()
+    },
     onExpandedChanged: (expanded) => patchUi({ expanded }),
     onScrollTopChanged: (scrollTop) => patchUi({ scrollTop }),
     onContextMenu: rowMenu,
@@ -1695,6 +2011,7 @@ function boot(): void {
       void noteExternalChange(p.path, p.mtimeMs, p.size).catch((e: unknown) => reportError(e, 'external-change'))
     }),
     onFlushAndClose(() => { void flushAndClose() }),
+    onFlushForReload(() => { void flushForReload() }),
   ]
   for (const s of subs) void s.catch((e: unknown) => reportError(e, 'listen'))
 

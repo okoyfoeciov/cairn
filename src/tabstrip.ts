@@ -33,14 +33,14 @@
  *
  * THE SCAFFOLD DEVIATION THIS FILE CLOSES.  index.html ships `.tab` VISIBLE with
  * no note open — deliberately, so its measured geometry (left 430, width 200,
- * height 39, fill #1c1c1c) was verifiable before the tab had any behaviour — and
+ * height 39, fill `--bg-primary` #182028) was verifiable before the tab had any behaviour — and
  * that contradicts §7.4's "the tab is not rendered".  `hideTabUntilWired()` is
  * called from chrome.ts's `mountChrome()`, i.e. on the boot path that exists
  * TODAY, so the deviation is closed even before main.ts wires this module.
  * `.tab[hidden] { display: none }` was already waiting in chrome.css.
  *
  * NOTE FOR THE GEOMETRY GATE (§5.11): the probe's `tab` row asserts x 430 /
- * width 200 / height 39 / #1c1c1c, and a `display:none` tab reads back as zeros.
+ * width 200 / height 39 / `--bg-primary` #182028, and a `display:none` tab reads back as zeros.
  * That row therefore requires the fixture's note to be OPEN — which §5.11's
  * fixture already mandates ("the open note containing a fenced ```sh block") —
  * and `setNote()` to have run before the probe's first animation frame.  This is

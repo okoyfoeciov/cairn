@@ -37,11 +37,32 @@ class ANode {
     if (i >= 0) p.childNodes.splice(i, 1)
     this.parentNode = null
   }
+  replaceWith(node) {
+    const p = this.parentNode
+    if (!p) return
+    const at = p.childNodes.indexOf(this)
+    if (at < 0) return
+    node.remove()
+    node.parentNode = p
+    p.childNodes[at] = node
+    this.parentNode = null
+  }
 }
 
 class AText extends ANode {
   constructor(doc, data) { super(doc); this.data = String(data) }
+  get nodeType() { return 3 }
   get textContent() { return this.data }
+  splitText(offset) {
+    const rest = new AText(this.ownerDocument, this.data.slice(offset))
+    this.data = this.data.slice(0, offset)
+    const p = this.parentNode
+    if (p) {
+      rest.parentNode = p
+      p.childNodes.splice(p.childNodes.indexOf(this) + 1, 0, rest)
+    }
+    return rest
+  }
 }
 
 class AFragment extends ANode {
@@ -76,6 +97,7 @@ class AElement extends ANode {
   constructor(doc, tag) {
     super(doc)
     this.tagName = tag.toUpperCase()
+    this.nodeType = 1
     this.attrs = new Map()
     this.className = ''
     this.listeners = new Map()
@@ -119,6 +141,10 @@ class AElement extends ANode {
   }
   querySelector(sel) { return this.querySelectorAll(sel)[0] ?? null }
   querySelectorAll(sel) { return this.descendants().filter((e) => matches(e, sel)) }
+  contains(node) {
+    for (let n = node; n; n = n.parentNode) if (n === this) return true
+    return false
+  }
   closest(sel) {
     let n = this
     while (n instanceof AElement) { if (matches(n, sel)) return n; n = n.parentNode }
@@ -178,6 +204,19 @@ class ADocument {
   createElementNS(_ns, tag) { return new AElement(this, tag) }
   createTextNode(t) { return new AText(this, t) }
   createDocumentFragment() { return new AFragment(this) }
+  /** SHOW_TEXT only, which is the one mode `reader.ts` asks for. */
+  createTreeWalker(root) {
+    const nodes = []
+    const walk = (n) => {
+      for (const c of n.childNodes) {
+        if (c instanceof AText) nodes.push(c)
+        else if (c instanceof AElement) walk(c)
+      }
+    }
+    walk(root)
+    let i = 0
+    return { nextNode() { return i < nodes.length ? nodes[i++] : null } }
+  }
 }
 
 /** Install the two globals `src/search.ts` uses in `instanceof` guards, plus the

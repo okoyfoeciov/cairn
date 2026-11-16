@@ -778,7 +778,7 @@ export function wireChrome(deps: ChromeDeps, root: ParentNode = document): Chrom
      the handle stays under the finger for as long as the clamp allows.
 
      Persisted ONLY on release, through the EXISTING `save_ui_state` (command
-     17), so this adds no command — §1.3 is at twenty-one since §0.30 E70 — and a drag writes one patch rather than
+     17), so this adds no command — §1.3 is at twenty-nine since §0.55 E108 — and a drag writes one patch rather than
      one per frame — the 1,000 ms debounce in state.ts would coalesce them
      anyway, but not emitting them is cheaper than coalescing them. */
   const grip = root.querySelector<HTMLElement>('.sidebar-resize')

@@ -533,8 +533,8 @@ test('§3.2 every structural invariant is rejected, each by name', () => {
     ['subtree range', mutate((dv) => dv.setUint32(32 + 8, 9, true)), /runs past the last node/],
     // depth[2] = 7 while its parent is at depth 0.
     ['depth', mutate((_dv, u8) => (u8[32 + 12 + 12 + 16 + 2] = 7)), /depth\[2\] = 7/],
-    // kind[0] sets a reserved bit.
-    ['reserved kind bit', mutate((_dv, u8) => (u8[32 + 12 + 12 + 16 + 3] = 0x03)), /reserved bit/],
+    // kind[0] sets a reserved bit (bit 4; bit 3 is the book flag since E108).
+    ['reserved kind bit', mutate((_dv, u8) => (u8[32 + 12 + 12 + 16 + 3] = 0x10)), /reserved bit/],
   ]
   for (const [what, buf, re] of cases) {
     assert.throws(
@@ -1948,7 +1948,7 @@ function withKind(buf, i, k) {
   return buf
 }
 
-test('extension case: pathOf rebuilds each note\'s on-disk name, and kind bits 1..2 are a file\'s only', () => {
+test('extension case: pathOf rebuilds each file\'s on-disk name; note case is bits 1..2, book case bits 4..7', () => {
   const buf = buildBlob([dir('Sub', [file('inner')]), file('Dup'), file('Dup'), file('Foo'), file('x')])
   withKind(buf, 1, EXT_D)
   withKind(buf, 3, EXT_M | EXT_D)
@@ -1963,11 +1963,56 @@ test('extension case: pathOf rebuilds each note\'s on-disk name, and kind bits 1
   assert.equal(b.resolveLink('Foo', null), 'Foo.MD')
   assert.equal(b.resolveLink('Sub/inner', null), 'Sub/inner.mD')
 
+  const bookBuf = buildBlob([dir('Books', [file('Book'), file('Mixed')])])
+  withKind(bookBuf, 1, 0x08)                    // Book.epub
+  withKind(bookBuf, 2, 0x08 | (0b0101 << 4))    // Mixed.EpUb
+  const bookBlob = B.adopt(bookBuf)
+  assert.equal(bookBlob.nameOf(1), 'Book', 'a book display name loses `.epub` too')
+  assert.equal(bookBlob.extOf(1), '.epub')
+  assert.equal(bookBlob.pathOf(1), 'Books/Book.epub')
+  assert.equal(bookBlob.pathOf(2), 'Books/Mixed.EpUb')
+  assert.equal(bookBlob.resolveLink('Book', null), 'Books/Book.epub')
+  assert.equal(bookBlob.resolveLink('Book.epub', null), 'Books/Book.epub')
+  assert.equal(bookBlob.resolveLink('Books/Book.epub', null), 'Books/Book.epub')
+
   B.adopt(withKind(buildBlob([file('a')]), 0, EXT_M | EXT_D)) // accepted
-  assert.throws(() => B.adopt(withKind(buildBlob([file('a')]), 0, 0x08)), /reserved bit/)
-  assert.throws(() => B.adopt(withKind(buildBlob([dir('d')]), 0, 1 | EXT_M)), /reserved bit/,
+  B.adopt(withKind(buildBlob([file('a')]), 0, 0x08)) // accepted: an EPUB book (E108)
+  assert.throws(() => B.adopt(withKind(buildBlob([file('a')]), 0, 0x10)), /reserved bit/,
+    'the high nibble is a book extension case, never a note’s')
+  assert.throws(() => B.adopt(withKind(buildBlob([file('a')]), 0, 0x08 | EXT_M)), /book/)
+  assert.throws(() => B.adopt(withKind(buildBlob([dir('d')]), 0, 1 | EXT_M)), /folder as a file/,
     'a folder has no extension; bits 1..2 on one are corruption')
-  assert.throws(() => B.adopt(withKind(buildBlob([dir('d')]), 0, 1 | EXT_D)), /reserved bit/)
+  assert.throws(() => B.adopt(withKind(buildBlob([dir('d')]), 0, 1 | EXT_D)), /folder as a file/)
+  assert.throws(() => B.adopt(withKind(buildBlob([dir('d')]), 0, 1 | 0x08)), /folder as a file/)
+  assert.throws(() => B.adopt(withKind(buildBlob([dir('d')]), 0, 1 | 0x10)), /folder as a file/)
+})
+
+test('§0.55 E108: an explicit .md/.epub wikilink picks the matching kind when stems collide', () => {
+  const buf = buildBlob([file('Book'), file('Book')])
+  withKind(buf, 1, 0x08)
+  const b = B.adopt(buf)
+  assert.equal(b.resolveLink('Book.md', null), 'Book.md')
+  assert.equal(b.resolveLink('Book.epub', null), 'Book.epub')
+  assert.ok(b.resolveLink('Book', null) !== null, 'stem-only link still resolves')
+})
+
+test('§0.55 E108: an EPUB row drops `.epub` and draws the book mark', () => {
+  const buf = buildBlob([file('Book')])
+  withKind(buf, 0, 0x08)
+  const b = B.adopt(buf)
+  assert.equal(b.isBook(0), true)
+  assert.equal(b.nameOf(0), 'Book')
+  assert.equal(b.extOf(0), '.epub')
+  assert.equal(b.pathOf(0), 'Book.epub')
+
+  const m = mount()
+  m.tree.applySnapshot(buf)
+  const row = shownRows(m).find((r) => r.textContent === 'Book')
+  assert.ok(row, 'the book row was not painted')
+  assert.equal(row.classList.contains('is-book'), true)
+  assert.equal(row.classList.contains('is-secret'), false)
+  assert.notEqual(row.className, 'tr', 'the book mark is a row class, not a side table')
+  m.tree.destroy()
 })
 
 test('extension case: open, Delete, F2 and the row menu all carry the row\'s exact path', () => {

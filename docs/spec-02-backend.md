@@ -1131,7 +1131,7 @@ Every subsection here is a pointer.
 | §11.1 conventions | **Normative: CONTRACT §1.1.** |
 | §11.2 raw-bytes framing | **Normative: CONTRACT §2** (frame) and **§1.2** (transport). The frame is magic-guarded, self-describing, 24 bytes, and exists in exactly two files. The raw path stands on the measured ×2.6/×1.9 at 1 MiB and +36 MB RSS for an 8 MiB JSON write. |
 | §11.3 autosave contract | **Normative: CONTRACT §7.2.** 800 ms idle / 5 s cap / flush on switch, blur, hidden and close, extended with `visibilitychange` and `Mod-s`. The 5.04 ms fsync is still sized against that 800 ms floor. |
-| §11.4 command list | **Normative: CONTRACT §1.3** — **twenty-five** commands. `list_tree`, `set_expanded`, `reveal`, `TreePage`, `TreeRow` and the tree-paging policy do not exist: the tree crosses IPC once, whole, as `TreeBlob v1` raw bytes. |
+| §11.4 command list | **Normative: CONTRACT §1.3** — **twenty-nine** commands. `list_tree`, `set_expanded`, `reveal`, `TreePage`, `TreeRow` and the tree-paging policy do not exist: the tree crosses IPC once, whole, as `TreeBlob v1` raw bytes. |
 | §11.5 events | **Normative: CONTRACT §1.4.** One namespace, `nc://`; `vault://`, `note://` and `tree:` do not exist. |
 | §11.6 TypeScript types | **Normative: CONTRACT §1.5**, and `src/ipc.ts` is **owned by 02** — the only frontend module that crosses the bridge. |
 

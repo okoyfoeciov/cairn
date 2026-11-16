@@ -88,9 +88,9 @@ const SKIP = !existsSync(BIN)
       : NO_DISPLAY
 
 /** Obsidian's `has-focus` ring, app.css:10454: `0 0 0 2px
- *  var(--background-modifier-border-focus)`, #555555 in the dark theme, and
- *  measured live as exactly #555555 in its tree. */
-const RING = 'rgb(85, 85, 85) 0px 0px 0px 2px'
+ *  var(--background-modifier-border-focus)`.  Obsidian's dark value is
+ *  #555555; Oceanic's `--bg-modifier-border-focus` is #5a6b84. */
+const RING = 'rgb(90, 107, 132) 0px 0px 0px 2px'
 
 /** The fill's inset from the sidebar's right edge when the tree does NOT
  *  overflow: 1px of fill inset + 8px gutter + 3px of scroller-to-sidebar. */
@@ -102,14 +102,15 @@ const BASE_INSET = 12
  * (§0.17's `applyRowH`).  A row's top edge can now land a fraction of a
  * device pixel off a whole one, and Chromium anti-aliases whatever the ring's
  * box-shadow paints across that boundary against whatever the row ABOVE
- * painted there — measured up to 10 per channel on this Mac, well short of
- * the ~45 a genuinely wrong colour (the #282828 background) would show.  Not
+ * painted there — measured up to 25 per channel on this Mac with Oceanic's
+ * ring at a guide column (the old #555555 peaked at 10), still far short of
+ * the ~70 a genuinely wrong colour (the `--bg-secondary` ground) would show.  Not
  * a defect: Obsidian's own row is the SAME fraction of a device pixel tall,
  * so its rows blend the same way at the boundaries where they land the same
  * way — this loosens the INSTRUMENT to the geometry it is now measuring, it
  * does not paper over a colour that is actually wrong.
  */
-const NEAR_HEX = (a, b, tol = 15) =>
+const NEAR_HEX = (a, b, tol = 28) =>
   [0, 2, 4].every((k) => Math.abs(parseInt(a.slice(k, k + 2), 16) - parseInt(b.slice(k, k + 2), 16)) <= tol)
 const assertNearHexMap = (actual, expected, msg) => {
   for (const k of Object.keys(expected)) {
@@ -261,14 +262,15 @@ test('B: ArrowDown arms Obsidian\'s ring; a plain click on another row removes i
 
   if (k.dpr === 1 && c.dpr === 1) {
     // Outset 2px from a fill whose left edge is x 12: columns 10 and 11.
-    assert.deepEqual(d.pixB.ring, Object.fromEntries(d.pixB.xs.map((x) => [x, '555555'])),
-      'the ring is not painted #555555 in the two columns outside the fill: ' + JSON.stringify(d.pixB))
+    // `pixHex` returns the framebuffer's B,G,R byte order, hence `846b5a`.
+    assert.deepEqual(d.pixB.ring, Object.fromEntries(d.pixB.xs.map((x) => [x, '846b5a'])),
+      'the ring is not painted #5a6b84 in the two columns outside the fill: ' + JSON.stringify(d.pixB))
     // The TOP edge lies outside the row box, where `.tr { overflow: hidden }`
     // clipped it and the row above's indent guide painted over it — measured
     // missing in a real window before this assertion existed.  NEAR, not
     // exact: this y sits at a row BOUNDARY, which a non-integer `--row-h` need
     // not land on a whole device pixel (see NEAR_HEX).
-    const want = Object.fromEntries(d.pixB.topXs.map((x) => [x, '555555']))
+    const want = Object.fromEntries(d.pixB.topXs.map((x) => [x, '846b5a']))
     assertNearHexMap(d.pixB.topEdge.above1, want,
       'the ring\'s top edge is missing 1px above the fill (clipped by the row, or painted over by the row above)')
     assertNearHexMap(d.pixB.topEdge.above2, want,
@@ -289,7 +291,7 @@ test('B: ArrowDown arms Obsidian\'s ring; a plain click on another row removes i
   if (z.dpr === 1) {
     // NEAR, not exact — see NEAR_HEX: this y is a row boundary, which a
     // non-integer `--row-h` need not land on a whole device pixel.
-    const want = Object.fromEntries(z.xs.map((x) => [x, '555555']))
+    const want = Object.fromEntries(z.xs.map((x) => [x, '846b5a']))
     assertNearHexMap(z.above1, want,
       'the row above (later in the DOM) paints over the ring\'s top edge, 1px above the fill')
     assertNearHexMap(z.above2, want,

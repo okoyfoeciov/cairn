@@ -22,7 +22,10 @@ struct Rec {
 
 impl Rec {
     fn new() -> Self {
-        Self { state: Arc::new(AppState::new()), events: Arc::default() }
+        Self {
+            state: Arc::new(AppState::new()),
+            events: Arc::default(),
+        }
     }
 
     fn clear(&self) {
@@ -117,7 +120,12 @@ fn an_external_rename_over_the_open_note_reaches_the_editor_and_ours_does_not() 
 
     // Ours first: an autosave through the real command.
     let base_mtime = fsops::mtime_ms(&std::fs::metadata(&note).unwrap());
-    let args = WriteArgs { rel: "Open.md".into(), flags: 0, base_mtime_ms: Some(base_mtime), create: false };
+    let args = WriteArgs {
+        rel: "Open.md".into(),
+        flags: 0,
+        base_mtime_ms: Some(base_mtime),
+        create: false,
+    };
     app::write_note(&ctx, &ctx.state, &args, b"typed in cairn\n").unwrap();
     assert_eq!(
         ctx.wait("nc://note-external-change", Duration::from_millis(1500)),
@@ -153,7 +161,9 @@ fn drop_inotify_watch(dir: &Path) -> bool {
         if link.to_string_lossy() != "anon_inode:inotify" {
             continue;
         }
-        let Some(n) = fd.file_name().to_str().and_then(|s| s.parse::<i32>().ok()) else { continue };
+        let Some(n) = fd.file_name().to_str().and_then(|s| s.parse::<i32>().ok()) else {
+            continue;
+        };
         let info = std::fs::read_to_string(format!("/proc/self/fdinfo/{n}")).unwrap_or_default();
         for line in info.lines().filter(|l| l.starts_with("inotify wd:")) {
             let field = |k: &str| {
@@ -181,7 +191,10 @@ fn refresh_rearms_a_watcher_that_lost_a_directory() {
     let ctx = Rec::new();
     open(&ctx, &root);
 
-    assert!(drop_inotify_watch(&root.join("sub")), "premise: sub/ was being watched");
+    assert!(
+        drop_inotify_watch(&root.join("sub")),
+        "premise: sub/ was being watched"
+    );
     ctx.clear();
     std::fs::write(root.join("sub/x.md"), b"x\n").unwrap();
     assert_eq!(
@@ -197,7 +210,8 @@ fn refresh_rearms_a_watcher_that_lost_a_directory() {
 
     std::fs::write(root.join("sub/y.md"), b"y\n").unwrap();
     assert!(
-        ctx.wait("nc://tree-changed", Duration::from_secs(5)).is_some(),
+        ctx.wait("nc://tree-changed", Duration::from_secs(5))
+            .is_some(),
         "Refresh left the watcher blind to a directory it had lost"
     );
 }
@@ -220,9 +234,16 @@ fn a_symlinked_tree_is_neither_listed_nor_watched() {
 
     let rels: Vec<String> = {
         let v = ctx.state.vault().expect("vault");
-        v.snapshot().files.iter().map(|f| f.rel.to_string()).collect()
+        v.snapshot()
+            .files
+            .iter()
+            .map(|f| f.rel.to_string())
+            .collect()
     };
-    assert!(!rels.iter().any(|r| r.contains("Linked")), "the scanner admitted a linked note: {rels:?}");
+    assert!(
+        !rels.iter().any(|r| r.contains("Linked")),
+        "the scanner admitted a linked note: {rels:?}"
+    );
 
     ctx.clear();
     std::fs::write(outside.join("Linked.md"), b"linked changed\n").unwrap();

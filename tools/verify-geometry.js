@@ -152,13 +152,14 @@
   var K = {
     /* window & column sums */
     winW: 1920, winH: 964,      /* [D] §5.5 gate size; 1920 screenshot − 1px chrome each side      */
-    stripH: 40,                 /* [M+S] §0.6 E8 — BORDER BOX: 39px of #2f2f2f fill + a 1px rule.
-                                   The old 39 measured the FILL RUN and missed the rule under it;
-                                   Obsidian's own app.css:6642-6651 is height 40 + border-bottom 1px.
-                                   Everything derived below moves with it, which is the point of
-                                   deriving it: titleTop 69->70, and treeTop/treeH followed until
-                                   §0.12 E14 deleted the 40px nav band under this strip.            */
-    stripFillH: 39,             /* [M] the #2f2f2f run alone, i.e. stripH minus the rule            */
+    stripH: 40,                 /* [M+S] §0.6 E8 — BORDER BOX: 39px of --bg-titlebar fill + the
+                                   1px --tab-outline rule.  The old 39 measured the FILL RUN and
+                                   missed the rule under it; Obsidian's own app.css:6642-6651 is
+                                   height 40 + border-bottom 1px.  Everything derived below moves
+                                   with it, which is the point of deriving it: titleTop 69->70,
+                                   and treeTop/treeH followed until §0.12 E14 deleted the 40px nav
+                                   band under this strip.                                            */
+    stripFillH: 39,             /* [M] the --bg-titlebar run alone, i.e. stripH minus the rule     */
     tabTop: 7,                  /* [M] §0.8 — re-measured: 7, not 6.  The first pass rounded 5.46
                                    off a downscaled capture and shipped the tab 1px too tall.       */
     /* §0.12 E14: `navH: 40` is DELETED with the toolbar it measured.  The band
@@ -243,7 +244,27 @@
     h1Size: 25.888, h1Weight: 700, h1Lh: 1.2, titleSpace: 12.944,   /* h1Space DELETED, §0.30 E74 */
 
     /* vault bar interior — §5.5 / §5.11 */
-    vbPadL: 16, vbGap: 8
+    vbPadL: 16, vbGap: 8,
+
+    /* §5.1 — the Oceanic colour tokens this gate asserts, in RGB-channel form
+       because `rgb()` returns a channel triple.  They are HAND-COPIED and must
+       move with tokens.css; `tests/frontend/geometry-probe.test.mjs` reads both
+       files and fails if they drift, so the gate cannot quietly assert a
+       pre-Oceanic palette again.  The old expectations were Obsidian's
+       #333333/#282828/#1c1c1c/#b3b3b3/#dadada/#666666/#232323 values. */
+    colors: {
+      bgPrimary: '24,32,40',        /* --bg-primary #182028       */
+      bgPrimaryAlt: '33,42,52',     /* --bg-primary-alt #212a34   */
+      bgSecondary: '37,47,58',      /* --bg-secondary #252f3a     */
+      bgTitlebar: '50,62,76',       /* --bg-titlebar #323e4c      */
+      border: '51,64,82',           /* --bg-modifier-border #334052 / --tab-outline / --divider-color */
+      textNormal: '215,223,233',    /* --text-normal #d7dfe9      */
+      textMuted: '165,177,194',     /* --text-muted #a5b1c2       */
+      textFaint: '98,109,126',      /* --text-faint #626d7e       */
+      textBook: '143,207,154',      /* --text-book #8fcf9a        */
+      indentGuide: '170,205,240',   /* --indent-guide rgba(170,205,240,.14) */
+      indentGuideAlpha: 0.14
+    }
   };
 
   /* derived — one law per family, so the self-test can check the law, not five copies */
@@ -356,7 +377,7 @@
   /** Left edge of an element's content box — where its text actually starts. */
   function cl(el) { var s = cs(el); return R(el).left + px(s.borderLeftWidth) + px(s.paddingLeft); }
   /** Any colour → "r,g,b". Handles hex, because a custom property read back with
-   *  getPropertyValue() is the raw token text (`#606060`), not a resolved rgb() triple. */
+   *  getPropertyValue() is the raw token text (`rgba(...)`/`#rrggbb`), not a resolved rgb() triple. */
   function rgb(v) {
     var s = String(v).trim();
     var h = s.match(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/);
@@ -549,7 +570,7 @@
     /* ---- 2. title / tab strip -------------------------------------------- */
     row('titlebar', SEL.titlebar[0], function () { return q('titlebar'); }, [
       c('y', 0, 'D: the strip is the top band of the webview', function (e) { return R(e).top; }),
-      c('height', K.stripH, 'M+S §0.6 E8: BORDER BOX. 39px of #2f2f2f fill plus the 1px rule under it — the old expectation of 39 was the fill run alone. Obsidian app.css:6642-6651 draws the same two things', function (e) { return R(e).height; }),
+      c('height', K.stripH, 'M+S §0.6 E8: BORDER BOX. 39px of `--bg-titlebar` (#323e4c, Oceanic) fill plus the 1px `--tab-outline` rule under it — the old expectation of 39 was the fill run alone. Obsidian app.css:6642-6651 draws the same two things', function (e) { return R(e).height; }),
       c('rule under the strip', 1, 'S §0.6 E8: --tab-outline-width. This is the boundary between the chrome and both panes, and it is a DIFFERENT decision from spec-01 §2\'s "no border-right between the panes" — that one is vertical, between two fills', function (e) { return parseFloat(cs(e).borderBottomWidth); }),
       /* §0.49 E97 — THE TIE THAT MAKES `--hairline` HONEST.  `.titlebar`'s rule
          is a REAL 1px border, and Chromium snaps a used border to whole device
@@ -564,8 +585,8 @@
         var bord = parseFloat(cs(e).borderBottomWidth);
         return isFinite(hair) && isFinite(bord) && Math.abs(hair - bord) < 0.001;
       }),
-      c('rule colour', '51,51,51', 'S: Obsidian --tab-outline-color -> --color-base-30 = #333333, NOT this project\'s #2f2f2f --bg-modifier-border, which would be invisible on a #2f2f2f strip', function (e) { return rgb(cs(e).borderBottomColor); }),
-      c('background', '51,51,51', 'S: --bg-titlebar = Obsidian --titlebar-background-FOCUSED -> --background-secondary-alt -> --color-base-30 = #333333. It WAS 47,47,47, sampled as #2f2f2f off the reference PNG — but that PNG carries an iCCP display profile (S27E390, gamma 1.961) and 47 is the framebuffer byte, which decodes to 1.12.7\'s #363636. See tokens.css', function (e) { return rgb(cs(e).backgroundColor); })
+      c('rule colour', K.colors.border, '[C] Oceanic --tab-outline #334052. Obsidian\'s --tab-outline-color was --color-base-30 #333333; the gate used to assert that pre-Oceanic value', function (e) { return rgb(cs(e).borderBottomColor); }),
+      c('background', K.colors.bgTitlebar, '[C] Oceanic --bg-titlebar #323e4c. Obsidian\'s --titlebar-background-FOCUSED was --color-base-30 #333333; the reference PNG\'s #2f2f2f is a colour-profiled framebuffer byte, not this token. See tokens.css', function (e) { return rgb(cs(e).backgroundColor); })
     ]);
 
     row('tab', SEL.tab[0], function () { return q('tab'); }, [
@@ -575,7 +596,7 @@
       c('height', K.tabH, 'D §0.6 E8: --titlebar-h - --tab-top. THE OLD ROW SAID "the tab fills the strip" AND THAT WAS A [D], NOT A MEASUREMENT — it does not fill it, and never did in the reference', function (e) { return R(e).height; }),
       c('bleeds over the rule', K.stripH, 'D §0.6 E8: bottom = tabTop + tabH + 1px of negative margin = 40, so the tab covers the strip\'s own rule and tab and pane read as one surface with no line between them', function (e) { return R(e).bottom; }),
       c('top corner radius', '6px', 'S §0.6 E8: Obsidian --tab-radius-active is 6px 6px 0 0. NOT --radius-m (8px): that token is shared with the menu, the modal and the popover, and its "[D] active tab top corners" was a derivation off the radius ladder', function (e) { return cs(e).borderTopLeftRadius; }),
-      c('background', '28,28,28', 'M: active tab fill #1c1c1c — identical to the editor, so the tab reads as seamless', function (e) { return rgb(cs(e).backgroundColor); })
+      c('background', K.colors.bgPrimary, '[C] Oceanic --bg-primary #182028 — identical to the editor, so the tab reads as seamless. Was Obsidian #1c1c1c', function (e) { return rgb(cs(e).backgroundColor); })
     ]);
 
     /* §0.7 E9 — the resize handle.  It must take NO layout space: its right edge
@@ -595,8 +616,8 @@
       c('transparent at rest', 'rgba(0, 0, 0, 0)',
         'S: --accent only on :hover / .is-active — the FILL, unaffected by the 2026-09-15 divider ruling below, which is a border on the same element',
         function (e) { return cs(e).backgroundColor; }),
-      c('divider colour', '51,51,51',
-        'S 2026-09-15, user ruling overturning spec-01 §2: Obsidian\'s `--divider-color` on `.workspace-leaf-resize-handle` (app.css:6436, 6489) -> --background-modifier-border -> --color-base-30 = #333333 dark, read from the pinned 1.13.7 cascade. `docs/KNOWN-ISSUES.md` UI-3 is CLOSED by this',
+      c('divider colour', K.colors.border,
+        '[C] Oceanic --divider-color #334052, the same border token as the strip and the vault bar. It was Obsidian\'s --color-base-30 #333333; the 2026-09-15 ruling that put the line on `.sidebar-resize` is unchanged',
         function (e) { return rgb(cs(e).borderRightColor); }),
       c('divider width == a snapped hairline', true,
         'D 2026-09-15: Obsidian\'s design value is `--divider-width: 1px` (app.css:2198) and a USED border snaps to floor of the device scale over the device scale, the same rule `--hairline` already carries for the tree\'s guides — K.hairline is re-seated from the page\'s own `--hairline`, by the same `verify()` block that re-seats it, never read off the display here',
@@ -607,14 +628,14 @@
     row('sidebar', SEL.sidebar[0], function () { return q('sidebar'); }, [
       c('x', 0, 'M: sidebar sx 1..412 → content x 0', function (e) { return R(e).left; }),
       c('width', K.sidebarW, 'M: sidebar sx 1..412; fixed, no splitter in v1. §5.5: "the sidebar does not scale" — spec-07 §11 open question 2 answered NO', function (e) { return R(e).width; }),
-      c('background', '40,40,40', 'S: --bg-secondary = --background-secondary -> --color-base-20 = #282828. WAS 34,34,34 = the reference PNG\'s framebuffer byte, which decodes to 1.12.7\'s #262626. The user\'s own profile-free screenshot of 1.13.7 measures 40 exactly', function (e) { return rgb(cs(e).backgroundColor); }),
+      c('background', K.colors.bgSecondary, '[C] Oceanic --bg-secondary #252f3a. Obsidian\'s --background-secondary was --color-base-20 #282828; the reference PNG\'s #222222 is a colour-profiled framebuffer byte', function (e) { return rgb(cs(e).backgroundColor); }),
       c('border-right', 0, 'M: `.sidebar` itself carries no border; since 2026-09-15 the divider line lives on `.sidebar-resize` instead (`sidebar.resize · divider colour` below), the same element Obsidian draws it on', function (e) { return px(cs(e).borderRightWidth); })
     ]);
 
     row('editor', SEL.editor[0], function () { return q('editor'); }, [
       c('x', K.editorX, 'M: editor starts sx 413 → content 412; = sidebar width, no gap', function (e) { return R(e).left; }),
       c('width', K.editorW, 'D: 1920 − 412 (sidebarW is [M] and did not move). WAS 1506 from winW 1918; the ±1 tie the code-block solve broke in §5.3 is unaffected — it chose between 1506 and 1507 at winW 1918, and at 1920 the same solve gives 1508, and spec-01 §2\'s "treat ±1px on the far right column as a pass" is STRUCK', function (e) { return R(e).width; }, true),
-      c('background', '28,28,28', 'M: sampled #1c1c1c at (1200,600), (900,800)', function (e) { return rgb(cs(e).backgroundColor); })
+      c('background', K.colors.bgPrimary, '[C] Oceanic --bg-primary #182028. Was Obsidian #1c1c1c, the value the old sample recorded at (1200,600) and (900,800)', function (e) { return rgb(cs(e).backgroundColor); })
     ]);
 
     /* ---- 4. sidebar vertical bands ---------------------------------------
@@ -628,7 +649,7 @@
       c('height', K.treeH, 'D §0.12 E14 + the 43px vault bar: 964 − 40 − 43 = 881, WHICH IS WHAT CONTRACT §0 E14 SAYS. At winH 958 this computed 875 and contradicted the ruling it cites. §3.3: 881 with no banner, 857 with one cap, 833 with both — and spec-04 sizes the row pool from the LIVE clientHeight, never from this constant', function (e) { return R(e).height; }, true)
     ]);
 
-    /* sidebar.gutter (X6) — §5.2. Ruled here for the first time: the 8px #606060 thumb the
+    /* sidebar.gutter (X6) — §5.2. Ruled here for the first time: the 8px reserved gutter/thumb the
        --scrollbar-gutter-w token is measured from was sampled in the SIDEBAR (sx 402..410), yet the
        token was scoped to .cm-scroller alone. Left to overflow-y:auto, every tree row's usable
        width changes by 8px the moment the vault grows past one screen and row ellipsis moves with
@@ -644,7 +665,7 @@
         'C §5.2: "reserve the 8px gutter ALWAYS — never auto". §5.12.4.1 restates that overflow-y:scroll stays exactly as written under the flag route. NOT `auto` (the width would jump), NOT `hidden` (that is §5.12.7\'s fallback, which is not adopted)',
         function (h) { return cs(h.s).overflowY; }),
       c('reserved gutter width', K.gutterW,
-        'M §5.2: 8px #606060 thumb sampled in the sidebar at sx 402..410. §5.12.4.2 makes this memory-load-bearing as well as cosmetic: a pane left on WebKit\'s default 17px scrollbar measures 1.57x the bare backing store instead of 1.00x, which is ~7 MB at 2x and a G5d failure. Both memory spike rigs made exactly this mistake',
+        'M §5.2: the 8px gutter was sampled at sx 402..410; its ink is now the --scrollbar-thumb token asserted below. §5.12.4.2 makes the gutter memory-load-bearing as well as cosmetic: a pane left on WebKit\'s default 17px scrollbar measures 1.57x the bare backing store instead of 1.00x, which is ~7 MB at 2x and a G5d failure. Both memory spike rigs made exactly this mistake',
         function (h) { return gutterOf(h.s); }),
       c('border box left', 0, 'D §5.2: the scroller starts at the sidebar\'s left edge', function (h) { return R(h.s).left; }),
       c('border box right', K.scrollerR,
@@ -663,7 +684,7 @@
         'S §5.2/§5.1, per-platform since 2026-09-15 (user ruling): on Linux, Obsidian 1.13.7\'s own --scrollbar-thumb-bg, `color-mix(in oklch, white 10%, transparent)` (app.css:2629 + 2962) = rgba(255,255,255,.1) — Cairn is permanently in the styled 8px-scrollbar branch there (§5.12.4.2) and a macOS colour would be neither app\'s rendering of anything. On macOS, Obsidian\'s OWN rendering: `gray` = rgb(128,128,128) (`.mod-macos { --scrollbar-thumb-bg: gray }`, app.css:3028), re-measured live against the running app rather than the reference PNG\'s colour-managed #606060. Read from the token so it is asserted even where ::-webkit-scrollbar-thumb is not introspectable',
         function (h) { return rgb(cs(document.documentElement).getPropertyValue('--scrollbar-thumb') || cs(h.s).getPropertyValue('--scrollbar-thumb')); }),
       c('scrollbar thumb alpha', K.scrollbarThumbAlpha,
-        'S the OTHER half of the row above, and the half that makes it mean anything: rgb() cannot tell a translucent white from opaque grey, so without this a regression to the wrong branch\'s colour passes. On Linux the translucency is the point — one token reads #383838 over the sidebar\'s #222222 and #333333 over the editor\'s #1c1c1c, the per-pane difference Obsidian has there. On macOS the native thumb is OPAQUE and that per-pane argument does not apply',
+        'S the OTHER half of the row above, and the half that makes it mean anything: rgb() cannot tell a translucent white from opaque grey, so without this a regression to the wrong branch\'s colour passes. On Linux the translucency is the point — the pre-Oceanic grounds made one token read #383838 over the sidebar\'s #222222 and #333333 over the editor\'s #1c1c1c, and the per-pane difference survives Oceanic\'s new grounds. On macOS the native thumb is OPAQUE and that per-pane argument does not apply',
         function (h) { return alpha(cs(document.documentElement).getPropertyValue('--scrollbar-thumb') || cs(h.s).getPropertyValue('--scrollbar-thumb')); })
     ]);
 
@@ -730,7 +751,7 @@
       return { bar: bar, chev: kids[0] || null, label: kids[1] || null };
     }, [
       c('y (border box, incl. rule)', K.vaultBarY,
-        'D: 964 − 43 = 921, painted as the bar\'s own border-top. The COLOUR is still §5.10 R2\'s measured #2f2f2f and is deliberately not moved to Obsidian 1.13.7\'s --tab-outline-color (#333333) — that is one row of §0.14.1\'s palette conflict, which is the user\'s call, not this pass\'s',
+        'D: 964 − 43 = 921, painted as the bar\'s own border-top. Its colour is `--bg-modifier-border` #334052 (Oceanic); Obsidian\'s --tab-outline-color was #333333',
         function (h) { return R(h.bar).top; }, true),
       c('height (border box)', K.vaultBarH,
         'S+M: 1px rule + 8px pad + 26px content row + 8px pad = 921..963, bottom flush with 964. Obsidian app.css:6319-6330 + 8010-8022; confirmed on the user\'s screen at 42.1 CSS px',
@@ -738,9 +759,9 @@
       c('box-sizing', 'border-box',
         'D §5.10 R2: this is the half of R2 that survives. With content-box, `height:43px` + a 1px border-top makes the sidebar column sum to 959',
         function (h) { return cs(h.bar).boxSizing; }),
-      c('border-top', 1, 'M §5.10 R2: the rule is #2f2f2f, 1px', function (h) { return px(cs(h.bar).borderTopWidth); }),
-      c('rule colour', '51,51,51', 'S: --bg-modifier-border -> --color-base-30 = #333333, the same base-30 as the strip and --tab-outline. WAS 47,47,47 (a framebuffer byte); the user\'s screenshot of this very rule measures 51', function (h) { return rgb(cs(h.bar).borderTopColor); }),
-      c('background', '40,40,40', 'S §5.5: --bg-secondary #282828, same ground as the sidebar', function (h) { return rgb(cs(h.bar).backgroundColor); }),
+      c('border-top', 1, '[C] Oceanic --bg-modifier-border #334052, 1px', function (h) { return px(cs(h.bar).borderTopWidth); }),
+      c('rule colour', K.colors.border, '[C] Oceanic --bg-modifier-border #334052, the same border token as the strip and --tab-outline. Was Obsidian #333333', function (h) { return rgb(cs(h.bar).borderTopColor); }),
+      c('background', K.colors.bgSecondary, '[C] Oceanic --bg-secondary #252f3a, same ground as the sidebar. Was Obsidian #282828', function (h) { return rgb(cs(h.bar).backgroundColor); }),
       c('chevron box left', K.vbPadL,
         'M/D §5.11 + §5.5: chevrons-up-down in a 16px box at content x 16..32. It is now 8 (bar padding) + 8 (switcher padding) rather than one 16px bar padding — the same 16, reached the way Obsidian reaches it, which is why the switcher can start its hover box at x 8',
         function (h) { return h.chev ? R(h.chev).left : null; }),
@@ -762,7 +783,7 @@
     row('tree.row', SEL.treeRow[0] + ' (any)', function () { return qa('treeRow')[0]; }, [
       c('height', K.rowH, 'M §5.2: --row-h, the measured 27px row pitch. Rows are absolutely positioned inside the .sz sizer (§5.12.4), so the pitch is the box height', function (e) { return R(e).height; }),
       c('font-size', K.treeFs, 'M: glyph band 13px tall', function (e) { return px(cs(e).fontSize); }),
-      c('colour', '179,179,179', 'M §5.1: #b3b3b3 = --text-muted, folders and files alike (the #aaaaaa peak is ink, not the token)', function (e) { return rgb(cs(e).color); }),
+      c('colour', K.colors.textMuted, '[C] Oceanic --text-muted #a5b1c2, folders and files alike. Was Obsidian #b3b3b3 (the old ink-peak argument still holds: a peak is not the token)', function (e) { return rgb(cs(e).color); }),
       c('ellipsis, not clip', 'ellipsis',
         'D §5.2: the row is spec-04\'s block-with-padding, NOT spec-01 §5.4\'s flex container — text-overflow:ellipsis does not apply to an anonymous flex item, so a flex row would clip long filenames hard instead of ellipsing',
         function (e) { return cs(e).textOverflow; })
@@ -830,8 +851,8 @@
         function (h) { return h.b0.width; }),
       c('box left at depth 0', K.chevLeft(0), 'D §5.2: --cx0 = --gx0 − --chev-w/2 = 24 − 8 = 16 (§0.48 E96)', function (h) { return h.b0.left; }),
       c('gutter to text', K.gut, 'D §5.2: --gut = --tx0 − --cx0 − --chev-w = 35 − 15 − 16. Falls out once the slot width is chosen', function (h) { return cl(h.r0) - (h.b0.left + h.b0.width); }),
-      c('mask colour', '102,102,102',
-        'M §5.1: --text-faint #666666. spec-04\'s #8a8a8a is STRUCK. The chevron is a -webkit-mask (which recolours on hover; a background-image cannot), and its data URL is the --chev TOKEN in tokens.css, NOT one of icons.ts\'s 11 literals (X2)',
+      c('mask colour', K.colors.textFaint,
+        '[C] Oceanic --text-faint #626d7e. Was Obsidian #666666; spec-04\'s #8a8a8a is STRUCK. The chevron is a -webkit-mask (which recolours on hover; a background-image cannot), and its data URL is the --chev TOKEN in tokens.css, NOT one of icons.ts\'s 11 literals (X2)',
         function (h) { return rgb(cs(h.b0.el).stroke); }),
       c('no transition', 'none',
         'D §5.1 rule 5: no transitions, no animations, anywhere. spec-04 §4.3\'s `transition: transform 100ms ease` on the chevron is STRUCK. Asserted as "nothing animates" (every duration and delay is 0), never as one spelling of it — see noTransition(): the old literal `all 0s ease 0s` failed the shipping app, whose global `transition: none !important` computes transition-property `none`',
@@ -844,9 +865,9 @@
       return r ? { r: r, chevron: chev(f) } : null;
     }, [
       c('first guide x', K.gx0, 'M §0.48 E96: sx 24 / 41 / 58 ARE content 24 / 41 / 58 — spike O struck the 1px frame correction. Live Obsidian measures device 30 / 51 / 72 at dpr 1.25', function (h) { return px(cs(h.r).backgroundPositionX); }),
-      c('guide colour', '255,255,255', 'S §5.1: --indent-guide is now Obsidian\'s own --indentation-guide-color, color-mix(in oklch, white 12%, transparent) = rgba(255,255,255,.12), so the CHANNELS are white and the alpha row below carries the rest. WAS the opaque 56,56,56 — which is exactly what 12% white over 1.12.7\'s #262626 decodes to, so the old literal was right about the pixel and wrong about the model', function (h) { var m = cs(h.r).backgroundImage.match(/rgba?\([^)]*\)/); return rgb(m ? m[0] : ''); }),
-      c('guide alpha', 0.12,
-        'S the other half of the row above: rgb() cannot tell rgba(255,255,255,.12) from opaque white, so without this an opaque regression passes. Same trap the scrollbar-thumb pair documents',
+      c('guide colour', K.colors.indentGuide, '[C] Oceanic --indent-guide is rgba(170,205,240,.14), so the channels are the Oceanic guide ink and the alpha row carries the rest. Obsidian\'s --indentation-guide-color was 12% white; the old 255,255,255 expectation was that pre-Oceanic model', function (h) { var m = cs(h.r).backgroundImage.match(/rgba?\([^)]*\)/); return rgb(m ? m[0] : ''); }),
+      c('guide alpha', K.colors.indentGuideAlpha,
+        '[C] Oceanic alpha for --indent-guide. The previous 0.12 was Obsidian\'s 12%-white value; rgb() cannot tell a translucent guide from an opaque one, so this row still guards the alpha channel',
         function (h) { var m = cs(h.r).backgroundImage.match(/rgba?\([^)]*\)/); return alpha(m ? m[0] : ''); }),
       c('guide k sits on the depth-k chevron centre', 0,
         'D §5.2: this single coincidence is what fixes the chevron box. If it fails, the tree is the 3px-per-level wrong one',
@@ -902,7 +923,7 @@
       c('margin-bottom', K.titleSpace,
         'M 2026-09-09: --inline-title-space-after 12.944px, applied as margin-bottom. It was --h1-space-after 10px until then; that token is a BODY-heading token and still governs .nc-h1. spec-03\'s "No margins on heading lines" is STRUCK — this margin is LOAD-BEARING for the measured geometry',
         function (h) { return px(cs(h.t).marginBottom); }),
-      c('colour', '218,218,218', 'M §5.4.2: --text-normal #dadada', function (h) { return rgb(cs(h.t).color); }),
+      c('colour', K.colors.textNormal, '[C] Oceanic --text-normal #d7dfe9. Was Obsidian #dadada', function (h) { return rgb(cs(h.t).color); }),
       c('x', K.lineLeft, 'M §5.4.2 + spike Q: it sits in the same line box as body text — now 1434px at origin 444 (was 1432 at 445)', function (h) { return R(h.t).left; }),
       c('width', K.lineW, 'D §5.4.2 + spike Q: the same 1434px line box as body text (was 1432)', function (h) { return R(h.t).width; }, true),
       c('document first line box top', K.firstLineTop,
@@ -992,8 +1013,8 @@
       c('marker count', 1,
         '§5.4.1 rule 2 + §5.11: "exactly one .nc-md-marker". A heading line reveals its marker when the PRIMARY selection intersects that line — an empty selection on the line, or a range that touches it',
         function (h) { return h.markers; }),
-      c('marker colour', '102,102,102',
-        '§5.4.1 rule 2 + §5.11: --text-faint #666666 = rgb(102,102,102)',
+      c('marker colour', K.colors.textFaint,
+        '§5.4.1 rule 2 + §5.11: [C] Oceanic --text-faint #626d7e. Was Obsidian #666666 = rgb(102,102,102)',
         function (h) { return h.colour; }),
       c('marker background alpha', 0,
         '§5.4.1 rule 2: "no background". Asserted as the ALPHA channel, because rgb() cannot tell transparent from opaque black — both read (0,0,0)',
@@ -1034,7 +1055,7 @@
         function (l) { return cl(l[0]); }),
       c('font-size', K.codeFs, 'M §5.3: advance 8.370px (a 3-decimal fit over four dot centroids: 8.357/8.369/8.383) ÷ 0.6em → 13.95 → 14. Rejects spec-03\'s 13.8px, which also cannot give the measured 21.000 pitch', function (l) { return px(cs(l[0]).fontSize); }),
       c('line-height', K.codeLh, 'M §5.1/§5.3: backtick y-centroids on lines 1 and 3 at 28.46 and 70.46 → 42.00/2 = 21.000. --lh-code is the INTEGER 21px, never `1.5` (X4) — 14x1.5 must not be re-derived at render time and drift sub-pixel', function (l) { return px(cs(l[0]).lineHeight); }),
-      c('background', '35,35,35', 'S §5.1: --bg-primary-alt = --code-background -> --background-primary-alt -> --color-base-10 = #232323. WAS 33,33,33, the framebuffer byte of 1.12.7\'s #242424', function (l) { return rgb(cs(l[0]).backgroundColor); }),
+      c('background', K.colors.bgPrimaryAlt, '[C] Oceanic --bg-primary-alt #212a34. Obsidian\'s --color-base-10 was #232323; the reference PNG\'s #242424 is a colour-profiled framebuffer byte', function (l) { return rgb(cs(l[0]).backgroundColor); }),
       c('border', 0, 'M §5.3: no ring of intermediate colour around the fill', function (l) { return px(cs(l[0]).borderTopWidth); })
     ]);
 
@@ -1046,7 +1067,7 @@
 
     row('cm.code.fence', 'the ```sh fence lines', function () { var l = qa('codeLine'); return l.length >= 3 ? l : null; }, [
       c('fence colour == body colour', 0,
-        'M §5.3: peak ink 213 on the backticks, on the "sh", and on the code body alike; the em-dash (a solid bar, so it reaches full value) peaks at 219 ~ #dadada. Both specs\' "fences are dimmer" guesses and VISUAL-MEASUREMENTS.md\'s "dimmer fence colour" prose are STRUCK — there is no dimming',
+        'M §5.3: peak ink 213 on the backticks, on the "sh", and on the code body alike; the em-dash (a solid bar, so it reaches full value) peaked at 219 ~ pre-Oceanic #dadada. Both specs\' "fences are dimmer" guesses and VISUAL-MEASUREMENTS.md\'s "dimmer fence colour" prose are STRUCK — there is no dimming',
         function (l) { return rgb(cs(l[0]).color) === rgb(cs(l[1]).color) ? 0 : NaN; }),
       c('fence sits inside the tinted box', 0,
         'M §5.3: one class on every line of the block, opening fence to closing fence INCLUSIVE. A 3-line block is exactly 3 x 21px tall, so the two fence lines are two of those three tinted lines',
@@ -1119,7 +1140,7 @@
         '§5.12.5: `height: 100%`. Size-independent — asserted against the live innerHeight, not against 964',
         function () { return document.body.clientHeight - root.innerHeight; }),
       c('independent pane scroll offsets survive', 1,
-        '§5.12.1: the price §9 E3 agreed to pay does NOT materialise under the flag route — the two panes keep independent scroll positions and both keep their own 8px #606060 scrollbars, and §5.2\'s and §5.3\'s box models survive verbatim. Asserted structurally: the two scrollers are disjoint, so neither can be the other\'s ancestor',
+        '§5.12.1: the price §9 E3 agreed to pay does NOT materialise under the flag route — the two panes keep independent scroll positions and both keep their own 8px scrollbars, and §5.2\'s and §5.3\'s box models survive verbatim. Asserted structurally: the two scrollers are disjoint, so neither can be the other\'s ancestor',
         function (h) {
           if (h.hits.length !== 2) return 0;
           return b(!h.hits[0].contains(h.hits[1]) && !h.hits[1].contains(h.hits[0]));

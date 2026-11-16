@@ -57,11 +57,11 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 
-use cairn_lib::tree::{NoteEntry, VaultSnapshot};
 use cairn_lib::search::{
     self, FileGroup, MsgSink, SearchMsg, SearchState, Snippet, BATCH_MAX_GROUPS,
     CONTENT_DEBOUNCE_MS, MAX_FILENAME_HITS, MAX_FILES, MAX_SNIPPETS_IPC, MAX_SNIPPETS_PER_FILE,
 };
+use cairn_lib::tree::{NoteEntry, VaultSnapshot};
 
 /* ── the sink ─────────────────────────────────────────────────────────────── */
 
@@ -98,11 +98,17 @@ impl Collector {
     }
     /// Milliseconds from construction to the first `Files` message.
     fn files_ms(&self) -> Option<f64> {
-        self.t_files.lock().unwrap().map(|t| (t - self.t0).as_secs_f64() * 1000.0)
+        self.t_files
+            .lock()
+            .unwrap()
+            .map(|t| (t - self.t0).as_secs_f64() * 1000.0)
     }
     /// Milliseconds from construction to the first `Batch` message.
     fn batch_ms(&self) -> Option<f64> {
-        self.t_batch.lock().unwrap().map(|t| (t - self.t0).as_secs_f64() * 1000.0)
+        self.t_batch
+            .lock()
+            .unwrap()
+            .map(|t| (t - self.t0).as_secs_f64() * 1000.0)
     }
     fn msgs(&self) -> Vec<SearchMsg> {
         self.msgs.lock().unwrap().clone()
@@ -187,7 +193,13 @@ impl Fixture {
 /// `path::basename_span`, which is the definition `NoteEntry::name()` decodes.
 fn entry(rel: &str, size: u32, mtime_ms: i64) -> NoteEntry {
     let (name_start, name_len) = cairn_lib::path::basename_span(rel);
-    NoteEntry { rel: rel.into(), name_start, name_len, size, mtime_ms }
+    NoteEntry {
+        rel: rel.into(),
+        name_start,
+        name_len,
+        size,
+        mtime_ms,
+    }
 }
 
 fn write(root: &Path, rel: &str, body: &str) {
@@ -203,16 +215,26 @@ fn write(root: &Path, rel: &str, body: &str) {
 /// the snapshot are both emitted in.  Files land in `files`, everything
 /// (directories included) lands in `blob_nodes`.
 fn walk(root: &Path, rel: &str, files: &mut Vec<NoteEntry>, nodes: &mut Vec<String>) {
-    let abs = if rel.is_empty() { root.to_path_buf() } else { root.join(rel) };
+    let abs = if rel.is_empty() {
+        root.to_path_buf()
+    } else {
+        root.join(rel)
+    };
     let mut dirs: Vec<String> = Vec::new();
     let mut notes: Vec<String> = Vec::new();
-    let Ok(rd) = std::fs::read_dir(&abs) else { return };
+    let Ok(rd) = std::fs::read_dir(&abs) else {
+        return;
+    };
     for e in rd.flatten() {
         let name = e.file_name().to_string_lossy().into_owned();
         if name.starts_with('.') {
             continue;
         }
-        let child = if rel.is_empty() { name.clone() } else { format!("{rel}/{name}") };
+        let child = if rel.is_empty() {
+            name.clone()
+        } else {
+            format!("{rel}/{name}")
+        };
         match e.file_type() {
             Ok(t) if t.is_dir() => dirs.push(child),
             Ok(t) if t.is_file() && name.ends_with(".md") => notes.push(child),
@@ -240,7 +262,11 @@ fn snapshot_of(root: &Path, epoch: u64) -> (Arc<VaultSnapshot>, Vec<String>) {
     let mut nodes = Vec::new();
     walk(root, "", &mut files, &mut nodes);
     (
-        Arc::new(VaultSnapshot { root: root.to_path_buf(), files, epoch }),
+        Arc::new(VaultSnapshot {
+            root: root.to_path_buf(),
+            files,
+            epoch,
+        }),
         nodes,
     )
 }
@@ -249,7 +275,11 @@ fn fixture_from(build: impl FnOnce(&Path)) -> Fixture {
     let dir = tempfile::tempdir().unwrap();
     build(dir.path());
     let (snapshot, blob_nodes) = snapshot_of(dir.path(), 1);
-    Fixture { dir, snapshot, blob_nodes }
+    Fixture {
+        dir,
+        snapshot,
+        blob_nodes,
+    }
 }
 
 /// The small, hand-built vault every semantic test runs against.  Directories
@@ -258,10 +288,22 @@ fn fixture_from(build: impl FnOnce(&Path)) -> Fixture {
 fn small() -> Fixture {
     fixture_from(|root| {
         write(root, "aardvark.md", "nothing to see\n");
-        write(root, "Alpha/one.md", "the needle is here\nand needle again\n");
-        write(root, "Alpha/Deep/two.md", "needle\nplus haystack on another line\n");
+        write(
+            root,
+            "Alpha/one.md",
+            "the needle is here\nand needle again\n",
+        );
+        write(
+            root,
+            "Alpha/Deep/two.md",
+            "needle\nplus haystack on another line\n",
+        );
         write(root, "Beta/three.md", "haystack only\n");
-        write(root, "Beta/needle-in-the-name.md", "no content match at all\n");
+        write(
+            root,
+            "Beta/needle-in-the-name.md",
+            "no content match at all\n",
+        );
         write(root, "Gamma/four.md", "Needle with a capital\n");
         write(root, "zulu.md", "tail file\n");
     })
@@ -274,12 +316,16 @@ fn big() -> &'static Fixture {
     static BIG: OnceLock<Fixture> = OnceLock::new();
     BIG.get_or_init(|| {
         fixture_from(|root| {
-            let filler = "lorem ipsum dolor sit amet consectetur adipiscing elit sed do\n"
-                .repeat(130); // ~8 KB
+            let filler =
+                "lorem ipsum dolor sit amet consectetur adipiscing elit sed do\n".repeat(130); // ~8 KB
             for i in 0..2400u32 {
                 let rel = format!("d{:03}/note_{:04}.md", i % 120, i);
                 if i % 16 == 0 {
-                    write(root, &rel, &format!("{filler}zzqneedle here on its own line\n"));
+                    write(
+                        root,
+                        &rel,
+                        &format!("{filler}zzqneedle here on its own line\n"),
+                    );
                 } else {
                     write(root, &rel, &filler);
                 }
@@ -350,7 +396,11 @@ fn files_comes_first_then_batches_then_exactly_one_complete() {
     let fx = small();
     let (c, _) = run(&fx, "needle");
     let k = c.kinds();
-    assert_eq!(k.first(), Some(&"files"), "Files is sent before ANY I/O: {k:?}");
+    assert_eq!(
+        k.first(),
+        Some(&"files"),
+        "Files is sent before ANY I/O: {k:?}"
+    );
     assert_eq!(k.last(), Some(&"complete"), "{k:?}");
     assert_eq!(k.iter().filter(|x| **x == "complete").count(), 1, "{k:?}");
     assert_eq!(k.iter().filter(|x| **x == "files").count(), 1, "{k:?}");
@@ -373,7 +423,10 @@ fn every_message_echoes_the_generation_it_was_started_with() {
             | SearchMsg::Complete { gen, .. }
             | SearchMsg::Error { gen, .. } => gen,
         };
-        assert_eq!(g, 4242, "Rust never invents, bumps or reorders the number (X15)");
+        assert_eq!(
+            g, 4242,
+            "Rust never invents, bumps or reorders the number (X15)"
+        );
     }
 }
 
@@ -394,9 +447,15 @@ fn a_one_character_query_runs_the_filename_path_only() {
     let fx = small();
     let (c, _) = run(&fx, "n");
     assert_eq!(c.kinds(), vec!["files", "complete"]);
-    assert!(!c.files().is_empty(), "filenames still match on one character");
+    assert!(
+        !c.files().is_empty(),
+        "filenames still match on one character"
+    );
     let d = done(&c.complete());
-    assert_eq!(d.scanned, 0, "no file may be opened for a one-character query");
+    assert_eq!(
+        d.scanned, 0,
+        "no file may be opened for a one-character query"
+    );
 }
 
 #[test]
@@ -405,8 +464,14 @@ fn a_bad_regex_is_terminal_for_its_generation_and_no_complete_follows() {
     // not an empty result list.
     let fx = small();
     let (c, _) = run(&fx, "/[/");
-    assert_eq!(c.kinds(), vec!["error"], "Error is TERMINAL: no Files, no Complete");
-    let SearchMsg::Error { gen, message } = &c.msgs()[0] else { panic!() };
+    assert_eq!(
+        c.kinds(),
+        vec!["error"],
+        "Error is TERMINAL: no Files, no Complete"
+    );
+    let SearchMsg::Error { gen, message } = &c.msgs()[0] else {
+        panic!()
+    };
     assert_eq!(*gen, 1);
     assert!(!message.is_empty());
 }
@@ -435,7 +500,10 @@ fn file_group_id_indexes_the_files_only_space_not_the_blob_node_space() {
             .files
             .get(g.id as usize)
             .expect("id must index VaultSnapshot.files");
-        assert_eq!(&*entry.rel, g.rel, "id must name the file the group is about");
+        assert_eq!(
+            &*entry.rel, g.rel,
+            "id must name the file the group is about"
+        );
         assert_eq!(entry.name(), g.name);
 
         // And the SAME number read in the blob node space names something else —
@@ -464,7 +532,10 @@ fn file_group_id_indexes_the_files_only_space_not_the_blob_node_space() {
         .iter()
         .filter(|g| fx.blob_nodes.get(g.id as usize).map(String::as_str) != Some(g.rel.as_str()))
         .count();
-    assert!(disagreeing > 0, "the fixture must produce at least one id whose blob node differs");
+    assert!(
+        disagreeing > 0,
+        "the fixture must produce at least one id whose blob node differs"
+    );
 }
 
 #[test]
@@ -474,7 +545,11 @@ fn the_tree_is_reached_by_path_never_by_index_arithmetic() {
     let fx = small();
     let (c, _) = run(&fx, "needle");
     for g in c.batched() {
-        assert!(fx.root().join(&g.rel).is_file(), "{} must resolve by path", g.rel);
+        assert!(
+            fx.root().join(&g.rel).is_file(),
+            "{} must resolve by path",
+            g.rel
+        );
     }
 }
 
@@ -486,7 +561,11 @@ fn tokens_are_and_across_the_file_and_or_per_line() {
     // "needle haystack" appears on DIFFERENT lines only in Alpha/Deep/two.md.
     let (c, _) = run(&fx, "needle haystack");
     let rels: Vec<String> = c.batched().into_iter().map(|g| g.rel).collect();
-    assert_eq!(rels, vec!["Alpha/Deep/two.md"], "AND is across the FILE, not the line");
+    assert_eq!(
+        rels,
+        vec!["Alpha/Deep/two.md"],
+        "AND is across the FILE, not the line"
+    );
 }
 
 #[test]
@@ -518,7 +597,11 @@ fn a_literal_query_is_never_interpreted_as_a_regex() {
     });
     let (c, _) = run(&fx, "a.c");
     let rels: Vec<String> = c.batched().into_iter().map(|g| g.rel).collect();
-    assert_eq!(rels, vec!["b.md"], "fixed_strings(true) escapes the whole pattern");
+    assert_eq!(
+        rels,
+        vec!["b.md"],
+        "fixed_strings(true) escapes the whole pattern"
+    );
 }
 
 #[test]
@@ -540,7 +623,11 @@ fn ranking_puts_name_matches_first_then_the_most_matching_lines() {
     let order = done(&c.complete()).order;
     let by_id: std::collections::HashMap<u32, FileGroup> =
         c.batched().into_iter().map(|g| (g.id, g)).collect();
-    assert_eq!(order.len(), by_id.len(), "order must name every content group exactly once");
+    assert_eq!(
+        order.len(),
+        by_id.len(),
+        "order must name every content group exactly once"
+    );
 
     let ranks: Vec<(u8, u32, u32)> = order
         .iter()
@@ -548,7 +635,10 @@ fn ranking_puts_name_matches_first_then_the_most_matching_lines() {
         .collect();
     let mut sorted = ranks.clone();
     sorted.sort_unstable();
-    assert_eq!(ranks, sorted, "order is the rank-sorted sequence: {ranks:?}");
+    assert_eq!(
+        ranks, sorted,
+        "order is the rank-sorted sequence: {ranks:?}"
+    );
 
     // `Alpha/one.md` has two matching lines and the others one, so among the
     // content-only groups it must come first.
@@ -580,9 +670,11 @@ fn snippet_offsets_select_exactly_the_match_in_a_note_with_emoji_and_cjk() {
 
     // `col`/`len` index the ORIGINAL line, which is what CodeMirror is given.
     let orig: Vec<u16> = line.encode_utf16().collect();
-    let picked =
-        String::from_utf16(&orig[s.col as usize..(s.col + s.len) as usize]).unwrap();
-    assert_eq!(picked, "needle", "col/len must select the match in the original line");
+    let picked = String::from_utf16(&orig[s.col as usize..(s.col + s.len) as usize]).unwrap();
+    assert_eq!(
+        picked, "needle",
+        "col/len must select the match in the original line"
+    );
 }
 
 #[test]
@@ -591,8 +683,15 @@ fn at_most_two_snippets_cross_the_ipc_and_more_marks_the_cap() {
     let fx = fixture_from(|root| write(root, "many.md", &body));
     let (c, _) = run(&fx, "needle");
     let g = &c.batched()[0];
-    assert_eq!(g.snippets.len(), MAX_SNIPPETS_IPC, "<=2 inline; the rest via search_expand");
-    assert!(g.more, "the per-file snippet cap was hit, so match_count is a floor");
+    assert_eq!(
+        g.snippets.len(),
+        MAX_SNIPPETS_IPC,
+        "<=2 inline; the rest via search_expand"
+    );
+    assert!(
+        g.more,
+        "the per-file snippet cap was hit, so match_count is a floor"
+    );
 
     // …and search_expand gives up to MAX_SNIPPETS_PER_FILE.
     let full = search::expand(fx.root(), "needle", "many.md").unwrap();
@@ -636,7 +735,7 @@ fn filename_highlight_ranges_are_utf16_and_inside_the_name() {
 fn the_files_section_is_capped() {
     let fx = fixture_from(|root| {
         for i in 0..80 {
-            write(root, &format!("note_{i:03}.md", ), "x\n");
+            write(root, &format!("note_{i:03}.md",), "x\n");
         }
     });
     let (c, _) = run(&fx, "note");
@@ -671,14 +770,21 @@ fn a_superseded_query_dies_inside_the_debounce_having_opened_no_file() {
     let took = t.elapsed().as_millis();
 
     let d = done(&c.complete());
-    assert_eq!(d.gen, 1, "a cancelled job's last message is on ITS OWN generation");
+    assert_eq!(
+        d.gen, 1,
+        "a cancelled job's last message is on ITS OWN generation"
+    );
     assert!(d.cancelled);
     assert_eq!(d.scanned, 0, "no file may be opened for a superseded query");
     assert!(
         took < u128::from(CONTENT_DEBOUNCE_MS),
         "it must not sleep the whole debounce: {took} ms"
     );
-    assert_eq!(st.live_jobs(), 0, "step 7 removes the entry on EVERY exit path");
+    assert_eq!(
+        st.live_jobs(),
+        0,
+        "step 7 removes the entry on EVERY exit path"
+    );
 }
 
 #[test]
@@ -714,7 +820,10 @@ fn typing_another_character_mid_scan_leaks_no_thread_and_delivers_no_stale_hits(
             | SearchMsg::Complete { gen, .. }
             | SearchMsg::Error { gen, .. } => gen,
         };
-        assert_eq!(g, 1, "a stale hit on generation 2 would be a wrong-results bug");
+        assert_eq!(
+            g, 1,
+            "a stale hit on generation 2 would be a wrong-results bug"
+        );
     }
     assert_eq!(st.live_jobs(), 0);
     // `run_search` joins every handle it spawned, so no worker outlives it.  The
@@ -744,7 +853,11 @@ fn cancel_all_stops_a_running_search_without_touching_the_number() {
     assert_eq!(d.gen, 9);
     assert!(d.cancelled);
     assert!((d.scanned as usize) < fx.snapshot.files.len());
-    assert_eq!(st.generation(), 9, "a vault switch must NOT touch the counter");
+    assert_eq!(
+        st.generation(),
+        9,
+        "a vault switch must NOT touch the counter"
+    );
     assert_eq!(st.live_jobs(), 0);
 }
 
@@ -799,7 +912,11 @@ fn a_file_deleted_mid_scan_is_skipped_and_never_an_error() {
             std::fs::remove_file(fx.root().join(format!("n{i:02}.md"))).unwrap();
         }
     }
-    assert_eq!(fx.snapshot.files.len(), 40, "the snapshot still names all 40 (it is immutable)");
+    assert_eq!(
+        fx.snapshot.files.len(),
+        40,
+        "the snapshot still names all 40 (it is immutable)"
+    );
 
     let (c, _) = run(&fx, "zzqneedle");
     let d = done(&c.complete());
@@ -810,7 +927,11 @@ fn a_file_deleted_mid_scan_is_skipped_and_never_an_error() {
         d.scanned, 20,
         "`scanned` counts files whose content was really read; the 20 that vanished are `skipped`"
     );
-    assert_eq!(d.scanned + d.skipped, 40, "every entry in the snapshot is accounted for");
+    assert_eq!(
+        d.scanned + d.skipped,
+        40,
+        "every entry in the snapshot is accounted for"
+    );
     assert!(c.kinds().iter().all(|k| *k != "error"));
 }
 
@@ -820,7 +941,11 @@ fn a_file_created_mid_scan_appears_only_on_the_next_search() {
     write(fx.root(), "new.md", "zzqneedle\n");
     let (c, _) = run(&fx, "zzqneedle");
     let rels: Vec<String> = c.batched().into_iter().map(|g| g.rel).collect();
-    assert_eq!(rels, vec!["old.md"], "the pinned snapshot does not know about new.md");
+    assert_eq!(
+        rels,
+        vec!["old.md"],
+        "the pinned snapshot does not know about new.md"
+    );
 
     // The next search takes a fresh snapshot and sees it — 90 ms away.
     let (snap2, _) = snapshot_of(fx.root(), 2);
@@ -876,9 +1001,16 @@ fn a_note_over_max_scan_bytes_is_never_read_but_stays_name_reachable() {
 
     let (c, _) = run(&fx, "zzqneedle");
     let rels: Vec<String> = c.batched().into_iter().map(|g| g.rel).collect();
-    assert_eq!(rels, vec!["small.md"], "the oversize note must not produce content hits");
+    assert_eq!(
+        rels,
+        vec!["small.md"],
+        "the oversize note must not produce content hits"
+    );
     let d = done(&c.complete());
-    assert_eq!(d.scanned, 1, "the oversize note is skipped before a single byte is read");
+    assert_eq!(
+        d.scanned, 1,
+        "the oversize note is skipped before a single byte is read"
+    );
     assert_eq!(d.skipped, 1);
 
     // Still reachable by name.
@@ -913,13 +1045,20 @@ fn the_file_cap_truncates_and_says_so() {
     });
     let (c, _) = run(&fx, "zzqneedle");
     let d = done(&c.complete());
-    assert!(d.truncated, "the cap was hit, so the count line must say `200+ … stopped`");
+    assert!(
+        d.truncated,
+        "the cap was hit, so the count line must say `200+ … stopped`"
+    );
     assert!(
         c.batched().len() <= MAX_FILES + cairn_lib::search::SEARCH_THREADS,
         "at most one in-flight group per worker may race past the cap"
     );
     assert!(d.total_files >= MAX_FILES as u32);
-    assert_eq!(d.order.len(), c.batched().len(), "order names every group that was sent");
+    assert_eq!(
+        d.order.len(),
+        c.batched().len(),
+        "order names every group that was sent"
+    );
 }
 
 #[test]
@@ -929,7 +1068,13 @@ fn a_vault_with_no_notes_completes_cleanly() {
     assert_eq!(c.kinds(), vec!["files", "complete"]);
     let d = done(&c.complete());
     assert_eq!(
-        (d.order.len(), d.total_matches, d.total_files, d.scanned, d.skipped),
+        (
+            d.order.len(),
+            d.total_matches,
+            d.total_files,
+            d.scanned,
+            d.skipped
+        ),
         (0, 0, 0, 0, 0)
     );
     assert!(!d.truncated && !d.cancelled);
@@ -972,19 +1117,29 @@ fn expand_regreps_the_current_file_and_a_deleted_one_is_an_empty_vec() {
 
     // It re-greps, so an edit is reflected immediately — no per-search cache.
     write(fx.root(), "e.md", "zzqneedle only once now\n");
-    assert_eq!(search::expand(fx.root(), "zzqneedle", "e.md").unwrap().len(), 1);
+    assert_eq!(
+        search::expand(fx.root(), "zzqneedle", "e.md")
+            .unwrap()
+            .len(),
+        1
+    );
 
     // A deleted file is Ok(vec![]), NOT a notFound error: an empty vector is the
     // honest answer to "what does this file match now" (§11.3).
     std::fs::remove_file(fx.root().join("e.md")).unwrap();
-    assert!(search::expand(fx.root(), "zzqneedle", "e.md").unwrap().is_empty());
+    assert!(search::expand(fx.root(), "zzqneedle", "e.md")
+        .unwrap()
+        .is_empty());
 }
 
 #[test]
 fn expand_refuses_a_path_that_escapes_the_vault() {
     let fx = fixture_from(|root| write(root, "e.md", "x\n"));
     for bad in ["../outside.md", "/etc/passwd.md", "a/../../b.md", ""] {
-        assert!(search::expand(fx.root(), "x", bad).is_err(), "{bad:?} must be refused");
+        assert!(
+            search::expand(fx.root(), "x", bad).is_err(),
+            "{bad:?} must be refused"
+        );
     }
 }
 
@@ -1077,7 +1232,11 @@ fn bench_corpus(root: &Path, label: &str) -> f64 {
                     d.skipped,
                     d.total_files,
                     d.total_matches,
-                    if d.truncated { " TRUNCATED" } else { " uncapped" }
+                    if d.truncated {
+                        " TRUNCATED"
+                    } else {
+                        " uncapped"
+                    }
                 );
                 continue;
             }
@@ -1111,7 +1270,10 @@ fn files_lands_within_one_frame_and_the_first_batch_within_thirty_ms_of_the_scan
     };
     let (snapshot, _) = snapshot_of(&root, 1);
     eprintln!("\nlatency on {} notes", snapshot.files.len());
-    eprintln!("  {:<22} {:>10} {:>12}   hits", "query", "Files ms", "1st Batch ms");
+    eprintln!(
+        "  {:<22} {:>10} {:>12}   hits",
+        "query", "Files ms", "1st Batch ms"
+    );
 
     let budget_batch = CONTENT_DEBOUNCE_MS as f64 + 30.0;
     for q in ["c", "note", "memory", "n04", "meetings/retro", "zzqabsent"] {
@@ -1171,6 +1333,9 @@ fn the_counts_a_group_reports_are_consistent() {
     );
     for g in &groups {
         assert!(g.match_count > 0);
-        assert!(!g.more, "no file in the small fixture hits the 8-snippet cap");
+        assert!(
+            !g.more,
+            "no file in the small fixture hits the 8-snippet cap"
+        );
     }
 }

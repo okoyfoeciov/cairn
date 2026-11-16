@@ -99,6 +99,25 @@ fn sane_sidebar_w(w: f64) -> Option<f64> {
     (w.is_finite() && (SIDEBAR_W_MIN..=SIDEBAR_W_MAX).contains(&w)).then_some(w)
 }
 
+/// Clamp one bookmark in place; `false` means it cannot be used at all and the
+/// caller should drop it.
+fn sane_bookmark(b: &mut Bookmark) -> bool {
+    if !b.offset.is_finite() {
+        b.offset = 0.0;
+    }
+    b.offset = b.offset.clamp(0.0, 1.0);
+    if !b.progress.is_finite() {
+        b.progress = 0.0;
+    }
+    b.progress = b.progress.clamp(0.0, 1.0);
+    if b.href.len() > MAX_BOOKMARK_HREF {
+        b.href.clear();
+    }
+    // A bookmark with neither a chapter nor a progress fraction would restore
+    // to the top; that is a valid start, not a broken record.
+    true
+}
+
 /* ── the wire type (§1.5, camelCase) ──────────────────────────────────────── */
 
 /// CONTRACT §1.5.  `expanded` is folders only and is capped at 2000 (§7.6).
@@ -114,10 +133,42 @@ pub struct UiPatch {
     pub sort: Option<u8>,
     pub expanded: Option<Vec<String>>,
     pub scroll_top: Option<f64>,
+    /// §0.55 E108.  The whole per-vault bookmark map.  LAST WRITER WINS, like
+    /// `expanded`: the reader is its only producer and it sends the map it
+    /// holds.  An empty map clears every bookmark.
+    pub bookmarks: Option<BTreeMap<String, Bookmark>>,
     /// §0.7 E9.  GLOBAL — a property of the window the user arranged, not of
     /// the notes in it.
     pub sidebar_w: Option<f64>,
 }
+
+/// One EPUB's last reading position (§0.55 E108).
+///
+/// `chapter`/`href` anchor the position when a global fraction would drift,
+/// `offset` is the fraction through that chapter, and `progress` is the whole
+/// book's fraction for the header and for the case where the spine changed.
+/// Every field is single-word, so the struct is the same shape in the
+/// camelCase wire patch and in snake_case `state.json`.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct Bookmark {
+    #[serde(default)]
+    pub chapter: u32,
+    #[serde(default)]
+    pub href: String,
+    #[serde(default)]
+    pub offset: f64,
+    #[serde(default)]
+    pub progress: f64,
+}
+
+/// A sanity cap, not a design limit: a vault with more books than this still
+/// reads; keys past the cap are dropped on the next sanitise pass.
+pub const MAX_BOOKMARKS: usize = 500;
+/// A spine href is a path inside one ZIP.  Long enough for any real book,
+/// short enough that a hand-edited `state.json` cannot carry an essay.
+pub const MAX_BOOKMARK_HREF: usize = 2_048;
+/// A vault path key, same rationale.
+pub const MAX_BOOKMARK_KEY: usize = 4_096;
 
 /* ── the file (§7.6, snake_case — NOT a wire type) ────────────────────────── */
 
@@ -132,10 +183,23 @@ pub struct VaultUi {
     pub sort: u8,
     #[serde(default, deserialize_with = "lenient_strings")]
     pub expanded: Vec<String>,
-    #[serde(default, deserialize_with = "lenient", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        deserialize_with = "lenient",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub last_note: Option<String>,
     #[serde(default, deserialize_with = "lenient")]
     pub scroll_top: f64,
+    /// §0.55 E108.  Keyed by the vault-relative EPUB path, the same identity
+    /// the tree and `last_note` use.  Omitted when empty so a fresh state file
+    /// stays byte-for-byte what it was.
+    #[serde(
+        default,
+        deserialize_with = "lenient_bookmarks",
+        skip_serializing_if = "BTreeMap::is_empty"
+    )]
+    pub bookmarks: BTreeMap<String, Bookmark>,
 }
 
 /// A present value of the wrong type becomes the default, never an error that
@@ -166,6 +230,20 @@ where
         .collect())
 }
 
+/// `lenient`, per bookmark: one malformed entry drops that entry only.
+fn lenient_bookmarks<'de, D>(d: D) -> Result<BTreeMap<String, Bookmark>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    let serde_json::Value::Object(map) = serde_json::Value::deserialize(d)? else {
+        return Ok(BTreeMap::new());
+    };
+    Ok(map
+        .into_iter()
+        .filter_map(|(k, v)| serde_json::from_value(v).ok().map(|b| (k, b)))
+        .collect())
+}
+
 /// `lenient`, per vault: a record that is not an object drops that vault's
 /// record only.
 fn lenient_vaults<'de, D>(d: D) -> Result<BTreeMap<String, VaultUi>, D::Error>
@@ -186,7 +264,11 @@ where
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct State {
     pub v: u32,
-    #[serde(default, deserialize_with = "lenient", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        deserialize_with = "lenient",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub vault: Option<String>,
     #[serde(default, deserialize_with = "lenient_strings")]
     pub recents: Vec<String>,
@@ -194,7 +276,11 @@ pub struct State {
     /// is an `Option` and not a defaulted `f64`: absent means "never resized"
     /// and the frontend keeps tokens.css's 412, while `Some(412.0)` means
     /// "resized, and back to the default".
-    #[serde(default, deserialize_with = "lenient", skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        deserialize_with = "lenient",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub sidebar_w: Option<f64>,
     /// Keyed by the CANONICAL vault root (module header): two spellings of one
     /// directory are two keys here, and nothing joins them back up.
@@ -233,7 +319,9 @@ impl State {
     /// `load`, plus the raw bytes of a file that was there but could not be
     /// used, which `PrefsStore` keeps aside before its first write.
     fn read(path: &Path) -> (Self, Option<Vec<u8>>) {
-        let Ok(raw) = std::fs::read(path) else { return (Self::default(), None) };
+        let Ok(raw) = std::fs::read(path) else {
+            return (Self::default(), None);
+        };
         // An editor's UTF-8 BOM is not a reason to lose the file.
         let body = raw.strip_prefix(b"\xEF\xBB\xBF").unwrap_or(raw.as_slice());
         match serde_json::from_slice::<State>(body) {
@@ -276,6 +364,15 @@ impl State {
             ui.expanded.truncate(MAX_EXPANDED);
             if !ui.scroll_top.is_finite() || ui.scroll_top < 0.0 {
                 ui.scroll_top = 0.0;
+            }
+            ui.bookmarks
+                .retain(|k, b| !k.is_empty() && k.len() <= MAX_BOOKMARK_KEY && sane_bookmark(b));
+            if ui.bookmarks.len() > MAX_BOOKMARKS {
+                let keep: BTreeMap<String, Bookmark> = std::mem::take(&mut ui.bookmarks)
+                    .into_iter()
+                    .take(MAX_BOOKMARKS)
+                    .collect();
+                ui.bookmarks = keep;
             }
         }
 
@@ -341,6 +438,17 @@ impl State {
                 ui.scroll_top = t;
             }
         }
+        if let Some(b) = &patch.bookmarks {
+            ui.bookmarks = b.clone();
+            ui.bookmarks
+                .retain(|k, v| !k.is_empty() && k.len() <= MAX_BOOKMARK_KEY && sane_bookmark(v));
+            if ui.bookmarks.len() > MAX_BOOKMARKS {
+                ui.bookmarks = std::mem::take(&mut ui.bookmarks)
+                    .into_iter()
+                    .take(MAX_BOOKMARKS)
+                    .collect();
+            }
+        }
     }
 
     /// `vault` is the CANONICAL root string (module header).  A miss is
@@ -360,16 +468,22 @@ fn keep_aside(path: &Path, raw: &[u8]) -> Result<(), VaultError> {
     let secs = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |d| d.as_secs());
-    let name = path
-        .file_name()
-        .map_or_else(|| FILE_NAME.to_string(), |n| n.to_string_lossy().into_owned());
+    let name = path.file_name().map_or_else(
+        || FILE_NAME.to_string(),
+        |n| n.to_string_lossy().into_owned(),
+    );
     for n in 0..100u32 {
         let aside = path.with_file_name(if n == 0 {
             format!("{name}.bad-{secs}")
         } else {
             format!("{name}.bad-{secs}-{n}")
         });
-        match std::fs::OpenOptions::new().write(true).create_new(true).mode(0o600).open(&aside) {
+        match std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(&aside)
+        {
             Ok(mut f) => {
                 f.write_all(raw).map_err(|e| io(&aside, &e))?;
                 f.sync_all().map_err(|e| io(&aside, &e))?;
@@ -384,7 +498,10 @@ fn keep_aside(path: &Path, raw: &[u8]) -> Result<(), VaultError> {
             Err(e) => return Err(io(&aside, &e)),
         }
     }
-    Err(io(path, &std::io::Error::other("no free name to keep an unreadable state file aside")))
+    Err(io(
+        path,
+        &std::io::Error::other("no free name to keep an unreadable state file aside"),
+    ))
 }
 
 /* ── the store ────────────────────────────────────────────────────────────── */
@@ -485,6 +602,16 @@ impl PrefsStore {
             .map_or_else(|| (Vec::new(), 0.0), |u| (u.expanded.clone(), u.scroll_top))
     }
 
+    /// §0.55 E108.  The persisted reading positions for THIS vault, already
+    /// sanitised by `State::sanitise`.  THE READ PATH for what
+    /// `UiPatch.bookmarks` writes.
+    #[must_use]
+    pub fn bookmarks(&self, root: &str) -> BTreeMap<String, Bookmark> {
+        self.lock()
+            .ui(root)
+            .map_or_else(BTreeMap::new, |u| u.bookmarks.clone())
+    }
+
     pub fn edit<R>(&self, f: impl FnOnce(&mut State) -> R) -> R {
         f(&mut self.lock())
     }
@@ -497,19 +624,22 @@ impl PrefsStore {
     /// minus step 1b — this file has no other writer and no base mtime, and it
     /// must be creatable, which is exactly what those two steps forbid.
     pub fn flush_now(&self) -> Result<(), VaultError> {
-        let mut unusable = self.flush.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut unusable = self
+            .flush
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let bytes = {
             let mut st = self.lock();
             st.sanitise();
-            serde_json::to_vec_pretty(&*st)
-                .map_err(|e| VaultError::io(self.path.to_string_lossy(), &std::io::Error::other(e)))?
+            serde_json::to_vec_pretty(&*st).map_err(|e| {
+                VaultError::io(self.path.to_string_lossy(), &std::io::Error::other(e))
+            })?
         };
         #[cfg(test)]
         tests::run_after_serialise_hook();
 
         if let Some(dir) = self.path.parent() {
-            std::fs::create_dir_all(dir)
-                .map_err(|e| VaultError::io(dir.to_string_lossy(), &e))?;
+            std::fs::create_dir_all(dir).map_err(|e| VaultError::io(dir.to_string_lossy(), &e))?;
         }
 
         // A file that could not be read is the user's only copy of that state:
@@ -591,9 +721,7 @@ mod tests {
     use super::*;
 
     fn store(dir: &Path) -> Arc<PrefsStore> {
-        Arc::new(
-            PrefsStore::load(dir.join("state.json")).with_debounce(Duration::from_millis(30)),
-        )
+        Arc::new(PrefsStore::load(dir.join("state.json")).with_debounce(Duration::from_millis(30)))
     }
 
     /* ── tolerance: absent, truncated, corrupt (§7.6) ─────────────────────── */
@@ -620,7 +748,10 @@ mod tests {
             std::fs::write(&p, bytes).unwrap();
             assert_eq!(State::load(&p), State::default(), "{name}");
             // And the store built on it is usable, not poisoned.
-            assert!(PrefsStore::load(p.clone()).snapshot().recents.is_empty(), "{name}");
+            assert!(
+                PrefsStore::load(p.clone()).snapshot().recents.is_empty(),
+                "{name}"
+            );
         }
     }
 
@@ -654,8 +785,18 @@ mod tests {
     #[test]
     fn sidebar_w_persists_with_no_vault_open() {
         let mut st = State::default();
-        st.apply(None, &UiPatch { sidebar_w: Some(300.0), ..Default::default() });
-        assert_eq!(st.sidebar_w, Some(300.0), "a resize with no vault open was dropped");
+        st.apply(
+            None,
+            &UiPatch {
+                sidebar_w: Some(300.0),
+                ..Default::default()
+            },
+        );
+        assert_eq!(
+            st.sidebar_w,
+            Some(300.0),
+            "a resize with no vault open was dropped"
+        );
     }
 
     /// Rust rejects what could not have come from a drag; it does NOT try to
@@ -664,14 +805,33 @@ mod tests {
     /// — never a 0px sidebar that looks like the app failed to start.
     #[test]
     fn an_insane_sidebar_w_is_refused_not_stored() {
-        for bad in [0.0, -1.0, f64::NAN, f64::INFINITY, 90_000.0, SIDEBAR_W_MIN - 0.5] {
+        for bad in [
+            0.0,
+            -1.0,
+            f64::NAN,
+            f64::INFINITY,
+            90_000.0,
+            SIDEBAR_W_MIN - 0.5,
+        ] {
             let mut st = State::default();
-            st.apply(None, &UiPatch { sidebar_w: Some(bad), ..Default::default() });
+            st.apply(
+                None,
+                &UiPatch {
+                    sidebar_w: Some(bad),
+                    ..Default::default()
+                },
+            );
             assert_eq!(st.sidebar_w, None, "{bad} was stored");
         }
         for ok in [SIDEBAR_W_MIN, 412.0, SIDEBAR_W_MAX] {
             let mut st = State::default();
-            st.apply(None, &UiPatch { sidebar_w: Some(ok), ..Default::default() });
+            st.apply(
+                None,
+                &UiPatch {
+                    sidebar_w: Some(ok),
+                    ..Default::default()
+                },
+            );
             assert_eq!(st.sidebar_w, Some(ok), "{ok} was refused");
         }
     }
@@ -684,9 +844,17 @@ mod tests {
         let d = tempfile::tempdir().unwrap();
         let p = d.path().join("state.json");
         std::fs::write(&p, format!(r#"{{"v":{SCHEMA_VERSION},"sidebar_w":0.0}}"#)).unwrap();
-        assert_eq!(State::load(&p).sidebar_w, None, "a 0px sidebar survived load()");
+        assert_eq!(
+            State::load(&p).sidebar_w,
+            None,
+            "a 0px sidebar survived load()"
+        );
         std::fs::write(&p, format!(r#"{{"v":{SCHEMA_VERSION},"sidebar_w":333.0}}"#)).unwrap();
-        assert_eq!(State::load(&p).sidebar_w, Some(333.0), "a good width was thrown away");
+        assert_eq!(
+            State::load(&p).sidebar_w,
+            Some(333.0),
+            "a good width was thrown away"
+        );
     }
 
     /// M60 said the field was deleted because the sidebar could not change.
@@ -696,7 +864,10 @@ mod tests {
     fn an_unresized_sidebar_serialises_no_field_at_all() {
         let st = State::default();
         let j = serde_json::to_string(&st).unwrap();
-        assert!(!j.contains("sidebar_w"), "a fresh state.json names a width nobody set: {j}");
+        assert!(
+            !j.contains("sidebar_w"),
+            "a fresh state.json names a width nobody set: {j}"
+        );
     }
 
     /// §7.6 prints the file with snake_case keys, and it is NOT a wire type, so
@@ -714,6 +885,7 @@ mod tests {
                 sort: Some(2),
                 expanded: Some(vec!["Projects".into(), "Projects/2026".into()]),
                 scroll_top: Some(0.0),
+                bookmarks: None,
                 sidebar_w: Some(300.0),
             },
         );
@@ -736,9 +908,21 @@ mod tests {
     fn switching_a_b_a_keeps_a_s_expansion() {
         let mut st = State::default();
         st.touch_vault("/A");
-        st.apply(Some("/A"), &UiPatch { expanded: Some(vec!["A/x".into()]), ..<_>::default() });
+        st.apply(
+            Some("/A"),
+            &UiPatch {
+                expanded: Some(vec!["A/x".into()]),
+                ..<_>::default()
+            },
+        );
         st.touch_vault("/B");
-        st.apply(Some("/B"), &UiPatch { expanded: Some(vec!["B/y".into()]), ..<_>::default() });
+        st.apply(
+            Some("/B"),
+            &UiPatch {
+                expanded: Some(vec!["B/y".into()]),
+                ..<_>::default()
+            },
+        );
         st.touch_vault("/A");
         assert_eq!(st.ui("/A").unwrap().expanded, vec!["A/x".to_string()]);
         assert_eq!(st.ui("/B").unwrap().expanded, vec!["B/y".to_string()]);
@@ -751,13 +935,31 @@ mod tests {
     fn last_note_can_be_cleared_and_can_be_left_alone() {
         let mut st = State::default();
         st.touch_vault("/A");
-        st.apply(Some("/A"), &UiPatch { last_note: Some(Some("n.md".into())), ..<_>::default() });
+        st.apply(
+            Some("/A"),
+            &UiPatch {
+                last_note: Some(Some("n.md".into())),
+                ..<_>::default()
+            },
+        );
         assert_eq!(st.ui("/A").unwrap().last_note.as_deref(), Some("n.md"));
         // Absent: leave it alone.
-        st.apply(Some("/A"), &UiPatch { scroll_top: Some(5.0), ..<_>::default() });
+        st.apply(
+            Some("/A"),
+            &UiPatch {
+                scroll_top: Some(5.0),
+                ..<_>::default()
+            },
+        );
         assert_eq!(st.ui("/A").unwrap().last_note.as_deref(), Some("n.md"));
         // Present-but-null: clear it.
-        st.apply(Some("/A"), &UiPatch { last_note: Some(None), ..<_>::default() });
+        st.apply(
+            Some("/A"),
+            &UiPatch {
+                last_note: Some(None),
+                ..<_>::default()
+            },
+        );
         assert_eq!(st.ui("/A").unwrap().last_note, None);
     }
 
@@ -782,7 +984,13 @@ mod tests {
         let mut st = State::default();
         st.touch_vault("/A");
         let many: Vec<String> = (0..MAX_EXPANDED + 500).map(|i| format!("d{i}")).collect();
-        st.apply(Some("/A"), &UiPatch { expanded: Some(many), ..<_>::default() });
+        st.apply(
+            Some("/A"),
+            &UiPatch {
+                expanded: Some(many),
+                ..<_>::default()
+            },
+        );
         assert_eq!(st.ui("/A").unwrap().expanded.len(), MAX_EXPANDED);
     }
 
@@ -795,7 +1003,10 @@ mod tests {
             st.touch_vault(&format!("/v{i}"));
             st.apply(
                 Some(&format!("/v{i}")),
-                &UiPatch { expanded: Some(vec!["x".into()]), ..<_>::default() },
+                &UiPatch {
+                    expanded: Some(vec!["x".into()]),
+                    ..<_>::default()
+                },
             );
         }
         st.sanitise();
@@ -804,10 +1015,16 @@ mod tests {
         assert!(st.ui("/v11").is_some());
 
         // The open vault survives even if it is not in recents.
-        let mut st = State { vault: Some("/open".into()), ..State::default() };
+        let mut st = State {
+            vault: Some("/open".into()),
+            ..State::default()
+        };
         st.vaults.insert("/open".into(), VaultUi::default());
         st.sanitise();
-        assert!(st.ui("/open").is_some(), "the OPEN vault's state was pruned away");
+        assert!(
+            st.ui("/open").is_some(),
+            "the OPEN vault's state was pruned away"
+        );
     }
 
     /// Four sort orders, wire `u8` 0..3 (M28/M53).  A value outside that from a
@@ -821,9 +1038,25 @@ mod tests {
         // …and through the patch path too.
         let mut st = State::default();
         st.touch_vault("/A");
-        st.apply(Some("/A"), &UiPatch { sort: Some(2), ..<_>::default() });
-        st.apply(Some("/A"), &UiPatch { sort: Some(9), ..<_>::default() });
-        assert_eq!(st.ui("/A").unwrap().sort, 2, "a bogus sort overwrote a good one");
+        st.apply(
+            Some("/A"),
+            &UiPatch {
+                sort: Some(2),
+                ..<_>::default()
+            },
+        );
+        st.apply(
+            Some("/A"),
+            &UiPatch {
+                sort: Some(9),
+                ..<_>::default()
+            },
+        );
+        assert_eq!(
+            st.ui("/A").unwrap().sort,
+            2,
+            "a bogus sort overwrote a good one"
+        );
     }
 
     /// A NaN scroll offset must not reach the tree.
@@ -833,7 +1066,10 @@ mod tests {
         st.touch_vault("/A");
         st.apply(
             Some("/A"),
-            &UiPatch { scroll_top: Some(f64::INFINITY), ..<_>::default() },
+            &UiPatch {
+                scroll_top: Some(f64::INFINITY),
+                ..<_>::default()
+            },
         );
         st.sanitise();
         assert_eq!(st.ui("/A").unwrap().scroll_top, 0.0);
@@ -886,7 +1122,10 @@ mod tests {
         assert_eq!(mode, 0o600, "state.json is {mode:o}");
         // A rewrite preserves it rather than widening it.
         s.flush_now().unwrap();
-        assert_eq!(std::fs::metadata(s.path()).unwrap().permissions().mode() & 0o777, 0o600);
+        assert_eq!(
+            std::fs::metadata(s.path()).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
     }
 
     /// A symlinked state.json (a dotfiles setup) is written through the link
@@ -900,7 +1139,10 @@ mod tests {
         std::fs::create_dir(dir.path().join("cfg")).unwrap();
         let target = dir.path().join("dotfiles/state.json");
         store(&dir.path().join("dotfiles")).flush_now().unwrap();
-        assert_eq!(std::fs::metadata(&target).unwrap().permissions().mode() & 0o777, 0o600);
+        assert_eq!(
+            std::fs::metadata(&target).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
         let link = dir.path().join("cfg/state.json");
         std::os::unix::fs::symlink(&target, &link).unwrap();
 
@@ -910,10 +1152,20 @@ mod tests {
 
         let lmd = std::fs::symlink_metadata(&link).unwrap();
         let lmode = lmd.permissions().mode() & 0o777;
-        assert!(lmd.file_type().is_symlink(), "the link was replaced (mode {lmode:o})");
-        assert_eq!(std::fs::metadata(&target).unwrap().permissions().mode() & 0o777, 0o600);
+        assert!(
+            lmd.file_type().is_symlink(),
+            "the link was replaced (mode {lmode:o})"
+        );
+        assert_eq!(
+            std::fs::metadata(&target).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
         let recents = State::load(&target).recents;
-        assert_eq!(recents, vec!["/B".to_string()], "the target was not updated");
+        assert_eq!(
+            recents,
+            vec!["/B".to_string()],
+            "the target was not updated"
+        );
         let strays: Vec<_> = std::fs::read_dir(dir.path().join("cfg"))
             .unwrap()
             .flatten()
@@ -972,6 +1224,7 @@ mod tests {
                     sort: Some(3),
                     expanded: Some(vec!["Projects".into(), "Projects/2026".into()]),
                     scroll_top: Some(432.0),
+                    bookmarks: None,
                     sidebar_w: Some(340.0),
                 },
             );
@@ -984,11 +1237,14 @@ mod tests {
         let ui = st.ui("/Users/me/Notes").unwrap();
         assert_eq!(ui.sort, 3);
         assert_eq!(ui.last_note.as_deref(), Some("Misc.md"));
-        assert_eq!(ui.expanded, vec!["Projects".to_string(), "Projects/2026".to_string()]);
+        assert_eq!(
+            ui.expanded,
+            vec!["Projects".to_string(), "Projects/2026".to_string()]
+        );
         assert_eq!(ui.scroll_top, 432.0);
     }
 
-   /* ── one bad value costs that value; an unreadable file is kept aside ── */
+    /* ── one bad value costs that value; an unreadable file is kept aside ── */
 
     /// The shape the report reproduced: ONE vault's `scroll_top` is `null`.
     /// Everything else in the file must survive, and so must the rest of the
@@ -1012,11 +1268,20 @@ mod tests {
         assert_eq!(st.recents, vec!["/A".to_string(), "/B".to_string()]);
         assert_eq!(st.sidebar_w, None);
         let a = st.ui("/A").unwrap();
-        assert_eq!((a.sort, a.last_note.as_deref(), a.scroll_top), (2, Some("n.md"), 12.0));
+        assert_eq!(
+            (a.sort, a.last_note.as_deref(), a.scroll_top),
+            (2, Some("n.md"), 12.0)
+        );
         assert_eq!(a.expanded, vec!["x".to_string(), "y".to_string()]);
         let b = st.ui("/B").unwrap();
-        assert_eq!((b.sort, b.last_note.as_deref(), b.scroll_top), (0, None, 0.0));
-        assert!(st.ui("/C").is_none(), "/C is neither a record nor in recents");
+        assert_eq!(
+            (b.sort, b.last_note.as_deref(), b.scroll_top),
+            (0, None, 0.0)
+        );
+        assert!(
+            st.ui("/C").is_none(),
+            "/C is neither a record nor in recents"
+        );
 
         // Nothing unusable, so nothing is set aside on the next flush.
         let s = PrefsStore::load(p.clone());
@@ -1029,7 +1294,11 @@ mod tests {
     fn a_leading_bom_does_not_lose_the_file() {
         let dir = tempfile::tempdir().unwrap();
         let p = dir.path().join("state.json");
-        std::fs::write(&p, b"\xEF\xBB\xBF{\"v\":1,\"vault\":\"/A\",\"recents\":[\"/A\"]}").unwrap();
+        std::fs::write(
+            &p,
+            b"\xEF\xBB\xBF{\"v\":1,\"vault\":\"/A\",\"recents\":[\"/A\"]}",
+        )
+        .unwrap();
         assert_eq!(State::load(&p).recents, vec!["/A".to_string()]);
     }
 
@@ -1038,7 +1307,10 @@ mod tests {
             .unwrap()
             .flatten()
             .map(|e| e.path())
-            .filter(|p| p.file_name().is_some_and(|n| n.to_string_lossy().starts_with("state.json.bad-")))
+            .filter(|p| {
+                p.file_name()
+                    .is_some_and(|n| n.to_string_lossy().starts_with("state.json.bad-"))
+            })
             .collect();
         v.sort();
         v
@@ -1050,8 +1322,14 @@ mod tests {
     #[test]
     fn an_unusable_state_file_is_kept_aside_before_the_first_flush_replaces_it() {
         for (name, bytes) in [
-            ("truncated", &br#"{"v":1,"vault":"/A","recents":["/A","/B""#[..]),
-            ("another version", br#"{"v":2,"vault":"/A","recents":["/A"]}"#),
+            (
+                "truncated",
+                &br#"{"v":1,"vault":"/A","recents":["/A","/B""#[..],
+            ),
+            (
+                "another version",
+                br#"{"v":2,"vault":"/A","recents":["/A"]}"#,
+            ),
             ("not an object", br#"["/A","/B"]"#),
         ] {
             let dir = tempfile::tempdir().unwrap();
@@ -1065,11 +1343,19 @@ mod tests {
 
             let kept = bad_copies(dir.path());
             assert_eq!(kept.len(), 1, "{name}: {kept:?}");
-            assert_eq!(std::fs::read(&kept[0]).unwrap(), bytes, "{name}: the copy is not the original");
+            assert_eq!(
+                std::fs::read(&kept[0]).unwrap(),
+                bytes,
+                "{name}: the copy is not the original"
+            );
             assert_eq!(State::load(&p).vault.as_deref(), Some("/New"), "{name}");
 
             s.flush_now().unwrap();
-            assert_eq!(bad_copies(dir.path()).len(), 1, "{name}: a second flush copied again");
+            assert_eq!(
+                bad_copies(dir.path()).len(),
+                1,
+                "{name}: a second flush copied again"
+            );
         }
 
         // Nothing to keep: absent, empty, whitespace.
@@ -1118,7 +1404,9 @@ mod tests {
                 s_ref.edit(|st| st.sidebar_w = width(1.0));
                 s_ref.flush_now()
             });
-            snapped_rx.recv_timeout(Duration::from_secs(10)).expect("flush A never snapshotted");
+            snapped_rx
+                .recv_timeout(Duration::from_secs(10))
+                .expect("flush A never snapshotted");
 
             s_ref.edit(|st| st.sidebar_w = width(2.0));
             let (b_done_tx, b_done_rx) = std::sync::mpsc::channel::<()>();
@@ -1140,5 +1428,77 @@ mod tests {
             Some(402.0),
             "the older snapshot was renamed over the newer one"
         );
+    }
+
+    /* ── §0.55 E108: bookmarks ─────────────────────────────────────────────── */
+
+    fn bookmark(chapter: u32, href: &str, offset: f64, progress: f64) -> Bookmark {
+        Bookmark {
+            chapter,
+            href: href.into(),
+            offset,
+            progress,
+        }
+    }
+
+    #[test]
+    fn bookmarks_round_trip_through_the_file_and_the_read_path() {
+        let dir = tempfile::tempdir().unwrap();
+        let s = store(dir.path());
+        let mut map = BTreeMap::new();
+        map.insert(
+            "Books/A.epub".to_string(),
+            bookmark(3, "OEBPS/ch4.xhtml", 0.25, 0.5),
+        );
+        map.insert(
+            "Books/B.epub".to_string(),
+            bookmark(0, "ch1.xhtml", 0.0, 0.01),
+        );
+        s.edit(|st| {
+            st.touch_vault("/V");
+            st.apply(
+                Some("/V"),
+                &UiPatch {
+                    bookmarks: Some(map.clone()),
+                    ..UiPatch::default()
+                },
+            );
+        });
+        s.flush_now().unwrap();
+
+        let reloaded = State::load(s.path());
+        let got = reloaded.vaults.get("/V").unwrap();
+        assert_eq!(got.bookmarks, map);
+        assert_eq!(s.bookmarks("/V"), map);
+        assert!(
+            s.bookmarks("/other").is_empty(),
+            "bookmarks are per-vault keyed"
+        );
+    }
+
+    #[test]
+    fn a_bad_bookmark_is_dropped_or_clamped_not_the_whole_map() {
+        let dir = tempfile::tempdir().unwrap();
+        let p = dir.path().join("state.json");
+        std::fs::write(
+            &p,
+            br#"{"v":1,"vault":"/V","vaults":{"/V":{"bookmarks":{
+                "ok.epub":{"chapter":2,"href":"a.xhtml","offset":4,"progress":-1},
+                "bad.epub":"not an object"
+            }}}}"#,
+        )
+        .unwrap();
+        let st = State::load(&p);
+        let mut clean = st;
+        clean.sanitise();
+        let got = clean.vaults.get("/V").unwrap();
+        assert_eq!(
+            got.bookmarks.len(),
+            1,
+            "the malformed entry is dropped alone"
+        );
+        let b = got.bookmarks.get("ok.epub").unwrap();
+        assert_eq!(b.offset, 1.0);
+        assert_eq!(b.progress, 0.0);
     }
 }

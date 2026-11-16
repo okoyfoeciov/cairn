@@ -24,7 +24,7 @@
 
 import assert from 'node:assert/strict'
 import { test, before, after } from 'node:test'
-import { mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -443,4 +443,34 @@ test('an EXTERNAL edit reaches the frontend — the step-4 scaffold had no watch
   const [ev] = await waitFor('nc://note-external-change', 5000)
   assert.equal(ev.payload.path, 'README.md')
   assert.ok(ev.payload.size > 0)
+})
+
+test('commands 28/29: read_epub is RAW and import_epub MOVES the source', async () => {
+  const downloads = join(work, 'Downloads')
+  mkdirSync(downloads, { recursive: true })
+  const source = join(downloads, 'Holes.epub')
+  const bytes = Buffer.from('PK\x03\x04HOLES', 'latin1')
+  writeFileSync(source, bytes)
+
+  // Command 29 is shell-owned; this is the addon call the main process makes.
+  const moved = await addon.importEpub(source, 'Notes')
+  assert.equal(moved.path, 'Notes/Holes.epub')
+  assert.equal(existsSync(source), false, 'the source is MOVED, not copied')
+
+  const raw = await cmd.read_epub({ path: moved.path })
+  assert.deepEqual(new Uint8Array(raw), new Uint8Array(bytes), 'read_epub has no note frame')
+
+  const blob = await snapshot()
+  const at = Array.from({ length: blob.n }, (_, i) => i).find((i) => blob.nameOf(i) === 'Holes')
+  assert.ok(at !== undefined)
+  assert.equal(blob.isBook(at), true)
+  assert.equal(blob.extOf(at), '.epub', 'the display stem loses `.epub`; the path rebuilds it')
+  assert.equal(blob.pathOf(at), 'Notes/Holes.epub')
+
+  // A second import from the same outside name uniquifies at the destination.
+  const second = join(downloads, 'Holes.epub')
+  writeFileSync(second, Buffer.from('PK\x03\x04SECOND', 'latin1'))
+  const again = await addon.importEpub(second, 'Notes')
+  assert.equal(again.path, 'Notes/Holes 1.epub')
+  assert.equal(existsSync(second), false)
 })

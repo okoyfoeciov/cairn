@@ -26,17 +26,19 @@ TCC Files-and-Folders grants are re-prompted after every rebuild, because the ad
 ## Status
 
 It works end to end: tree, editor with live preview, Properties, the Memoir journal page, the
-secrets viewer with live TOTP codes, search, vault switching, and autosave to disk.
+secrets viewer with live TOTP codes, the EPUB reader (import or copy an `.epub` into the vault;
+continuous read, Mod-F in-book search and per-book resume), search, vault switching, and
+autosave to disk.
 
 Verified numbers move. **Re-run rather than trusting a count quoted here.** The current ones:
 
 ```
-cd core && cargo test --no-fail-fast       342 passed, 0 failed (all targets)
+cd core && cargo test --no-fail-fast       327 passed, 0 failed (all targets)
 cd core && cargo clippy --all-targets -- -D warnings   clean
 npx tsc --noEmit                            clean
-npm test                                    693 tests: 690 pass, 0 fail, 3 todo
+npm test                                    776 tests: 776 pass, 0 fail, 0 todo
 node electron-shell/build-native.mjs        BUILD-NATIVE result=PASS tauri_crates=0
-node electron-shell/build-app.mjs           BUILD-APP result=PASS modules=32
+node electron-shell/build-app.mjs           BUILD-APP result=PASS modules=34
 npm run selftest:geometry                   50 identities, 50 pass
 ./tools/run-g9-electron.sh                  137/137, ok=True, 1920x964, dpr=1.25
 node tools/scroll-bench.mjs --self-test     67 passed, 0 failed
@@ -63,7 +65,8 @@ so it never touches the real one.
   build scripts. `npm run electron:app` ends in `electron app-main.mjs`.
 - `core/` — the Rust core. `core/src/` is the library, `core/napi/` the Node-API wrapper,
   `core/tests/` the data-loss and vault suites.
-- `src/` — the frontend. `main.ts` boots and wires; every other file owns one subject.
+- `src/` — the frontend. `main.ts` boots and wires; every other file owns one subject. The EPUB
+  container is `src/epub.ts`, its reader `src/reader.ts`, and its sheet `src/styles/reader.css`.
 - `docs/CONTRACT.md` — **normative**; `§0` is the ruling index.
 - `docs/KNOWN-ISSUES.md` — the register of what is wrong or missing in the code. Read it before
   "fixing" anything that looks broken.

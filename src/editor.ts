@@ -617,7 +617,8 @@ export function refuseDrop(
 /**
  * Pasted clipboard images land inline as `![pasted image](data:…)` — the one
  * image use case.  A data URL keeps the image in the note's own text, so no
- * core change (the tree holds `.md` only), no IPC addition and no attachment
+ * core change (the tree holds notes and books, not note attachments), no IPC
+ * addition and no attachment
  * folder are owed.
  *
  * `firstClipboardImage` is the pure pick rule — the first `image/*` file, or

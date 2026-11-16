@@ -75,6 +75,7 @@ function mergeInto(target: UiPatch, p: UiPatch): void {
     target.expanded = p.expanded.length > EXPANDED_CAP ? p.expanded.slice(0, EXPANDED_CAP) : p.expanded
   }
   if (p.scrollTop !== undefined) target.scrollTop = p.scrollTop
+  if (p.bookmarks !== undefined) target.bookmarks = p.bookmarks
   if (p.sidebarW !== undefined) target.sidebarW = p.sidebarW
 }
 

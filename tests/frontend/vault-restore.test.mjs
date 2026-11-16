@@ -161,6 +161,7 @@ async function bootMain(extraReturns = {}) {
     './ipc:onWatchDegraded': () => Promise.resolve(),
     './ipc:onNoteExternalChange': () => Promise.resolve(),
     './ipc:onFlushAndClose': () => Promise.resolve(),
+    './ipc:onFlushForReload': () => Promise.resolve(),
     // §7.5 / M65: 'none' so boot() applies NO vault — every application in this
     // file goes through the event, which is the only path the app uses.
     './ipc:currentVault': () => Promise.resolve({ state: 'none' }),
@@ -289,7 +290,7 @@ async function bootMain(extraReturns = {}) {
   }
 }
 
-/** §1.5's ten-field `VaultInfo`, with the two Z2 fields. */
+/** §1.5's `VaultInfo`, including the per-vault bookmark map. */
 const vaultInfo = (over = {}) => ({
   root: '/tmp/A',
   name: 'A',
@@ -303,6 +304,7 @@ const vaultInfo = (over = {}) => ({
   watching: true,
   truncated: false,
   truncatedDepth: false,
+  bookmarks: {},
   ...over,
 })
 
@@ -423,7 +425,7 @@ test('Copy file content copies the FILE NAME and body, and reads without claimin
     'the clipboard did not receive the file name, a blank line, then the body')
 })
 
-test('§0.16 E18 — main.ts hands a FILE only its entry actions, a FOLDER all six', async () => {
+test('§0.16 E18 — main.ts hands a FILE only its entry actions, a FOLDER all seven', async () => {
   const { calls, treeHost, apply } = await bootMain()
   await apply(vaultInfo())
   const rowMenu = rowMenuOf(treeHost)
@@ -440,14 +442,14 @@ test('§0.16 E18 — main.ts hands a FILE only its entry actions, a FOLDER all s
   assert.equal(calls.countOf('folderRowMenu'), 0, 'a file was given the folder menu')
   assert.equal('reveal' in file, false, 'Reveal in Finder is back in the row menu')
 
-  // A FOLDER gets all six, and its creates target the folder ITSELF — not its
+  // A FOLDER gets all seven, and its creates target the folder ITSELF — not its
   // parent, which is what the deleted `destinationFor()` would have returned for
   // anything but a directory.
   calls.clear()
   rowMenu({ clientX: 1, clientY: 1 }, 'Projects/2026', true)
   const folder = actionsFrom(calls, 'folderRowMenu')
   assert.deepEqual(Object.keys(folder).sort(),
-    ['copyPath', 'newFolder', 'newNote', 'newSecret', 'remove', 'rename'])
+    ['copyPath', 'importEpub', 'newFolder', 'newNote', 'newSecret', 'remove', 'rename'])
   assert.equal(calls.countOf('fileRowMenu'), 0, 'a folder was given the file menu')
 
   // The DESTINATION is asserted at the source, not by calling `folder.newNote()`
@@ -462,6 +464,8 @@ test('§0.16 E18 — main.ts hands a FILE only its entry actions, a FOLDER all s
   assert.match(body, /newFolder: \(\) => newFolderIn\(path\)/)
   assert.match(body, /newSecret: \(\) => newSecretIn\(path\)/,
     'a secret-file create on a folder row must land INSIDE it, like the other creates')
+  assert.match(body, /importEpub: \(\) => \{ void importEpubInto\(path\) \}/,
+    'Import EPUB on a folder row must land INSIDE it')
   // The DEFECT, not the word: `rowMenu`'s own comment names `parentOf` to say
   // it is not used, so a bare substring test would fail on its own explanation.
   assert.equal(/newNoteIn\(parentOf\(|newFolderIn\(parentOf\(/.test(body), false,
@@ -480,7 +484,7 @@ test('§0.16 E18 — main.ts hands a FILE only its entry actions, a FOLDER all s
   calls.clear()
   rowMenu({ clientX: 1, clientY: 1 }, null, false)
   assert.deepEqual(Object.keys(actionsFrom(calls, 'emptySpaceMenu')).sort(),
-    ['copyPath', 'newFolder', 'newNote', 'newSecret'])
+    ['copyPath', 'importEpub', 'newFolder', 'newNote', 'newSecret'])
 })
 
 test('New secret file names through the inline row, with the dialog fallback', async () => {
@@ -498,6 +502,21 @@ test('New secret file names through the inline row, with the dialog fallback', a
   assert.match(body, /promptForName\(\{/, 'no fallback when no row can host the editor')
   assert.match(body, /await createSecretNote\(parent, name\)/,
     'the commit does not reach the shared second half')
+})
+
+test('New secret file refreshes after the template write, so the row turns blue now', async () => {
+  // The reported defect: the create-time refresh ran while the file was still
+  // empty (ordinary), and `Node.mtime` is whole seconds, so the template write
+  // in that same second did not move the secret cache's key.  The row only
+  // turned blue after a later refresh or a restart.  The writer must ask again
+  // AFTER the flush; the Rust half invalidates the cached verdict.
+  const main = read('src/main.ts')
+  const start = main.indexOf('async function createSecretNote(')
+  const body = main.slice(start, main.indexOf('\n}\n', start))
+  const flush = body.indexOf("await editorFlush('manual')")
+  const refresh = body.indexOf('await refreshTree()', flush)
+  assert.ok(flush >= 0, 'the template is never flushed')
+  assert.ok(refresh > flush, 'the secret mark is not re-read after the template lands')
 })
 
 test('Delete applies to the whole shift-selection: one confirm PER file, in order', async () => {
@@ -847,6 +866,7 @@ test('the close handshake flushes the tree\'s pending persists before flushUi an
   let closeCb = null
   const { calls } = await bootMain({
     './ipc:onFlushAndClose': (a) => { closeCb = a[0]; return Promise.resolve() },
+    './ipc:onFlushForReload': () => Promise.resolve(),
     './editor:onFlushAndClose': () => Promise.resolve({ ok: true }),
   })
   assert.ok(closeCb, 'main.ts did not subscribe to the close handshake')

@@ -120,6 +120,7 @@ async function bootMain(over = {}) {
     './ipc:onWatchDegraded': () => Promise.resolve(),
     './ipc:onNoteExternalChange': () => Promise.resolve(),
     './ipc:onFlushAndClose': () => Promise.resolve(),
+    './ipc:onFlushForReload': () => Promise.resolve(),
     './editor:onFlushAndClose': () => Promise.resolve({ ok: true }),
     './ipc:currentVault': () => Promise.resolve({ state: 'none' }),
     './ipc:treeSnapshot': () => Promise.resolve(new ArrayBuffer(64)),

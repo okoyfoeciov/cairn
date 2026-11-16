@@ -495,6 +495,14 @@ test('every match is marked and the current one wears its own class', () => {
   ])
 })
 
+test('case-folded matches keep offsets in the original string', () => {
+  const r = F.findMatches('İstanbul needle', 'needle', false)
+  assert.equal(r.matches.length, 1)
+  assert.equal(r.matches[0].from, 9)
+  assert.equal('İstanbul needle'.slice(r.matches[0].from, r.matches[0].to), 'needle')
+  assert.equal(F.findMatches('a.b a+b', 'a+b', true).matches[0].from, 4)
+})
+
 test('stepping moves the current class to the new match', () => {
   let s = stateWith('a a a', { query: 'a', caseSensitive: false, from: 0, to: 1 })
   s = s.update({ effects: ED.setFindHighlight.of({ query: 'a', caseSensitive: false, from: 2, to: 3 }) }).state

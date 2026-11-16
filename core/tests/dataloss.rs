@@ -89,9 +89,19 @@ fn guard(root: &Path) {
     );
     if let Some(home) = std::env::var_os("HOME") {
         let home = canon(Path::new(&home));
-        assert!(!root.starts_with(&home), "fixture {} is under $HOME", root.display());
+        assert!(
+            !root.starts_with(&home),
+            "fixture {} is under $HOME",
+            root.display()
+        );
     }
-    for forbidden in ["/Users", "/Library", "/System", "/Applications", "/private/etc"] {
+    for forbidden in [
+        "/Users",
+        "/Library",
+        "/System",
+        "/Applications",
+        "/private/etc",
+    ] {
         assert!(
             !root.starts_with(forbidden),
             "fixture {} is under {forbidden}",
@@ -101,7 +111,10 @@ fn guard(root: &Path) {
 }
 
 fn tmpdir() -> tempfile::TempDir {
-    tempfile::Builder::new().prefix(PREFIX).tempdir().expect("tempdir")
+    tempfile::Builder::new()
+        .prefix(PREFIX)
+        .tempdir()
+        .expect("tempdir")
 }
 
 /// A fixture vault: a temp directory, its CANONICAL root (which is what
@@ -148,14 +161,21 @@ fn open_vault(root: &Path) -> (AppState, usize) {
 /// the walk never admitted.
 fn arena_abs(state: &AppState, rel: &str) -> Result<PathBuf, VaultError> {
     vpath::validate_rel_for_lookup(rel)?;
-    let v = state.vault().ok_or_else(|| VaultError::not_found("<no vault>"))?;
+    let v = state
+        .vault()
+        .ok_or_else(|| VaultError::not_found("<no vault>"))?;
     let t = v.read();
     let id = t.resolve(rel).ok_or_else(|| VaultError::not_found(rel))?;
     Ok(t.abs_path(id))
 }
 
 fn wargs(rel: &str, flags: u32, base: Option<i64>, create: bool) -> WriteArgs {
-    WriteArgs { rel: rel.into(), flags, base_mtime_ms: base, create }
+    WriteArgs {
+        rel: rel.into(),
+        flags,
+        base_mtime_ms: base,
+        create,
+    }
 }
 
 /// An autosave, idle flush, blur flush or close flush: `x-create: '0'`, always
@@ -185,7 +205,12 @@ fn save_as(
     } else {
         format!("{parent_rel}/{name}")
     };
-    fsops::write_note(&parent.join(name), &wargs(&rel, 0, None, true), body, &state.self_writes)
+    fsops::write_note(
+        &parent.join(name),
+        &wargs(&rel, 0, None, true),
+        body,
+        &state.self_writes,
+    )
 }
 
 /// Names of everything in `dir`, sorted — including dotfiles, because the whole
@@ -229,7 +254,9 @@ fn temp_files(root: &Path) -> Vec<PathBuf> {
 /// A PID that is certainly dead: a child that has been spawned, exited and
 /// reaped.  The kernel will not reuse it within the life of one test.
 fn dead_pid() -> u32 {
-    let mut c = std::process::Command::new("/usr/bin/true").spawn().expect("spawn /usr/bin/true");
+    let mut c = std::process::Command::new("/usr/bin/true")
+        .spawn()
+        .expect("spawn /usr/bin/true");
     let pid = c.id();
     let _ = c.wait();
     pid
@@ -256,7 +283,9 @@ impl Watched {
             root,
             Arc::clone(self_writes),
             Box::new(move |ev| {
-                sink.lock().unwrap_or_else(std::sync::PoisonError::into_inner).push(ev);
+                sink.lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .push(ev);
             }),
         )
         .expect("the watcher must start on a fixture vault");
@@ -265,7 +294,10 @@ impl Watched {
     }
 
     fn events(&self) -> Vec<WatchEvent> {
-        self.seen.lock().unwrap_or_else(std::sync::PoisonError::into_inner).clone()
+        self.seen
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
     }
 
     /// Every content hit for `abs`, across every flush delivered so far.  This
@@ -284,7 +316,9 @@ impl Watched {
     }
 
     fn lost(&self) -> bool {
-        self.events().iter().any(|e| matches!(e, WatchEvent::VaultLost { .. }))
+        self.events()
+            .iter()
+            .any(|e| matches!(e, WatchEvent::VaultLost { .. }))
     }
 
     /// Wait until `f` is true, or give up.  Returns whether it became true, so
@@ -353,7 +387,9 @@ fn dl_00_the_containment_guard_is_real() {
 #[test]
 #[ignore = "spawned by dl_01_sigkill_between_the_temp_write_and_the_rename"]
 fn dataloss_kill_child() {
-    let Ok(dir) = std::env::var("CAIRN_DL_KILL_DIR") else { return };
+    let Ok(dir) = std::env::var("CAIRN_DL_KILL_DIR") else {
+        return;
+    };
     let root = PathBuf::from(dir);
     let abs = root.join("Misc.md");
     let sw = Mutex::new(SelfWrites::new());
@@ -421,7 +457,11 @@ fn dl_01_sigkill_between_the_temp_write_and_the_rename() {
             "round {round}: crash debris survived the vault open: {:?} (swept {swept})",
             temp_files(&f.root)
         );
-        assert_eq!(entries(&f.root), vec!["A", "Misc.md", "Notes"], "round {round}");
+        assert_eq!(
+            entries(&f.root),
+            vec!["A", "Misc.md", "Notes"],
+            "round {round}"
+        );
         // And the note the child was killed writing is still openable.
         let read = fsops::read_note(&arena_abs(&state, "Misc.md").expect("arena"), "Misc.md")
             .expect("the note must be readable after the crash");
@@ -446,7 +486,9 @@ fn dl_01_sigkill_between_the_temp_write_and_the_rename() {
 fn dl_02_the_vault_open_sweeps_dead_debris_and_spares_a_live_instance() {
     let f = Fixture::new();
     let dead = f.root.join(format!(".Misc.md.tmp-{}-0", dead_pid()));
-    let live = f.root.join(format!(".Misc.md.tmp-{}-1", std::process::id()));
+    let live = f
+        .root
+        .join(format!(".Misc.md.tmp-{}-1", std::process::id()));
     let notours = f.root.join(".hidden.tmp-notes");
     fs::write(&dead, b"crash debris").expect("dead");
     fs::write(&live, b"another instance is mid-write").expect("live");
@@ -456,7 +498,10 @@ fn dl_02_the_vault_open_sweeps_dead_debris_and_spares_a_live_instance() {
 
     assert_eq!(swept, 1, "exactly the dead-PID temp should have been swept");
     assert!(!dead.exists(), "dead-PID debris survived the vault open");
-    assert!(live.exists(), "a LIVE instance's in-flight temp was unlinked — that is data loss");
+    assert!(
+        live.exists(),
+        "a LIVE instance's in-flight temp was unlinked — that is data loss"
+    );
     assert!(notours.exists(), "a file that is not ours was unlinked");
 }
 
@@ -472,12 +517,19 @@ fn dl_02_the_vault_open_sweeps_dead_debris_and_spares_a_live_instance() {
 #[test]
 #[ignore = "spawned by dl_03_a_flush_issued_before_exit_is_on_disk_after_exit"]
 fn dataloss_flush_child() {
-    let Ok(dir) = std::env::var("CAIRN_DL_FLUSH_DIR") else { return };
+    let Ok(dir) = std::env::var("CAIRN_DL_FLUSH_DIR") else {
+        return;
+    };
     let root = PathBuf::from(dir);
     let abs = root.join("Misc.md");
     let sw = Mutex::new(SelfWrites::new());
-    fsops::write_note(&abs, &wargs("Misc.md", 0, None, false), b"typed but not yet saved\n", &sw)
-        .expect("the close flush must succeed");
+    fsops::write_note(
+        &abs,
+        &wargs("Misc.md", 0, None, false),
+        b"typed but not yet saved\n",
+        &sw,
+    )
+    .expect("the close flush must succeed");
     // Exit the instant the flush returns, exactly as `confirm_close(true)` does.
     std::process::exit(0);
 }
@@ -487,7 +539,12 @@ fn dl_03_a_flush_issued_before_exit_is_on_disk_after_exit() {
     let f = Fixture::new();
     let exe = std::env::current_exe().expect("current_exe");
     let status = std::process::Command::new(&exe)
-        .args(["--exact", "dataloss_flush_child", "--ignored", "--nocapture"])
+        .args([
+            "--exact",
+            "dataloss_flush_child",
+            "--ignored",
+            "--nocapture",
+        ])
         .env("CAIRN_DL_FLUSH_DIR", &f.root)
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
@@ -495,8 +552,14 @@ fn dl_03_a_flush_issued_before_exit_is_on_disk_after_exit() {
         .expect("run the flush child");
     assert!(status.success(), "the child did not exit cleanly");
 
-    assert_eq!(fs::read(f.abs("Misc.md")).expect("Misc.md"), b"typed but not yet saved\n");
-    assert!(temp_files(&f.root).is_empty(), "the flush left debris behind");
+    assert_eq!(
+        fs::read(f.abs("Misc.md")).expect("Misc.md"),
+        b"typed but not yet saved\n"
+    );
+    assert!(
+        temp_files(&f.root).is_empty(),
+        "the flush left debris behind"
+    );
 }
 
 /// Case 2 leg (b): with the destination unwritable, the flush REJECTS — which is
@@ -527,8 +590,15 @@ fn dl_04_an_unwritable_destination_makes_the_close_flush_reject() {
         Err(VaultError::Io { .. }) => {}
         other => panic!("an unwritable destination must reject, got {other:?}"),
     }
-    assert_eq!(fs::read(f.abs("Notes/Deep.md")).expect("Deep.md"), before, "the note changed");
-    assert!(temp_files(&f.root).is_empty(), "a rejected flush left a temp file behind");
+    assert_eq!(
+        fs::read(f.abs("Notes/Deep.md")).expect("Deep.md"),
+        before,
+        "the note changed"
+    );
+    assert!(
+        temp_files(&f.root).is_empty(),
+        "a rejected flush left a temp file behind"
+    );
 }
 
 /* ===========================================================================
@@ -555,7 +625,11 @@ fn dl_05_a_deleted_open_note_is_never_resurrected_by_a_late_autosave() {
     assert_eq!(body, b"before\n");
     assert_eq!(flags, 0);
     assert_eq!(
-        state.open_note.lock().unwrap_or_else(std::sync::PoisonError::into_inner).as_deref(),
+        state
+            .open_note
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .as_deref(),
         Some("Misc.md")
     );
 
@@ -568,13 +642,21 @@ fn dl_05_a_deleted_open_note_is_never_resurrected_by_a_late_autosave() {
     // The tree is rebuilt ([ Refresh ] / the watcher's rescan), so the arena no
     // longer holds the note either.
     let (state, _) = open_vault(&f.root);
-    assert!(matches!(arena_abs(&state, "Misc.md"), Err(VaultError::NotFound { .. })));
+    assert!(matches!(
+        arena_abs(&state, "Misc.md"),
+        Err(VaultError::NotFound { .. })
+    ));
 
     // Now the late autosave, at every base-mtime the frontend could be holding.
     for base in [Some(base_mtime), None] {
         // Straight through `fsops`, bypassing the arena, which is the WORST case:
         // it is what a frontend holding a stale absolute path would reach.
-        let e = fsops::write_note(&abs, &wargs("Misc.md", flags, base, false), b"edited\n", &state.self_writes);
+        let e = fsops::write_note(
+            &abs,
+            &wargs("Misc.md", flags, base, false),
+            b"edited\n",
+            &state.self_writes,
+        );
         match e {
             Err(VaultError::NotFound { path }) => assert_eq!(path, "Misc.md"),
             other => panic!("a late autosave with base={base:?} did not refuse: {other:?}"),
@@ -589,7 +671,12 @@ fn dl_05_a_deleted_open_note_is_never_resurrected_by_a_late_autosave() {
     // that retries.
     std::thread::sleep(Duration::from_millis(1_000));
     assert!(matches!(
-        fsops::write_note(&abs, &wargs("Misc.md", flags, None, false), b"edited\n", &state.self_writes),
+        fsops::write_note(
+            &abs,
+            &wargs("Misc.md", flags, None, false),
+            b"edited\n",
+            &state.self_writes
+        ),
         Err(VaultError::NotFound { .. })
     ));
     assert!(!abs.exists());
@@ -599,9 +686,17 @@ fn dl_05_a_deleted_open_note_is_never_resurrected_by_a_late_autosave() {
     // every autosave if step 1b were dropped, and is exactly bug B17.  Without
     // this line the four `NotFound`s above could be passing for any reason at
     // all, including a typo in the path.
-    fsops::write_note(&abs, &wargs("Misc.md", flags, None, true), b"edited\n", &state.self_writes)
-        .expect("x-create: 1 must be able to create");
-    assert!(abs.exists(), "the create bit did not create — the test above proves nothing");
+    fsops::write_note(
+        &abs,
+        &wargs("Misc.md", flags, None, true),
+        b"edited\n",
+        &state.self_writes,
+    )
+    .expect("x-create: 1 must be able to create");
+    assert!(
+        abs.exists(),
+        "the create bit did not create — the test above proves nothing"
+    );
     fs::remove_file(&abs).expect("clean up the deliberate resurrection");
 
     assert!(temp_files(&f.root).is_empty());
@@ -627,13 +722,19 @@ fn dl_06_the_create_bit_has_exactly_one_producer_in_the_frontend() {
         if p.extension().and_then(|e| e.to_str()) != Some("ts") {
             continue;
         }
-        let name = p.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
+        let name = p
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("")
+            .to_string();
         if name == "ipc.ts" || name == "ipc.d.ts" {
             continue; // the wrapper and the type: they TAKE the flag, never set it
         }
         let text = fs::read_to_string(&p).expect("read a frontend module");
         for (i, line) in text.lines().enumerate() {
-            let Some(at) = line.find("writeNote(") else { continue };
+            let Some(at) = line.find("writeNote(") else {
+                continue;
+            };
             let call = line.get(at..).unwrap_or("");
             // The last argument is `create`.  A literal `true` there is a producer.
             if call.contains("true)") {
@@ -649,11 +750,12 @@ fn dl_06_the_create_bit_has_exactly_one_producer_in_the_frontend() {
          Save as…). Found: {producers:?}"
     );
     assert!(
-        producers.first().is_some_and(|p| p.starts_with("editor.ts:")),
+        producers
+            .first()
+            .is_some_and(|p| p.starts_with("editor.ts:")),
         "the one create-bit producer moved out of editor.ts's saveAs(): {producers:?}"
     );
 }
-
 
 /* ===========================================================================
  * §7.3 CASES 4 AND 5 — RENAME, IN-APP AND EXTERNAL
@@ -672,18 +774,26 @@ fn dl_07_after_an_in_app_rename_the_open_note_still_hears_external_edits() {
     let _ = cairn_lib::app::read_note(&state, "Misc.md").expect("read_note");
 
     let w = Watched::start(&f.root, &state.self_writes);
-    assert_eq!(w.root(), f.root, "the watcher root must be the canonical root");
+    assert_eq!(
+        w.root(),
+        f.root,
+        "the watcher root must be the canonical root"
+    );
 
     // The in-app rename.  `rename_entry` + the M54 bookkeeping that
     // `app::rename_entry` performs under the write lock.
     let src = arena_abs(&state, "Misc.md").expect("arena");
     let dst = fsops::rename_target(&src, "Renamed", true).expect("rename_target");
     fsops::rename_entry(&src, &dst, &state.self_writes).expect("rename");
-    *state.open_note.lock().unwrap_or_else(std::sync::PoisonError::into_inner) =
-        Some("Renamed.md".to_string());
+    *state
+        .open_note
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner) = Some("Renamed.md".to_string());
     let (state, _) = open_vault(&f.root);
-    *state.open_note.lock().unwrap_or_else(std::sync::PoisonError::into_inner) =
-        Some("Renamed.md".to_string());
+    *state
+        .open_note
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner) = Some("Renamed.md".to_string());
 
     // Let the rename's own events drain before the external edit, so the count
     // below is about the edit and nothing else.
@@ -710,9 +820,17 @@ fn dl_07_after_an_in_app_rename_the_open_note_still_hears_external_edits() {
     );
 
     // And the filter is real: the hit resolves to the path `open_note` holds.
-    let rel = renamed.strip_prefix(&f.root).expect("rel").to_string_lossy().into_owned();
+    let rel = renamed
+        .strip_prefix(&f.root)
+        .expect("rel")
+        .to_string_lossy()
+        .into_owned();
     assert_eq!(
-        state.open_note.lock().unwrap_or_else(std::sync::PoisonError::into_inner).as_deref(),
+        state
+            .open_note
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .as_deref(),
         Some(rel.as_str())
     );
 }
@@ -732,18 +850,30 @@ fn dl_08_an_external_rename_stops_autosave_and_save_as_is_the_only_way_out() {
 
     external_rename(&old, &moved);
     let (state, _) = open_vault(&f.root); // the watcher's rescan
-    *state.open_note.lock().unwrap_or_else(std::sync::PoisonError::into_inner) =
-        Some("Misc.md".to_string());
+    *state
+        .open_note
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner) = Some("Misc.md".to_string());
 
     // The buffer is dirty and autosave fires. It must not write to EITHER path.
-    assert!(matches!(autosave(&state, "Misc.md", b"dirty\n", None), Err(VaultError::NotFound { .. })));
+    assert!(matches!(
+        autosave(&state, "Misc.md", b"dirty\n", None),
+        Err(VaultError::NotFound { .. })
+    ));
     assert!(!old.exists(), "autosave recreated the note at its OLD path");
-    assert_eq!(fs::read(&moved).expect("Other.md"), b"before\n", "autosave followed the rename");
+    assert_eq!(
+        fs::read(&moved).expect("Other.md"),
+        b"before\n",
+        "autosave followed the rename"
+    );
 
     // Save as… into a fresh name: exactly one write, with the create bit.
     let r = save_as(&state, "", "Rescued.md", b"dirty\n").expect("save as");
     assert_eq!(r.size, 6);
-    assert_eq!(fs::read(f.abs("Rescued.md")).expect("Rescued.md"), b"dirty\n");
+    assert_eq!(
+        fs::read(f.abs("Rescued.md")).expect("Rescued.md"),
+        b"dirty\n"
+    );
 
     // Save as… into an existing name: refused at step 1c, and NOTHING is written.
     let before = fs::read(&moved).expect("Other.md");
@@ -752,9 +882,16 @@ fn dl_08_an_external_rename_stops_autosave_and_save_as_is_the_only_way_out() {
         Err(VaultError::AlreadyExists { path }) => assert_eq!(path, "Other.md"),
         other => panic!("Save as… over an existing note must refuse: {other:?}"),
     }
-    assert_eq!(fs::read(&moved).expect("Other.md"), before, "Save as… overwrote a note");
+    assert_eq!(
+        fs::read(&moved).expect("Other.md"),
+        before,
+        "Save as… overwrote a note"
+    );
     assert!(temp_files(&f.root).is_empty());
-    assert_eq!(entries(&f.root), vec!["A", "Notes", "Other.md", "Rescued.md"]);
+    assert_eq!(
+        entries(&f.root),
+        vec!["A", "Notes", "Other.md", "Rescued.md"]
+    );
 }
 
 /* ===========================================================================
@@ -775,20 +912,35 @@ fn dl_09_deleting_the_folder_takes_the_open_note_and_nothing_comes_back() {
 
     // M54's containment rule, which `app::delete_entry` applies under the lock.
     let cleared = {
-        let g = state.open_note.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
-        g.as_deref().is_some_and(|cur| cur == "A" || cur.starts_with("A/"))
+        let g = state
+            .open_note
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        g.as_deref()
+            .is_some_and(|cur| cur == "A" || cur.starts_with("A/"))
     };
-    assert!(cleared, "the open note was not inside the deleted folder — fixture bug");
+    assert!(
+        cleared,
+        "the open note was not inside the deleted folder — fixture bug"
+    );
 
     // Every autosave that could still be in the frontend's queue.
     for base in [Some(base), None] {
         assert!(matches!(
-            fsops::write_note(&note, &wargs("A/B/n.md", flags, base, false), b"x\n", &state.self_writes),
+            fsops::write_note(
+                &note,
+                &wargs("A/B/n.md", flags, base, false),
+                b"x\n",
+                &state.self_writes
+            ),
             Err(VaultError::NotFound { .. })
         ));
     }
     assert!(!f.abs("A").exists(), "the deleted folder came back");
-    assert!(!note.exists(), "the note under the deleted folder came back");
+    assert!(
+        !note.exists(),
+        "the note under the deleted folder came back"
+    );
     assert_eq!(entries(&f.root), vec!["Misc.md", "Notes"]);
 }
 
@@ -801,7 +953,9 @@ fn dl_09_deleting_the_folder_takes_the_open_note_and_nothing_comes_back() {
 #[test]
 #[ignore = "spawned by external_write()/external_rename()"]
 fn dataloss_external_actor() {
-    let Ok(path) = std::env::var("CAIRN_DL_EXT_PATH") else { return };
+    let Ok(path) = std::env::var("CAIRN_DL_EXT_PATH") else {
+        return;
+    };
     match std::env::var("CAIRN_DL_EXT_TO") {
         Ok(to) => fs::rename(&path, &to).expect("external rename"),
         Err(_) => {
@@ -814,9 +968,14 @@ fn dataloss_external_actor() {
 fn run_external(env: &[(&str, &str)]) {
     let exe = std::env::current_exe().expect("current_exe");
     let mut cmd = std::process::Command::new(&exe);
-    cmd.args(["--exact", "dataloss_external_actor", "--ignored", "--nocapture"])
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null());
+    cmd.args([
+        "--exact",
+        "dataloss_external_actor",
+        "--ignored",
+        "--nocapture",
+    ])
+    .stdout(std::process::Stdio::null())
+    .stderr(std::process::Stdio::null());
     for (k, v) in env {
         cmd.env(k, v);
     }
@@ -861,17 +1020,33 @@ fn dl_10_a_concurrent_edit_from_another_process_is_never_clobbered() {
     let mut conflicts = 0u32;
     for _ in 0..3 {
         match autosave(&state, "Misc.md", b"typed in Cairn\n", Some(base)) {
-            Err(VaultError::Conflict { path, disk_mtime_ms }) => {
+            Err(VaultError::Conflict {
+                path,
+                disk_mtime_ms,
+            }) => {
                 conflicts += 1;
                 assert_eq!(path, "Misc.md");
-                assert_ne!(disk_mtime_ms, base, "the conflict reported the base as the disk mtime");
+                assert_ne!(
+                    disk_mtime_ms, base,
+                    "the conflict reported the base as the disk mtime"
+                );
             }
             other => panic!("a concurrent edit must conflict: {other:?}"),
         }
     }
-    assert_eq!(conflicts, 3, "the conflict guard must not disarm itself after the first refusal");
-    assert_eq!(fs::read(&abs).expect("Misc.md"), disk_after_external, "the other process's edit was clobbered");
-    assert!(temp_files(&f.root).is_empty(), "a refused write left a temp file");
+    assert_eq!(
+        conflicts, 3,
+        "the conflict guard must not disarm itself after the first refusal"
+    );
+    assert_eq!(
+        fs::read(&abs).expect("Misc.md"),
+        disk_after_external,
+        "the other process's edit was clobbered"
+    );
+    assert!(
+        temp_files(&f.root).is_empty(),
+        "a refused write left a temp file"
+    );
 
     // §7.2's *Keep mine* is the ONLY way through, and it is explicit.
     let receipt = autosave(&state, "Misc.md", b"typed in Cairn\n", None).expect("keep mine");
@@ -940,11 +1115,19 @@ fn dl_12_a_vanished_vault_root_is_reported_and_nothing_is_written_after() {
     // "…assert zero writes afterwards."  With the root gone the write cannot
     // even create its temp file, so nothing is recreated under a path whose root
     // no longer exists.
-    match fsops::write_note(&abs, &wargs("Misc.md", 0, None, false), b"late\n", &state.self_writes) {
+    match fsops::write_note(
+        &abs,
+        &wargs("Misc.md", 0, None, false),
+        b"late\n",
+        &state.self_writes,
+    ) {
         Err(VaultError::NotFound { .. } | VaultError::Io { .. }) => {}
         other => panic!("a write into a vanished vault must fail: {other:?}"),
     }
-    assert!(!f.root.exists(), "the vault root was recreated by a late write");
+    assert!(
+        !f.root.exists(),
+        "the vault root was recreated by a late write"
+    );
 }
 
 /* ===========================================================================
@@ -1024,14 +1207,18 @@ fn dl_14_a_mixed_eol_note_is_unified_on_crlf_not_silently_stripped() {
     let (state, _) = open_vault(&f.root);
 
     let after = round_trip(&state, "mixed.md");
-    assert_ne!(after, mixed, "mixed EOL is documented as NOT byte-identical; behaviour changed");
+    assert_ne!(
+        after, mixed,
+        "mixed EOL is documented as NOT byte-identical; behaviour changed"
+    );
     assert_eq!(
         after, b"crlf\r\nbare\r\nboth\r\n\r\nend",
         "mixed EOL must be UNIFIED on CRLF — never stripped, never torn"
     );
     // The one thing that must never happen: a `\r` silently deleted.
     assert!(
-        after.windows(2).filter(|w| *w == b"\r\n").count() >= mixed.windows(2).filter(|w| *w == b"\r\n").count(),
+        after.windows(2).filter(|w| *w == b"\r\n").count()
+            >= mixed.windows(2).filter(|w| *w == b"\r\n").count(),
         "a CRLF was silently downgraded to LF"
     );
     // And the second round trip IS stable: the file is uniform now.
@@ -1053,7 +1240,11 @@ fn dl_15_a_non_utf8_note_is_refused_and_survives_untouched() {
         Err(VaultError::NotUtf8 { path }) => assert_eq!(path, "latin1.md"),
         other => panic!("a non-UTF-8 note must be refused: {other:?}"),
     }
-    assert_eq!(fs::read(f.abs("latin1.md")).expect("latin1.md"), raw, "the bytes were rewritten");
+    assert_eq!(
+        fs::read(f.abs("latin1.md")).expect("latin1.md"),
+        raw,
+        "the bytes were rewritten"
+    );
 }
 
 /* ===========================================================================
@@ -1094,16 +1285,29 @@ fn dl_16_a_case_only_rename_keeps_the_file_and_a_real_collision_is_refused() {
     let dst = fsops::rename_target(&src, "Notes", true).expect("rename_target");
     fsops::rename_entry(&src, &dst, &state.self_writes).expect("the case-only rename must succeed");
 
-    assert_eq!(fs::read(f.abs("Notes.md")).expect("Notes.md"), b"the user's writing\n");
+    assert_eq!(
+        fs::read(f.abs("Notes.md")).expect("Notes.md"),
+        b"the user's writing\n"
+    );
     assert_eq!(
         fs::symlink_metadata(f.abs("Notes.md")).expect("stat").ino(),
         ino_before,
         "the case-only rename replaced the inode instead of moving it"
     );
-    assert!(temp_files(&f.root).is_empty(), "the intermediate temp name survived: {:?}", temp_files(&f.root));
+    assert!(
+        temp_files(&f.root).is_empty(),
+        "the intermediate temp name survived: {:?}",
+        temp_files(&f.root)
+    );
     let names = entries(&f.root);
     assert!(names.contains(&"Notes.md".to_string()));
-    assert_eq!(names.iter().filter(|n| n.eq_ignore_ascii_case("notes.md")).count(), 1);
+    assert_eq!(
+        names
+            .iter()
+            .filter(|n| n.eq_ignore_ascii_case("notes.md"))
+            .count(),
+        1
+    );
 
     // A GENUINE collision: a different file whose name differs only by case.
     fs::write(f.abs("OTHER.md"), b"a different note\n").expect("OTHER.md");
@@ -1114,8 +1318,14 @@ fn dl_16_a_case_only_rename_keeps_the_file_and_a_real_collision_is_refused() {
         Err(VaultError::AlreadyExists { .. }) => {}
         other => panic!("a case-only COLLISION with a different file must be refused: {other:?}"),
     }
-    assert_eq!(fs::read(f.abs("OTHER.md")).expect("OTHER.md"), b"a different note\n");
-    assert_eq!(fs::read(f.abs("Notes.md")).expect("Notes.md"), b"the user's writing\n");
+    assert_eq!(
+        fs::read(f.abs("OTHER.md")).expect("OTHER.md"),
+        b"a different note\n"
+    );
+    assert_eq!(
+        fs::read(f.abs("Notes.md")).expect("Notes.md"),
+        b"the user's writing\n"
+    );
 }
 
 /* ===========================================================================
@@ -1141,7 +1351,11 @@ fn dl_17_a_vault_reached_through_a_symlink_still_watches_and_still_suppresses() 
     let link_home = tmpdir();
     let link = link_home.path().join("vault-link");
     std::os::unix::fs::symlink(&f.root, &link).expect("symlink");
-    assert!(link.symlink_metadata().expect("lstat").file_type().is_symlink());
+    assert!(link
+        .symlink_metadata()
+        .expect("lstat")
+        .file_type()
+        .is_symlink());
     assert_ne!(link, f.root);
 
     // Open THROUGH THE SYMLINK, exactly as a user who picked it would.
@@ -1171,14 +1385,23 @@ fn dl_17_a_vault_reached_through_a_symlink_still_watches_and_still_suppresses() 
     );
 
     let w = Watched::start(&link, &state.self_writes);
-    assert_eq!(w.root(), f.root, "the watcher and the arena disagree about the root");
+    assert_eq!(
+        w.root(),
+        f.root,
+        "the watcher and the arena disagree about the root"
+    );
     w.settle();
 
     // Echo suppression must still work: same fingerprint ring, same spelling.
     autosave(&state, "Misc.md", b"saved through the link\n", None).expect("autosave");
     w.settle();
     let abs = f.abs("Misc.md");
-    assert_eq!(w.hits(&abs), 0, "our own save echoed back through the symlinked root: {:?}", w.events());
+    assert_eq!(
+        w.hits(&abs),
+        0,
+        "our own save echoed back through the symlinked root: {:?}",
+        w.events()
+    );
 
     // And a real external edit must still arrive.
     external_write(&abs, b"external, through the link\n");
@@ -1207,7 +1430,14 @@ fn dl_18_awkward_names_are_openable_even_where_they_are_uncreatable() {
     let f = Fixture::new();
 
     // Created from OUTSIDE the app, which is the only way they can appear.
-    let awkward: [&str; 6] = ["Archive ", "v1.", "CON.md", "star*.md", "pipe|.md", "quote\".md"];
+    let awkward: [&str; 6] = [
+        "Archive ",
+        "v1.",
+        "CON.md",
+        "star*.md",
+        "pipe|.md",
+        "quote\".md",
+    ];
     let mut made: Vec<&str> = Vec::new();
     for name in awkward {
         let p = f.root.join(name);
@@ -1224,8 +1454,11 @@ fn dl_18_awkward_names_are_openable_even_where_they_are_uncreatable() {
         made.contains(&"Archive ") && made.contains(&"v1.") && made.contains(&"CON.md"),
         "the fixture filesystem refused names §7.3 case 11 assumes it accepts: made={made:?}"
     );
-    fs::write(f.root.join("Archive /inside.md"), b"inside a trailing-space folder\n")
-        .expect("a note inside `Archive `");
+    fs::write(
+        f.root.join("Archive /inside.md"),
+        b"inside a trailing-space folder\n",
+    )
+    .expect("a note inside `Archive `");
 
     let (state, _) = open_vault(&f.root);
 
@@ -1234,19 +1467,32 @@ fn dl_18_awkward_names_are_openable_even_where_they_are_uncreatable() {
         "a note inside a trailing-space folder must be reachable — spec-02 §5.2's single \
          validate_rel made exactly this note visible but permanently unopenable",
     );
-    assert_eq!(fsops::read_note(&inside, "Archive /inside.md").expect("read").bytes, b"inside a trailing-space folder\n");
-    autosave(&state, "Archive /inside.md", b"edited\n", None).expect("write through an awkward parent");
+    assert_eq!(
+        fsops::read_note(&inside, "Archive /inside.md")
+            .expect("read")
+            .bytes,
+        b"inside a trailing-space folder\n"
+    );
+    autosave(&state, "Archive /inside.md", b"edited\n", None)
+        .expect("write through an awkward parent");
     let dst = fsops::rename_target(&inside, "Renamed inside", true).expect("rename_target");
-    fsops::rename_entry(&inside, &dst, &state.self_writes).expect("rename through an awkward parent");
-    fsops::delete_entry(&dst, "Archive /Renamed inside.md", true, &state.self_writes).expect("delete");
+    fsops::rename_entry(&inside, &dst, &state.self_writes)
+        .expect("rename through an awkward parent");
+    fsops::delete_entry(&dst, "Archive /Renamed inside.md", true, &state.self_writes)
+        .expect("delete");
 
     // `CON.md` is openable and deletable, even though it can never be CREATED.
     let con = arena_abs(&state, "CON.md").expect("CON.md must be openable");
-    assert_eq!(fsops::read_note(&con, "CON.md").expect("read CON.md").bytes, b"awkward\n");
+    assert_eq!(
+        fsops::read_note(&con, "CON.md").expect("read CON.md").bytes,
+        b"awkward\n"
+    );
 
     // And the creation policy is the strict one, on every name the app itself
     // would have to write onto a synced Windows machine.
-    for bad in ["CON", "Archive ", "v1.", "a/b", "a:b", "a*b", "a?b", "a<b", "..", "."] {
+    for bad in [
+        "CON", "Archive ", "v1.", "a/b", "a:b", "a*b", "a?b", "a<b", "..", ".",
+    ] {
         assert!(
             vpath::validate_name(bad).is_err(),
             "validate_name accepted {bad:?}, which a Windows checkout cannot hold"
@@ -1254,7 +1500,10 @@ fn dl_18_awkward_names_are_openable_even_where_they_are_uncreatable() {
     }
     // …while the LOOKUP validator admits every one of them that is a real name.
     for ok in ["Archive ", "v1.", "CON.md", "Archive /inside.md"] {
-        assert!(vpath::validate_rel_for_lookup(ok).is_ok(), "lookup refused {ok:?}");
+        assert!(
+            vpath::validate_rel_for_lookup(ok).is_ok(),
+            "lookup refused {ok:?}"
+        );
     }
 }
 
@@ -1275,7 +1524,10 @@ fn dl_19_a_symlink_loop_terminates_the_walk_and_is_absent_from_the_tree() {
     // If the walk followed symlinks this would not return.
     let started = Instant::now();
     let (state, _) = open_vault(&f.root);
-    assert!(started.elapsed() < Duration::from_secs(10), "the walk did not terminate promptly");
+    assert!(
+        started.elapsed() < Duration::from_secs(10),
+        "the walk did not terminate promptly"
+    );
 
     for absent in ["loop", "self", "escape", "Notes/link.md"] {
         assert!(
@@ -1285,17 +1537,33 @@ fn dl_19_a_symlink_loop_terminates_the_walk_and_is_absent_from_the_tree() {
     }
     // The accepted limitation, asserted as a limitation: a symlinked note is
     // absent with no error, rather than followed.
-    assert!(f.abs("Notes/link.md").symlink_metadata().is_ok(), "the fixture link vanished");
+    assert!(
+        f.abs("Notes/link.md").symlink_metadata().is_ok(),
+        "the fixture link vanished"
+    );
 
     // §7.3 case 13, through the same seam: nothing outside the root resolves.
-    for hostile in ["../../etc/passwd", "/etc/passwd", "loop/../../etc/passwd", "escape/secret.md", "..", "a/../.."] {
+    for hostile in [
+        "../../etc/passwd",
+        "/etc/passwd",
+        "loop/../../etc/passwd",
+        "escape/secret.md",
+        "..",
+        "a/../..",
+    ] {
         let r = arena_abs(&state, hostile);
         assert!(
-            matches!(r, Err(VaultError::NotFound { .. } | VaultError::InvalidPath { .. })),
+            matches!(
+                r,
+                Err(VaultError::NotFound { .. } | VaultError::InvalidPath { .. })
+            ),
             "{hostile} resolved to {r:?}"
         );
     }
-    assert_eq!(fs::read(outside.path().join("secret.md")).expect("secret"), b"not in the vault\n");
+    assert_eq!(
+        fs::read(outside.path().join("secret.md")).expect("secret"),
+        b"not in the vault\n"
+    );
 }
 
 /* ===========================================================================
@@ -1313,8 +1581,17 @@ fn dl_20_the_eight_mib_cap_holds_on_both_the_read_and_the_write_path() {
     let (state, _) = open_vault(&f.root);
 
     // Exactly at the cap opens; one byte over is refused, with the numbers.
-    assert_eq!(fsops::read_note(&arena_abs(&state, "AtCap.md").expect("arena"), "AtCap.md").expect("at cap").bytes.len(), cap);
-    match fsops::read_note(&arena_abs(&state, "OverCap.md").expect("arena"), "OverCap.md") {
+    assert_eq!(
+        fsops::read_note(&arena_abs(&state, "AtCap.md").expect("arena"), "AtCap.md")
+            .expect("at cap")
+            .bytes
+            .len(),
+        cap
+    );
+    match fsops::read_note(
+        &arena_abs(&state, "OverCap.md").expect("arena"),
+        "OverCap.md",
+    ) {
         Err(VaultError::TooLarge { path, bytes, limit }) => {
             assert_eq!(path, "OverCap.md");
             assert_eq!(bytes, cap as u64 + 1);
@@ -1330,7 +1607,11 @@ fn dl_20_the_eight_mib_cap_holds_on_both_the_read_and_the_write_path() {
         Err(VaultError::TooLarge { bytes, .. }) => assert_eq!(bytes, cap as u64 + 1),
         other => panic!("an over-cap write must be refused: {other:?}"),
     }
-    assert_eq!(fs::read(f.abs("AtCap.md")).expect("AtCap.md"), before, "the refused write landed anyway");
+    assert_eq!(
+        fs::read(f.abs("AtCap.md")).expect("AtCap.md"),
+        before,
+        "the refused write landed anyway"
+    );
 
     // AND THE CAP IS APPLIED AFTER `denormalise`, which is the subtle one: a body
     // that fits becomes over-cap once the BOM and the CRLFs are re-applied.
@@ -1340,7 +1621,9 @@ fn dl_20_the_eight_mib_cap_holds_on_both_the_read_and_the_write_path() {
         &vec![b'y'; cap],
         &state.self_writes,
     ) {
-        Err(VaultError::TooLarge { bytes, .. }) => assert_eq!(bytes, cap as u64 + 3, "the BOM's three bytes"),
+        Err(VaultError::TooLarge { bytes, .. }) => {
+            assert_eq!(bytes, cap as u64 + 3, "the BOM's three bytes")
+        }
         other => panic!("the cap must be measured on what LANDS on disk: {other:?}"),
     }
     // The same, through the CRLF flag: one extra byte per line ending.
@@ -1352,11 +1635,16 @@ fn dl_20_the_eight_mib_cap_holds_on_both_the_read_and_the_write_path() {
         &body,
         &state.self_writes,
     ) {
-        Err(VaultError::TooLarge { bytes, .. }) => assert_eq!(bytes, cap as u64 + 4, "four re-applied CRs"),
+        Err(VaultError::TooLarge { bytes, .. }) => {
+            assert_eq!(bytes, cap as u64 + 4, "four re-applied CRs")
+        }
         other => panic!("the cap must be measured after denormalise: {other:?}"),
     }
     assert_eq!(fs::read(f.abs("AtCap.md")).expect("AtCap.md"), before);
-    assert!(temp_files(&f.root).is_empty(), "a refused over-cap write left a temp file");
+    assert!(
+        temp_files(&f.root).is_empty(),
+        "a refused over-cap write left a temp file"
+    );
 }
 
 /* ===========================================================================
@@ -1381,17 +1669,27 @@ fn dl_21_g8_a_whole_session_leaves_exactly_the_users_notes() {
     let w = Watched::start(&link, &state.self_writes);
 
     let root_abs = state.vault().expect("vault").root();
-    let (folder, _) = fsops::create_folder(&root_abs, Some("Projects"), &state.self_writes).expect("mkdir");
+    let (folder, _) =
+        fsops::create_folder(&root_abs, Some("Projects"), &state.self_writes).expect("mkdir");
     let (note, name) = fsops::create_note(&folder, None, &state.self_writes).expect("create");
     assert_eq!(name, "Untitled.md");
-    fsops::write_note(&note, &wargs("Projects/Untitled.md", 0, None, false), b"# Ideas\n", &state.self_writes).expect("write");
+    fsops::write_note(
+        &note,
+        &wargs("Projects/Untitled.md", 0, None, false),
+        b"# Ideas\n",
+        &state.self_writes,
+    )
+    .expect("write");
     let renamed = fsops::rename_target(&note, "Ideas", true).expect("rename_target");
     fsops::rename_entry(&note, &renamed, &state.self_writes).expect("rename");
-    let (scratch, _) = fsops::create_note(&root_abs, Some("Scratch"), &state.self_writes).expect("create");
+    let (scratch, _) =
+        fsops::create_note(&root_abs, Some("Scratch"), &state.self_writes).expect("create");
     fsops::delete_entry(&scratch, "Scratch.md", true, &state.self_writes).expect("delete");
     external_write(&f.abs("Misc.md"), b"and somebody else edited this\n");
 
-    let prefs = Arc::new(cairn_lib::prefs::PrefsStore::load(config.path().join("state.json")));
+    let prefs = Arc::new(cairn_lib::prefs::PrefsStore::load(
+        config.path().join("state.json"),
+    ));
     prefs.edit(|st| st.touch_vault(&root_abs.to_string_lossy()));
     prefs.flush_now().expect("flush state.json");
 
@@ -1401,8 +1699,14 @@ fn dl_21_g8_a_whole_session_leaves_exactly_the_users_notes() {
     assert_eq!(entries(&f.root), vec!["A", "Misc.md", "Notes", "Projects"]);
     assert_eq!(entries(&f.abs("Projects")), vec!["Ideas.md"]);
     assert!(temp_files(&f.root).is_empty(), "{:?}", temp_files(&f.root));
-    assert!(!f.abs("state.json").exists(), "state.json was written INSIDE the vault");
-    assert!(config.path().join("state.json").is_file(), "state.json did not reach the config dir");
+    assert!(
+        !f.abs("state.json").exists(),
+        "state.json was written INSIDE the vault"
+    );
+    assert!(
+        config.path().join("state.json").is_file(),
+        "state.json did not reach the config dir"
+    );
     // And the config directory holds NOTHING but state.json.
     assert_eq!(entries(config.path()), vec!["state.json"]);
 }
@@ -1423,13 +1727,19 @@ fn dl_21_g8_a_whole_session_leaves_exactly_the_users_notes() {
 fn dl_22_a_vault_with_no_watcher_still_opens_and_still_saves() {
     let f = Fixture::new();
     let (state, _) = open_vault(&f.root);
-    assert!(!state.watching(), "no watcher was started, so `watching` must be false (M57)");
+    assert!(
+        !state.watching(),
+        "no watcher was started, so `watching` must be false (M57)"
+    );
 
     // The vault is fully usable: read, write, create, rename, delete.
     let framed = cairn_lib::app::read_note(&state, "Misc.md").expect("read_note");
     let (base, _, _) = note_frame::decode_note(&framed).expect("decode");
     autosave(&state, "Misc.md", b"edited with no watcher\n", Some(base)).expect("write");
-    assert_eq!(fs::read(f.abs("Misc.md")).expect("Misc.md"), b"edited with no watcher\n");
+    assert_eq!(
+        fs::read(f.abs("Misc.md")).expect("Misc.md"),
+        b"edited with no watcher\n"
+    );
 
     // And a start against a path that cannot be watched degrades rather than
     // panicking or hanging.
@@ -1548,13 +1858,19 @@ fn dl_24_a_write_already_in_flight_resurrects_a_deleted_note_and_settling_stops_
         conclusive += 1;
 
         let receipt = writer.join().expect("writer thread");
-        assert!(receipt.is_ok(), "round {round}: the in-flight write itself failed: {receipt:?}");
+        assert!(
+            receipt.is_ok(),
+            "round {round}: the in-flight write itself failed: {receipt:?}"
+        );
         assert!(
             !abs.exists(),
             "round {round}: the in-flight write re-created the deleted note — \
              the write lock is not serialising delete behind the rename"
         );
-        assert!(temp_files(&f.root).is_empty(), "round {round}: a temp survived");
+        assert!(
+            temp_files(&f.root).is_empty(),
+            "round {round}: a temp survived"
+        );
     }
 
     // Reported, not merely asserted: a run where the delete never met an
@@ -1585,11 +1901,20 @@ fn dl_24_a_write_already_in_flight_resurrects_a_deleted_note_and_settling_stops_
             let body = vec![b'x'; F3_BODY_LEN];
             fsops::write_note(&wabs, &wargs(&wrel, 0, Some(base), false), &body, &writes)
         });
-        assert!(wait_for_temp(&f.root, 5_000), "round {round}: the write never started");
+        assert!(
+            wait_for_temp(&f.root, 5_000),
+            "round {round}: the write never started"
+        );
 
         // await settleWrites()
-        writer.join().expect("writer thread").expect("the settled write");
-        assert!(temp_files(&f.root).is_empty(), "a temp survived a completed write");
+        writer
+            .join()
+            .expect("writer thread")
+            .expect("the settled write");
+        assert!(
+            temp_files(&f.root).is_empty(),
+            "a temp survived a completed write"
+        );
 
         fsops::delete_entry(&abs, &rel, true, &state.self_writes).expect("delete");
         assert!(
@@ -1599,7 +1924,10 @@ fn dl_24_a_write_already_in_flight_resurrects_a_deleted_note_and_settling_stops_
         );
     }
 
-    assert!(temp_files(&f.root).is_empty(), "the run left crash debris behind");
+    assert!(
+        temp_files(&f.root).is_empty(),
+        "the run left crash debris behind"
+    );
 }
 
 /// §7.3 case 3's *"assert `~/.Trash` holds the pre-edit copy and nothing holds a
@@ -1638,7 +1966,11 @@ fn dl_25_the_bytes_that_reach_the_delete_are_the_branch_the_user_picked() {
         // The guard returns 'abort', so `main.ts` does nothing: no write, no
         // delete_entry, and the buffer stays dirty in the editor.
         let abs = arena_abs(&state, "Misc.md").expect("arena");
-        assert_eq!(fs::read(&abs).expect("read"), PRE, "Cancel changed the file");
+        assert_eq!(
+            fs::read(&abs).expect("read"),
+            PRE,
+            "Cancel changed the file"
+        );
         assert_eq!(entries(&f.root), vec!["A", "Misc.md", "Notes"]);
         assert!(temp_files(&f.root).is_empty());
     }
@@ -1666,14 +1998,30 @@ fn dl_25_the_bytes_that_reach_the_delete_are_the_branch_the_user_picked() {
         fs::create_dir(&trash).expect("mkdir");
         let moved = trash.join("Misc.md");
         fs::rename(&abs, &moved).expect("the same-volume move a trash is");
-        assert_eq!(fs::metadata(&moved).expect("stat").ino(), ino_before, "the move copied");
-        assert_eq!(fs::read(&moved).expect("read"), PRE, "the trashed copy is not the pre-edit one");
+        assert_eq!(
+            fs::metadata(&moved).expect("stat").ino(),
+            ino_before,
+            "the move copied"
+        );
+        assert_eq!(
+            fs::read(&moved).expect("read"),
+            PRE,
+            "the trashed copy is not the pre-edit one"
+        );
         assert!(!abs.exists());
 
         // AND NOTHING HOLDS A POST-EDIT COPY: the buffer was never written, so
         // no later flush can put one anywhere.  `x-create: '0'` refuses.
-        let e = fsops::write_note(&abs, &wargs("Misc.md", flags, Some(base), false), POST, &state.self_writes);
-        assert!(matches!(e, Err(VaultError::NotFound { .. })), "a post-edit copy was created: {e:?}");
+        let e = fsops::write_note(
+            &abs,
+            &wargs("Misc.md", flags, Some(base), false),
+            POST,
+            &state.self_writes,
+        );
+        assert!(
+            matches!(e, Err(VaultError::NotFound { .. })),
+            "a post-edit copy was created: {e:?}"
+        );
         assert!(!abs.exists());
     }
 
@@ -1686,7 +2034,8 @@ fn dl_25_the_bytes_that_reach_the_delete_are_the_branch_the_user_picked() {
         assert_eq!(body, PRE);
 
         // Step 3: `await flushNow('delete')` — an ordinary autosave, create FALSE.
-        let receipt = autosave(&state, "Misc.md", POST, Some(base)).expect("the flush behind the button");
+        let receipt =
+            autosave(&state, "Misc.md", POST, Some(base)).expect("the flush behind the button");
         assert!(receipt.mtime_ms >= base);
 
         let abs = arena_abs(&state, "Misc.md").expect("arena");
@@ -1733,12 +2082,18 @@ fn dl_25_the_bytes_that_reach_the_delete_are_the_branch_the_user_picked() {
         perms.set_mode(original);
         fs::set_permissions(&f.root, perms).expect("restore");
 
-        assert!(matches!(refused, Err(VaultError::Io { .. })), "the flush was not refused: {refused:?}");
+        assert!(
+            matches!(refused, Err(VaultError::Io { .. })),
+            "the flush was not refused: {refused:?}"
+        );
         // The delete does NOT happen, so the file is still there and still holds
         // the pre-edit content — which is the only copy of it there is.
         assert!(abs.exists(), "the note was deleted after a REFUSED save");
         assert_eq!(fs::read(&abs).expect("read"), PRE);
-        assert!(temp_files(&f.root).is_empty(), "the refused write left debris");
+        assert!(
+            temp_files(&f.root).is_empty(),
+            "the refused write left debris"
+        );
     }
 }
 
@@ -1801,10 +2156,19 @@ fn dl_26_g_a_the_trash_for_a_fixture_note_is_the_users_real_trash_not_the_fixtur
     "#;
 
     let out = std::process::Command::new("/usr/bin/osascript")
-        .args(["-l", "JavaScript", "-e", JXA, note.to_str().expect("utf-8 path")])
+        .args([
+            "-l",
+            "JavaScript",
+            "-e",
+            JXA,
+            note.to_str().expect("utf-8 path"),
+        ])
         .output()
         .expect("osascript is part of macOS and v1 is macOS only (§9 E2)");
-    assert!(out.status.success(), "the trash-destination probe failed: {out:?}");
+    assert!(
+        out.status.success(),
+        "the trash-destination probe failed: {out:?}"
+    );
     let dest = String::from_utf8_lossy(&out.stdout).trim().to_string();
     assert!(!dest.is_empty(), "the probe printed nothing");
 
@@ -1863,7 +2227,8 @@ fn dl_26_g_a_the_trash_for_a_fixture_note_is_the_users_real_trash_not_the_fixtur
 #[test]
 fn dl_28_the_quit_handshake_is_wired_at_both_ends_and_the_webview_cannot_close_the_window() {
     let repo = canon(&Path::new(env!("CARGO_MANIFEST_DIR")).join(".."));
-    let src = |rel: &str| fs::read_to_string(repo.join(rel)).unwrap_or_else(|e| panic!("{rel}: {e}"));
+    let src =
+        |rel: &str| fs::read_to_string(repo.join(rel)).unwrap_or_else(|e| panic!("{rel}: {e}"));
 
     /* ── link 1+2: ONE arming call site, and it PREVENTS ──────────────────── */
     // Electron needs ONE arming site: `app.quit()` cascades into
@@ -1892,8 +2257,9 @@ fn dl_28_the_quit_handshake_is_wired_at_both_ends_and_the_webview_cannot_close_t
 
     /* ── link 3: the event, the payload and the deadline ──────────────────── */
     let app_rs = src("core/src/app.rs");
+    let app_flat: String = app_rs.split_whitespace().collect();
     assert!(
-        app_rs.contains(r#"app.emit_event("nc://flush-and-close""#),
+        app_flat.contains(r#"app.emit_event("nc://flush-and-close""#),
         "§1.4's `nc://flush-and-close` is no longer emitted by begin_close"
     );
     assert!(
@@ -1914,7 +2280,8 @@ fn dl_28_the_quit_handshake_is_wired_at_both_ends_and_the_webview_cannot_close_t
         "editor.ts no longer implements §1.6's frontend half"
     );
     assert!(
-        main_ts.contains("await confirmClose(true)") && main_ts.contains("confirmClose(false, r.kind)"),
+        main_ts.contains("await confirmClose(true)")
+            && main_ts.contains("confirmClose(false, r.kind)"),
         "main.ts does not answer confirm_close on BOTH outcomes; the missing one falls through \
          to the watchdog, which DISCARDS (§1.6)"
     );
@@ -1929,13 +2296,18 @@ fn dl_28_the_quit_handshake_is_wired_at_both_ends_and_the_webview_cannot_close_t
         .nth(1)
         .and_then(|s| s.split("\n}\n").next())
         .expect("main.ts no longer has flushAndClose()");
-    let flush_ui = body.find("await flushUi()").expect("main.ts no longer flushes state.json");
-    let editor_flush =
-        body.find("await editorFlushAndClose()").expect("main.ts no longer flushes the buffer");
+    let flush_ui = body
+        .find("await flushUi()")
+        .expect("main.ts no longer flushes state.json");
+    let editor_flush = body
+        .find("await editorFlushAndClose()")
+        .expect("main.ts no longer flushes the buffer");
     let memoir_flush = body
         .find("await flushMemoirForClose()")
         .expect("main.ts no longer flushes the journal (F26)");
-    let confirm_true = body.rfind("await confirmClose(true)").expect("confirmClose(true)");
+    let confirm_true = body
+        .rfind("await confirmClose(true)")
+        .expect("confirmClose(true)");
     assert!(
         editor_flush < memoir_flush && memoir_flush < flush_ui && flush_ui < confirm_true,
         "§1.6's sequencing is broken: it must be editor buffer -> journal -> state.json -> confirm_close, \
@@ -1951,16 +2323,30 @@ fn dl_28_the_quit_handshake_is_wired_at_both_ends_and_the_webview_cannot_close_t
     // §0.5 E7's three-action handler, which routes into `win.close()` and
     // therefore into this very handshake.  The assertion is not "the page
     // cannot close" but "the only route is the one that flushes".
-    for flag in ["contextIsolation: true", "nodeIntegration: false", "sandbox: true"] {
-        assert!(main_mjs.contains(flag), "the renderer lost `{flag}` — it can now reach past the seam");
+    for flag in [
+        "contextIsolation: true",
+        "nodeIntegration: false",
+        "sandbox: true",
+    ] {
+        assert!(
+            main_mjs.contains(flag),
+            "the renderer lost `{flag}` — it can now reach past the seam"
+        );
     }
     let preload = src("electron-shell/preload.cjs");
     assert!(
         preload.contains("contextBridge.exposeInMainWorld('cairn'"),
         "the preload no longer publishes the bridge"
     );
-    for forbidden in ["exposeInMainWorld('require'", "exposeInMainWorld('fs'", "exposeInMainWorld('ipcRenderer'"] {
-        assert!(!preload.contains(forbidden), "the preload exposes {forbidden} to the page");
+    for forbidden in [
+        "exposeInMainWorld('require'",
+        "exposeInMainWorld('fs'",
+        "exposeInMainWorld('ipcRenderer'",
+    ] {
+        assert!(
+            !preload.contains(forbidden),
+            "the preload exposes {forbidden} to the page"
+        );
     }
     // The one indirect route, and it must land on `close()` rather than
     // `destroy()` — asserted above — after passing through a CLOSED set of
@@ -2040,7 +2426,9 @@ const STUB_MARK: &str = "cairn-fake-osascript";
 #[test]
 #[ignore = "spawned by dl_27_the_trash_branch_is_nsfilemanager_and_a_refusal_keeps_the_note"]
 fn dataloss_trash_child() {
-    let Ok(abs) = std::env::var("CAIRN_DL_TRASH_ABS") else { return };
+    let Ok(abs) = std::env::var("CAIRN_DL_TRASH_ABS") else {
+        return;
+    };
     let rel = std::env::var("CAIRN_DL_TRASH_REL").expect("CAIRN_DL_TRASH_REL");
     let out = PathBuf::from(std::env::var("CAIRN_DL_TRASH_RESULT").expect("RESULT"));
     let abs = PathBuf::from(abs);
@@ -2054,7 +2442,11 @@ fn dataloss_trash_child() {
     // parent means the harness did not set up what it thinks it set up, and the
     // correct response is to delete nothing and say so.
     let parent = abs.parent().expect("the target has a parent");
-    let write_bits = fs::metadata(parent).expect("parent metadata").permissions().mode() & 0o222;
+    let write_bits = fs::metadata(parent)
+        .expect("parent metadata")
+        .permissions()
+        .mode()
+        & 0o222;
     if write_bits != 0 {
         let msg = format!(
             "abort:the parent of {rel} has write bits {write_bits:o}; a trash there could \
@@ -2168,7 +2560,12 @@ fn dl_27_the_trash_branch_is_nsfilemanager_and_a_refusal_keeps_the_note() {
     let run = |rel: &str| -> String {
         let _ = fs::remove_file(&result_file);
         let status = std::process::Command::new(&exe)
-            .args(["--exact", "dataloss_trash_child", "--ignored", "--nocapture"])
+            .args([
+                "--exact",
+                "dataloss_trash_child",
+                "--ignored",
+                "--nocapture",
+            ])
             .env("PATH", &path_with_stub)
             .env("CAIRN_DL_TRASH_ABS", f.abs(rel))
             .env("CAIRN_DL_TRASH_REL", rel)
@@ -2223,7 +2620,11 @@ fn dl_27_the_trash_branch_is_nsfilemanager_and_a_refusal_keeps_the_note() {
         after_exists,
         "A REFUSED TRASH LOST THE NOTE — it is gone from the vault and it never reached the Trash"
     );
-    assert_eq!(after.as_deref(), Some(&before[..]), "a refused trash rewrote the note");
+    assert_eq!(
+        after.as_deref(),
+        Some(&before[..]),
+        "a refused trash rewrote the note"
+    );
 
     /* ---- 4: the discriminator ------------------------------------------- */
     // `permanent: true` — every other delete in this file — must spawn nothing
@@ -2232,7 +2633,11 @@ fn dl_27_the_trash_branch_is_nsfilemanager_and_a_refusal_keeps_the_note() {
     let sw = Mutex::new(SelfWrites::new());
     fsops::delete_entry(&f.abs("A/B/n.md"), "A/B/n.md", true, &sw).expect("permanent delete");
     assert!(!f.abs("A/B/n.md").exists());
-    assert_eq!(fs::read_to_string(&log).expect("log"), "", "`permanent: true` spawned something");
+    assert_eq!(
+        fs::read_to_string(&log).expect("log"),
+        "",
+        "`permanent: true` spawned something"
+    );
 
     assert!(temp_files(&f.root).is_empty());
     guard(&f.root);
@@ -2256,7 +2661,12 @@ fn dl_29_the_trash_childs_containment_interlock_refuses_a_writable_parent() {
     // Deliberately NOT chmod'ed: `Notes` is writable, so the real backend would
     // succeed here and put `Deep.md` in the user's own Trash.
     let status = std::process::Command::new(&exe)
-        .args(["--exact", "dataloss_trash_child", "--ignored", "--nocapture"])
+        .args([
+            "--exact",
+            "dataloss_trash_child",
+            "--ignored",
+            "--nocapture",
+        ])
         .env("CAIRN_DL_TRASH_ABS", f.abs("Notes/Deep.md"))
         .env("CAIRN_DL_TRASH_REL", "Notes/Deep.md")
         .env("CAIRN_DL_TRASH_RESULT", &result_file)

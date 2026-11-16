@@ -136,6 +136,7 @@ async function bootMain(memoirFake) {
       flushAndCloseCb = a[0]
       return Promise.resolve()
     },
+    './ipc:onFlushForReload': () => Promise.resolve(),
     './ipc:currentVault': () => Promise.resolve({ state: 'none' }),
     './ipc:treeSnapshot': () => Promise.resolve(new ArrayBuffer(64)),
     './ipc:showMainWindow': () => Promise.resolve(),

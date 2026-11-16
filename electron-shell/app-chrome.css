@@ -45,7 +45,8 @@
  *
  * CAIRN today: `editor.ts:978` swaps in an `<input class="nc-title-edit">`,
  * and `editor.css:255-257` gives it `background: var(--bg-form-field)`
- * (#2e2e2e) plus `border: 1px solid var(--border-focus)` (#3f3f3f) and a 4px
+ * (Oceanic #303a47) plus `border: 1px solid var(--border-focus)` (Oceanic
+ * #43536a) and a 4px
  * radius -- a filled, bordered, full-width box Obsidian does not draw.
  *
  * WHY THIS OVERRIDE IS LEGITIMATE AND NOT A PREFERENCE. CONTRACT §5.4.2

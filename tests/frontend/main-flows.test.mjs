@@ -90,6 +90,7 @@ async function bootMain(extra = {}) {
   const returns = {
     './ipc:onVaultOpened': (a) => { got.applyVault = a[0]; return Promise.resolve() },
     './ipc:onFlushAndClose': (a) => { got.flushAndClose = a[0]; return Promise.resolve() },
+    './ipc:onFlushForReload': () => Promise.resolve(),
     './ipc:onTreeChanged': () => Promise.resolve(),
     './ipc:onVaultLost': () => Promise.resolve(),
     './ipc:onWatchDegraded': () => Promise.resolve(),

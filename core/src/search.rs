@@ -146,7 +146,11 @@ pub struct FileGroup {
 /// `rename_all_fields` is what makes `total_matches` arrive as `totalMatches`.
 /// Both are required.
 #[derive(Debug, Clone, Serialize)]
-#[serde(tag = "kind", rename_all = "camelCase", rename_all_fields = "camelCase")]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 pub enum SearchMsg {
     /// Filename hits.  Sent BEFORE any I/O, always first, may be empty.
     Files { gen: u64, groups: Vec<FileGroup> },
@@ -316,7 +320,12 @@ pub fn parse(raw: &str) -> Query {
             return Query::Regex(inner.to_string());
         }
     }
-    Query::Literal(q.split_whitespace().take(MAX_TOKENS).map(str::to_string).collect())
+    Query::Literal(
+        q.split_whitespace()
+            .take(MAX_TOKENS)
+            .map(str::to_string)
+            .collect(),
+    )
 }
 
 impl Query {
@@ -363,7 +372,11 @@ fn build_matcher_many(pats: &[String]) -> Result<RegexMatcher, String> {
 }
 
 fn one_line(e: grep_regex::Error) -> String {
-    e.to_string().lines().next().unwrap_or("invalid pattern").to_string()
+    e.to_string()
+        .lines()
+        .next()
+        .unwrap_or("invalid pattern")
+        .to_string()
 }
 
 /// `any` drives the `Searcher` (one pass, SIMD-prefiltered).  `tokens` is used
@@ -398,7 +411,11 @@ fn build_matchers(q: &Query) -> Result<Matchers, String> {
             } else {
                 (1u32 << tokens.len()) - 1
             };
-            Ok(Matchers { any, tokens, token_mask_full })
+            Ok(Matchers {
+                any,
+                tokens,
+                token_mask_full,
+            })
         }
     }
 }
@@ -536,7 +553,16 @@ fn make_snippet(raw: &[u8], line: u32, any: &RegexMatcher, tokens_on_line: u8) -
         })
         .collect();
 
-    (Snippet { line, text: out, ranges, col, len }, tokens_on_line)
+    (
+        Snippet {
+            line,
+            text: out,
+            ranges,
+            col,
+            len,
+        },
+        tokens_on_line,
+    )
 }
 
 /* ─────────────────────────────────────────────────────────────────────────────
@@ -617,11 +643,7 @@ fn build_group(id: u32, entry: &NoteEntry, sink: GroupSink<'_>, name_hit: bool) 
         snippets: snippets.into_iter().map(|(s, _)| s).collect(),
         match_count: sink.match_count,
         more,
-        rank: (
-            u8::from(!name_hit),
-            u32::MAX - sink.match_count,
-            id,
-        ),
+        rank: (u8::from(!name_hit), u32::MAX - sink.match_count, id),
     }
 }
 
@@ -685,7 +707,11 @@ fn classify_head(head: &[u8], eof: bool) -> Option<bool> {
     let body = head.strip_prefix(b"\xEF\xBB\xBF").unwrap_or(head);
     if !body.starts_with(b"---") {
         // Under 6 bytes a BOM and the opener may both still be arriving.
-        return if eof || head.len() >= 6 { Some(false) } else { None };
+        return if eof || head.len() >= 6 {
+            Some(false)
+        } else {
+            None
+        };
     }
     let (mut text, _) = crate::note_frame::normalise(head.to_vec());
     if !eof {
@@ -697,7 +723,10 @@ fn classify_head(head: &[u8], eof: bool) -> Option<bool> {
             text.pop();
         }
     }
-    let mut lines = EditorLines { rest: Some(&text), last: eof };
+    let mut lines = EditorLines {
+        rest: Some(&text),
+        last: eof,
+    };
     match lines.next() {
         Some(b"---") => {}
         Some(_) => return Some(false),
@@ -719,7 +748,11 @@ fn classify_head(head: &[u8], eof: bool) -> Option<bool> {
             seen_marker = true;
         }
     }
-    if eof || walked == SECRET_HEAD_LINES { Some(false) } else { None }
+    if eof || walked == SECRET_HEAD_LINES {
+        Some(false)
+    } else {
+        None
+    }
 }
 
 /// The whole-head predicate, for the unit tests' vectors.
@@ -801,7 +834,9 @@ fn worker_main(job: &Arc<Job>) {
             if stale(job) {
                 return;
             }
-            let Some(entry) = job.snapshot.files.get(i) else { return };
+            let Some(entry) = job.snapshot.files.get(i) else {
+                return;
+            };
 
             // A note above the 8 MiB read cap stays reachable by filename but is
             // never content-scanned.  It counts as skipped, not scanned.
@@ -857,7 +892,8 @@ fn worker_main(job: &Arc<Job>) {
             if sink.seen_mask != job.m.token_mask_full {
                 continue; // AND across the file not satisfied
             }
-            job.matches_total.fetch_add(sink.match_count as usize, Ordering::Relaxed);
+            job.matches_total
+                .fetch_add(sink.match_count as usize, Ordering::Relaxed);
             if job.files_hit.fetch_add(1, Ordering::Relaxed) >= MAX_FILES {
                 return;
             }
@@ -980,13 +1016,18 @@ fn filename_hits(snapshot: &VaultSnapshot, raw: &str) -> Vec<FileGroup> {
 
     let mut groups = Vec::with_capacity(hits.len());
     for (_, id) in hits {
-        let Some(e) = snapshot.files.get(id as usize) else { continue };
+        let Some(e) = snapshot.files.get(id as usize) else {
+            continue;
+        };
         let hay = if use_path { &*e.rel } else { e.name() };
         // Ranges are always expressed inside `name`, which is what the row
         // displays; a '/'-query highlights nothing rather than highlighting at
         // path offsets the row does not render.  Unchanged.
-        let name_ranges =
-            if use_path { Vec::new() } else { substring_spans_utf16(hay, &needle) };
+        let name_ranges = if use_path {
+            Vec::new()
+        } else {
+            substring_spans_utf16(hay, &needle)
+        };
         groups.push(FileGroup {
             id,
             rel: e.rel.to_string(),
@@ -1037,7 +1078,10 @@ fn substring_spans_utf16(hay: &str, needle: &str) -> Vec<(u32, u32)> {
         let bend = bstart + needle.len();
         // Byte offsets -> UTF-16 code units, counted over the ORIGINAL string.
         let u16_start: u32 = hay[..bstart].chars().map(|c| c.len_utf16() as u32).sum();
-        let u16_len: u32 = hay[bstart..bend].chars().map(|c| c.len_utf16() as u32).sum();
+        let u16_len: u32 = hay[bstart..bend]
+            .chars()
+            .map(|c| c.len_utf16() as u32)
+            .sum();
         out.push((u16_start, u16_start + u16_len));
         from = bend;
     }
@@ -1078,7 +1122,10 @@ fn flush_batches<S: MsgSink>(sink: &S, gen: u64, drained: Vec<FileGroup>) {
         g.snippets.truncate(MAX_SNIPPETS_IPC);
         let b = group_bytes(&g);
         if !msg.is_empty() && (msg.len() >= BATCH_MAX_GROUPS || bytes + b > BATCH_MAX_BYTES) {
-            sink.send(SearchMsg::Batch { gen, groups: std::mem::take(&mut msg) });
+            sink.send(SearchMsg::Batch {
+                gen,
+                groups: std::mem::take(&mut msg),
+            });
             bytes = 0;
         }
         bytes += b;
@@ -1113,7 +1160,10 @@ pub fn run_search<S: MsgSink>(
     // 0. register
     let cancelled = Arc::new(AtomicBool::new(false));
     state.register(gen, &cancelled);
-    let guard = LiveGuard { state, flag: &cancelled };
+    let guard = LiveGuard {
+        state,
+        flag: &cancelled,
+    };
 
     let parsed = parse(query);
     let smart_case = parsed.smart_case_engaged();
@@ -1134,7 +1184,10 @@ pub fn run_search<S: MsgSink>(
     }
 
     if matches!(parsed, Query::Empty) {
-        sink.send(SearchMsg::Files { gen, groups: Vec::new() });
+        sink.send(SearchMsg::Files {
+            gen,
+            groups: Vec::new(),
+        });
         sink.send(complete_empty(gen, smart_case, false, t0));
         drop(guard);
         return;
@@ -1160,7 +1213,10 @@ pub fn run_search<S: MsgSink>(
     //    anything is opened.  This is what §6.3 depends on.
     let name_groups = filename_hits(&snapshot, query);
     let name_hits: HashSet<u32> = name_groups.iter().map(|g| g.id).collect();
-    sink.send(SearchMsg::Files { gen, groups: name_groups });
+    sink.send(SearchMsg::Files {
+        gen,
+        groups: name_groups,
+    });
 
     // 3. too short to scan content
     if parsed.needle().chars().count() < MIN_CONTENT_QUERY_CHARS {
@@ -1386,13 +1442,19 @@ pub fn expand(root: &Path, query: &str, rel: &str) -> Result<Vec<Snippet>, Vault
         }
     }
     let parsed = parse(query);
-    let Ok(m) = build_matchers(&parsed) else { return Ok(Vec::new()) };
+    let Ok(m) = build_matchers(&parsed) else {
+        return Ok(Vec::new());
+    };
 
     let job = Job {
         gen: 0,
         generation: Arc::new(AtomicU64::new(0)),
         cancelled: Arc::new(AtomicBool::new(false)),
-        snapshot: Arc::new(VaultSnapshot { root: root.to_path_buf(), files: Vec::new(), epoch: 0 }),
+        snapshot: Arc::new(VaultSnapshot {
+            root: root.to_path_buf(),
+            files: Vec::new(),
+            epoch: 0,
+        }),
         m,
         name_hits: HashSet::new(),
         cursor: AtomicUsize::new(0),
@@ -1405,8 +1467,16 @@ pub fn expand(root: &Path, query: &str, rel: &str) -> Result<Vec<Snippet>, Vault
         left: Mutex::new(0),
         done: Condvar::new(),
     };
-    let mut sink = GroupSink { job: &job, snippets: Vec::new(), match_count: 0, seen_mask: 0 };
-    if build_searcher().search_path(&job.m.any, &abs, &mut sink).is_err() {
+    let mut sink = GroupSink {
+        job: &job,
+        snippets: Vec::new(),
+        match_count: 0,
+        seen_mask: 0,
+    };
+    if build_searcher()
+        .search_path(&job.m.any, &abs, &mut sink)
+        .is_err()
+    {
         return Ok(Vec::new());
     }
     let mut snippets = sink.snippets;
@@ -1482,8 +1552,12 @@ mod tests {
         // The file the app writes: marker on line 2.
         assert!(is_secret_head(b"---\ncairn-type: secrets\n---\n"));
         // Other keys around it are fine, before and after.
-        assert!(is_secret_head(b"---\ntitle: Creds\ncairn-type: secrets\n---\nbody"));
-        assert!(is_secret_head(b"---\ncairn-type: secrets\ntitle: Creds\n---\nbody"));
+        assert!(is_secret_head(
+            b"---\ntitle: Creds\ncairn-type: secrets\n---\nbody"
+        ));
+        assert!(is_secret_head(
+            b"---\ncairn-type: secrets\ntitle: Creds\n---\nbody"
+        ));
         // CRLF vaults (checked out on Windows, opened here).
         assert!(is_secret_head(b"---\r\ncairn-type: secrets\r\n---\r\n"));
 
@@ -1493,17 +1567,49 @@ mod tests {
         // indented marker is a nested YAML key, not this file's type tag.
         assert!(!is_secret_head(b""));
         assert!(!is_secret_head(b"---\n"));
-        assert!(!is_secret_head(b"no frontmatter at all\ncairn-type: secrets\n"));
-        assert!(!is_secret_head(b"--- \ncairn-type: secrets\n---\n"), "opener with trailing space");
-        assert!(!is_secret_head(b"----\ncairn-type: secrets\n----\n"), "four dashes is a break");
-        assert!(!is_secret_head(b" ---\ncairn-type: secrets\n---\n"), "indented opener");
-        assert!(!is_secret_head(b"---\ncairn-type: secrets\n"), "no closer at all");
-        assert!(!is_secret_head(b"---\ntitle: x\n---\ncairn-type: secrets\n"), "marker after the closer");
-        assert!(!is_secret_head(b"---\n  cairn-type: secrets\n---\n"), "indented marker is nested YAML");
-        assert!(!is_secret_head(b"---\ncairn-type: secrets \n---\n"), "trailing space on the marker");
-        assert!(!is_secret_head(b"---\ncairn-type: secret\n---\n"), "near-miss value");
-        assert!(!is_secret_head(b"---\ncairn-type: secrets-extra\n---\n"), "near-miss key");
-        assert!(!is_secret_head(b"---\n# cairn-type: secrets\n---\n"), "a comment is not the marker");
+        assert!(!is_secret_head(
+            b"no frontmatter at all\ncairn-type: secrets\n"
+        ));
+        assert!(
+            !is_secret_head(b"--- \ncairn-type: secrets\n---\n"),
+            "opener with trailing space"
+        );
+        assert!(
+            !is_secret_head(b"----\ncairn-type: secrets\n----\n"),
+            "four dashes is a break"
+        );
+        assert!(
+            !is_secret_head(b" ---\ncairn-type: secrets\n---\n"),
+            "indented opener"
+        );
+        assert!(
+            !is_secret_head(b"---\ncairn-type: secrets\n"),
+            "no closer at all"
+        );
+        assert!(
+            !is_secret_head(b"---\ntitle: x\n---\ncairn-type: secrets\n"),
+            "marker after the closer"
+        );
+        assert!(
+            !is_secret_head(b"---\n  cairn-type: secrets\n---\n"),
+            "indented marker is nested YAML"
+        );
+        assert!(
+            !is_secret_head(b"---\ncairn-type: secrets \n---\n"),
+            "trailing space on the marker"
+        );
+        assert!(
+            !is_secret_head(b"---\ncairn-type: secret\n---\n"),
+            "near-miss value"
+        );
+        assert!(
+            !is_secret_head(b"---\ncairn-type: secrets-extra\n---\n"),
+            "near-miss key"
+        );
+        assert!(
+            !is_secret_head(b"---\n# cairn-type: secrets\n---\n"),
+            "a comment is not the marker"
+        );
     }
 
     /* The viewer decides on the editor's text: one BOM stripped and CRLF made
@@ -1524,20 +1630,38 @@ mod tests {
     #[test]
     fn secret_verdict_sees_the_text_the_viewer_sees() {
         // One BOM is stripped on read, so the viewer's line 1 is `---`.
-        assert!(is_secret_head(b"\xEF\xBB\xBF---\ncairn-type: secrets\n---\n"), "BOM + LF");
-        assert!(is_secret_head(b"\xEF\xBB\xBF---\r\ncairn-type: secrets\r\n---\r\n"), "BOM + CRLF");
+        assert!(
+            is_secret_head(b"\xEF\xBB\xBF---\ncairn-type: secrets\n---\n"),
+            "BOM + LF"
+        );
+        assert!(
+            is_secret_head(b"\xEF\xBB\xBF---\r\ncairn-type: secrets\r\n---\r\n"),
+            "BOM + CRLF"
+        );
         // CodeMirror breaks a line at a lone CR.
-        assert!(is_secret_head(b"---\rcairn-type: secrets\r---\r"), "CR-only");
-        assert!(is_secret_head(b"---\ncairn-type: secrets\r---\n"), "one stray CR");
+        assert!(
+            is_secret_head(b"---\rcairn-type: secrets\r---\r"),
+            "CR-only"
+        );
+        assert!(
+            is_secret_head(b"---\ncairn-type: secrets\r---\n"),
+            "one stray CR"
+        );
         // `\r\r\n` is ONE break once the read path has made its CRLF an LF, so
         // 62 keys still put the closer at the 64th line walked.
         assert!(is_secret_head(&frontmatter(62, "\r\r\n")), "CR before CRLF");
 
         // Only ONE BOM is stripped: a second is content, and line 1 is not `---`.
-        assert!(!is_secret_head(b"\xEF\xBB\xBF\xEF\xBB\xBF---\ncairn-type: secrets\n---\n"));
+        assert!(!is_secret_head(
+            b"\xEF\xBB\xBF\xEF\xBB\xBF---\ncairn-type: secrets\n---\n"
+        ));
         // A BOM anywhere but byte 0 is content too.
-        assert!(!is_secret_head(b"\n\xEF\xBB\xBF---\ncairn-type: secrets\n---\n"));
-        assert!(!is_secret_head(b"---\n\xEF\xBB\xBFcairn-type: secrets\n---\n"));
+        assert!(!is_secret_head(
+            b"\n\xEF\xBB\xBF---\ncairn-type: secrets\n---\n"
+        ));
+        assert!(!is_secret_head(
+            b"---\n\xEF\xBB\xBFcairn-type: secrets\n---\n"
+        ));
         // A CR inside the marker line splits it.
         assert!(!is_secret_head(b"---\ncairn-type:\rsecrets\n---\n"));
     }
@@ -1545,8 +1669,14 @@ mod tests {
     #[test]
     fn secret_verdict_walks_64_lines_after_the_opener_and_no_more() {
         for eol in ["\n", "\r\n", "\r", "\r\r\n"] {
-            assert!(is_secret_head(&frontmatter(62, eol)), "closer is line 64 ({eol:?})");
-            assert!(!is_secret_head(&frontmatter(63, eol)), "closer is line 65 ({eol:?})");
+            assert!(
+                is_secret_head(&frontmatter(62, eol)),
+                "closer is line 64 ({eol:?})"
+            );
+            assert!(
+                !is_secret_head(&frontmatter(63, eol)),
+                "closer is line 65 ({eol:?})"
+            );
         }
     }
 
@@ -1565,12 +1695,21 @@ mod tests {
         }
         long.push_str("cairn-type: secrets\n---\n\n```secret\n# A\npw\n```\n");
         assert!(long.len() > SECRET_HEAD_BYTES);
-        assert!(check("long.md", long.as_bytes()), "marker past the first 4 KiB");
-        assert!(check("bom.md", b"\xEF\xBB\xBF---\ncairn-type: secrets\n---\n"));
+        assert!(
+            check("long.md", long.as_bytes()),
+            "marker past the first 4 KiB"
+        );
+        assert!(check(
+            "bom.md",
+            b"\xEF\xBB\xBF---\ncairn-type: secrets\n---\n"
+        ));
         assert!(check("cr.md", b"---\rcairn-type: secrets\r---\r"));
 
         // And what must stay searchable does.
-        assert!(!check("plain.md", "no frontmatter\n".repeat(70_000).as_bytes()));
+        assert!(!check(
+            "plain.md",
+            "no frontmatter\n".repeat(70_000).as_bytes()
+        ));
         assert!(!check("unclosed.md", &frontmatter(63, "\n")));
         let mut huge = b"---\n".to_vec();
         huge.resize(9 * 1024 * 1024, b'x');
@@ -1621,7 +1760,12 @@ mod tests {
             assert!(whole.is_some());
             for k in 0..=case.len() {
                 if let Some(v) = classify_head(&case[..k], false) {
-                    assert_eq!(Some(v), whole, "{:?} cut at {k}", String::from_utf8_lossy(&case));
+                    assert_eq!(
+                        Some(v),
+                        whole,
+                        "{:?} cut at {k}",
+                        String::from_utf8_lossy(&case)
+                    );
                 }
             }
         }
@@ -1686,7 +1830,9 @@ mod tests {
     #[test]
     fn a_bad_regex_is_a_message_not_a_panic() {
         // spec-05 §14 criterion 8: `/[/` renders an inline error.
-        let Err(err) = build_matchers(&parse("/[/")) else { panic!("/[/ must not compile") };
+        let Err(err) = build_matchers(&parse("/[/")) else {
+            panic!("/[/ must not compile")
+        };
         assert!(!err.is_empty());
         assert!(!err.contains('\n'), "the message is one line: {err:?}");
     }
@@ -1762,7 +1908,10 @@ mod tests {
         assert_eq!(s.col, 2000);
         assert_eq!(s.ranges.len(), 1);
         let (a, b) = s.ranges[0];
-        assert!(a >= 1, "the leading ellipsis shifts every range by one unit");
+        assert!(
+            a >= 1,
+            "the leading ellipsis shifts every range by one unit"
+        );
         assert_eq!(b - a, 6);
         // And the range really does cover the needle inside the emitted text.
         let units: Vec<u16> = s.text.encode_utf16().collect();
@@ -1836,9 +1985,14 @@ mod tests {
     /// (t…es…t) and that was the FIRST result. A substring matcher cannot.
     #[test]
     fn a_subsequence_is_not_a_substring_match() {
-        assert_eq!(count_occurrences("feedback_clear_site_data_fresh_boot", "test"), 0);
-        assert_eq!(substring_spans_utf16("feedback_clear_site_data_fresh_boot", "test"),
-                   Vec::<(u32, u32)>::new());
+        assert_eq!(
+            count_occurrences("feedback_clear_site_data_fresh_boot", "test"),
+            0
+        );
+        assert_eq!(
+            substring_spans_utf16("feedback_clear_site_data_fresh_boot", "test"),
+            Vec::<(u32, u32)>::new()
+        );
         // …and a real substring still matches, so this is not green by refusing
         // everything.
         assert_eq!(count_occurrences("my_test_notes", "test"), 1);
@@ -1876,7 +2030,13 @@ mod tests {
             ("dir/UPPER.MD", "UPPER"),
         ] {
             let (name_start, name_len) = crate::path::basename_span(rel);
-            let e = NoteEntry { rel: rel.into(), name_start, name_len, size: 0, mtime_ms: 0 };
+            let e = NoteEntry {
+                rel: rel.into(),
+                name_start,
+                name_len,
+                size: 0,
+                mtime_ms: 0,
+            };
             assert_eq!(e.name(), want, "{rel}");
         }
     }
@@ -1885,7 +2045,15 @@ mod tests {
     fn safe_rel_refuses_traversal_and_non_notes() {
         let root = Path::new("/vault");
         assert!(safe_rel(root, "a/b.md").is_ok());
-        for bad in ["", "/abs.md", "../x.md", "a/../b.md", "a//b.md", "a/b.txt", "dir/"] {
+        for bad in [
+            "",
+            "/abs.md",
+            "../x.md",
+            "a/../b.md",
+            "a//b.md",
+            "a/b.txt",
+            "dir/",
+        ] {
             assert!(safe_rel(root, bad).is_err(), "{bad:?} must be refused");
         }
         // A backslash is a LEGAL byte in a macOS filename, so it is not a
@@ -1930,7 +2098,9 @@ mod tests {
         assert!(!msgs.is_empty());
         let mut total = 0;
         for m in msgs.iter() {
-            let SearchMsg::Batch { gen, groups } = m else { panic!("not a Batch") };
+            let SearchMsg::Batch { gen, groups } = m else {
+                panic!("not a Batch")
+            };
             assert_eq!(*gen, 7);
             assert!(groups.len() <= BATCH_MAX_GROUPS, "{} groups", groups.len());
             for g in groups {

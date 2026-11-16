@@ -16,6 +16,7 @@
  */
 
 import * as esbuild from 'esbuild'
+import { createHash } from 'node:crypto'
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -35,6 +36,7 @@ const CSS_ORDER = [
   'search.css',
   'find.css',
   'memoir.css',
+  'reader.css',
 ]
 
 /** The token src/index.html carries where the stylesheet is inlined. Spelled the
@@ -95,8 +97,9 @@ const cssResult = await esbuild.build({
 })
 const css = cssResult.outputFiles[0].text
 
-// The real index.html, with its CSS placeholder filled and its script left
-// alone. Read, never modified in place -- src/index.html is owner 01's.
+// The real index.html, with its CSS placeholder filled and its script URL
+// cache-busted by the app.js hash. Read, never modified in place --
+// src/index.html is owner 01's.
 const html = readFileSync(join(ROOT, 'src', 'index.html'), 'utf8')
 
 /* EXACTLY ONE, not "at least one": String.replace substitutes the FIRST
@@ -110,11 +113,31 @@ if (nPlaceholder !== 1) {
 }
 // A FUNCTION, not a string: a string replacement would interpret `$&` / `$'` /
 // `` $` `` inside the CSS as substitution patterns.
-writeFileSync(join(OUT, 'index.html'), html.replace(PLACEHOLDER, () => `<style>${css}</style>`))
+const jsBytes = readFileSync(join(OUT, 'app.js'))
+const jsHash = createHash('sha256').update(jsBytes).digest('hex').slice(0, 16)
 
-const jsB = Buffer.byteLength(readFileSync(join(OUT, 'app.js')))
+/* CACHE-BUST THE SCRIPT.  `index.html` is loaded from `file://`, and Chromium
+ * will happily reuse a cached app.js across launches.  That made a rebuilt
+ * reader invisible: the page looked new, the JavaScript was old.  The hash makes
+ * every build a different URL.  Replace the LAST occurrence because the header
+ * comment also spells the tag. */
+const SCRIPT = '<script src="./app.js"></script>'
+let page = html.replace(PLACEHOLDER, () => `<style>${css}</style>`)
+const at = page.lastIndexOf(SCRIPT)
+const styleEnd = page.lastIndexOf('</style>')
+if (at < 0 || at < styleEnd) {
+  // The header comment also spells the tag.  If the real one is missing, the
+  // last occurrence is inside that comment; rewriting it would ship a page
+  // with no executable script while reporting success.
+  console.error('BUILD-APP result=FAIL reason=app-script-tag-missing-or-before-style')
+  process.exit(1)
+}
+page = page.slice(0, at) + `<script src="./app.js?v=${jsHash}"></script>` + page.slice(at + SCRIPT.length)
+writeFileSync(join(OUT, 'index.html'), page)
+
+const jsB = jsBytes.length
 const cssB = Buffer.byteLength(css)
 console.log(
   'BUILD-APP result=PASS modules=' + inputs.length + ' tauri_modules=0 js=' + jsB +
-    ' B css=' + cssB + ' B out=' + OUT
+    ' B css=' + cssB + ' B hash=' + jsHash + ' out=' + OUT
 )

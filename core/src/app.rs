@@ -1,5 +1,5 @@
 //! core/src/app.rs — Owner: 07.  **NEW FILE, NOT IN CONTRACT §6.4's TABLE.**
-//! Spec: CONTRACT.md §1.3 (the twenty commands), §1.4 (the seven events), §1.6
+//! Spec: CONTRACT.md §1.3 (the twenty-nine commands), §1.4 (the seven events), §1.6
 //! (the flush-on-quit handshake), §3.5 (echo suppression and repair), §4.2/§4.3
 //! (the snapshot seam and the switch order), §7.5 (first run), §7.6 (state.json).
 //!
@@ -193,12 +193,16 @@ impl AppState {
     }
 
     fn require_vault(&self) -> Result<Arc<Vault>, VaultError> {
-        self.vault().ok_or_else(|| VaultError::not_found("<no vault is open>"))
+        self.vault()
+            .ok_or_else(|| VaultError::not_found("<no vault is open>"))
     }
 
     #[must_use]
     pub fn watching(&self) -> bool {
-        self.watcher.lock().unwrap_or_else(std::sync::PoisonError::into_inner).is_some()
+        self.watcher
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .is_some()
     }
 
     #[must_use]
@@ -215,7 +219,10 @@ impl AppState {
     }
 
     fn set_open_note(&self, rel: Option<String>) {
-        *self.open_note.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = rel;
+        *self
+            .open_note
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = rel;
     }
 
     #[must_use]
@@ -300,7 +307,10 @@ fn rel_of(root: &Path, abs: &Path) -> Option<String> {
 /// it read the disk before a command's create or rename — the command's own
 /// events are suppressed as self-writes, so nothing would ever heal it.
 fn repair(state: &AppState) -> Option<u64> {
-    let _serial = state.repair_lock.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    let _serial = state
+        .repair_lock
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     let vault = state.vault()?;
     let (root, sort) = {
         let t = vault.read();
@@ -395,7 +405,11 @@ pub fn open_vault_blocking(
     //    `VaultWatcher::drop` joins its thread, and that thread takes the vault
     //    lock.  Doing this under `state.vault`'s write guard is the deadlock
     //    spec-06 §6.6 was struck for.
-    let old_watcher = state.watcher.lock().unwrap_or_else(std::sync::PoisonError::into_inner).take();
+    let old_watcher = state
+        .watcher
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .take();
     drop(old_watcher);
     // 3. Take the vault OUT of the slot and drop it OUTSIDE the lock, so tearing
     //    down a 5,000-node arena does not hold every reader out.
@@ -426,8 +440,10 @@ pub fn open_vault_blocking(
     }
 
     let vault = Arc::new(vault);
-    *state.vault.write().unwrap_or_else(std::sync::PoisonError::into_inner) =
-        Some(Arc::clone(&vault));
+    *state
+        .vault
+        .write()
+        .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(Arc::clone(&vault));
     state.loading.store(false, Ordering::SeqCst);
 
     // The watcher, and its degrade path.  A vault whose watcher will not start
@@ -440,7 +456,10 @@ pub fn open_vault_blocking(
     );
     let watching = match watch {
         Ok(w) => {
-            *state.watcher.lock().unwrap_or_else(std::sync::PoisonError::into_inner) = Some(w);
+            *state
+                .watcher
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(w);
             true
         }
         Err(reason) => {
@@ -468,9 +487,13 @@ pub fn open_vault_blocking(
     // §7.6.1 (errata 3, Z2) — THE READ PATH.  `root_key` above is the key
     // `save_ui_state` writes under and the string `VaultInfo.root` reports; one
     // spelling, asserted by `expansion_and_scroll_survive_a_quit_and_relaunch`.
-    let (expanded, scroll_top) =
-        state.prefs().map_or_else(|| (Vec::new(), 0.0), |p| p.view_state(&root_key));
-    let info = vault::info(&vault, last_note, watching, expanded, scroll_top);
+    let (expanded, scroll_top) = state
+        .prefs()
+        .map_or_else(|| (Vec::new(), 0.0), |p| p.view_state(&root_key));
+    let bookmarks = state
+        .prefs()
+        .map_or_else(std::collections::BTreeMap::new, |p| p.bookmarks(&root_key));
+    let info = vault::info(&vault, last_note, watching, expanded, scroll_top, bookmarks);
     app.emit_event("nc://vault-opened", info.clone());
     Ok(info)
 }
@@ -479,14 +502,28 @@ pub fn open_vault_blocking(
 pub fn current_vault(state: &AppState) -> VaultState {
     match state.vault() {
         Some(v) => {
-            let last_note =
-                state.open_note.lock().unwrap_or_else(std::sync::PoisonError::into_inner).clone();
+            let last_note = state
+                .open_note
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .clone();
             // §7.6.1.  Same key, same reader, same fallback as the other two.
             let key = v.root().to_string_lossy().into_owned();
-            let (expanded, scroll_top) =
-                state.prefs().map_or_else(|| (Vec::new(), 0.0), |p| p.view_state(&key));
+            let (expanded, scroll_top) = state
+                .prefs()
+                .map_or_else(|| (Vec::new(), 0.0), |p| p.view_state(&key));
+            let bookmarks = state
+                .prefs()
+                .map_or_else(std::collections::BTreeMap::new, |p| p.bookmarks(&key));
             VaultState::Open {
-                info: vault::info(&v, last_note, state.watching(), expanded, scroll_top),
+                info: vault::info(
+                    &v,
+                    last_note,
+                    state.watching(),
+                    expanded,
+                    scroll_top,
+                    bookmarks,
+                ),
             }
         }
         None if state.loading.load(Ordering::SeqCst) => VaultState::Loading,
@@ -499,7 +536,9 @@ pub fn current_vault(state: &AppState) -> VaultState {
 /// not existing, so an unreachable mount draws the disabled `(missing)` row
 /// instead of hanging the popover.
 pub fn recent_vaults(state: &AppState) -> Vec<RecentVault> {
-    let Some(prefs) = state.prefs() else { return Vec::new() };
+    let Some(prefs) = state.prefs() else {
+        return Vec::new();
+    };
     let recents = prefs.snapshot().recents;
     let probes = probe_dirs(&recents);
     recents
@@ -546,7 +585,9 @@ static DIR_PROBES_IN_FLIGHT: Mutex<BTreeSet<String>> = Mutex::new(BTreeSet::new(
 /// most `DIR_PROBE_DEADLINE` for the lot.  A path that has not answered by then
 /// is `Unknown`; its thread is left to finish whenever the kernel lets it.
 fn probe_dirs(paths: &[String]) -> Vec<DirProbe> {
-    probe_dirs_with(paths, DIR_PROBE_DEADLINE, |p| std::fs::metadata(p).map(|m| m.is_dir()))
+    probe_dirs_with(paths, DIR_PROBE_DEADLINE, |p| {
+        std::fs::metadata(p).map(|m| m.is_dir())
+    })
 }
 
 /// `probe_dirs` with the stat and the deadline injected, so a test can stand in
@@ -555,7 +596,11 @@ fn probe_dirs_with<F>(paths: &[String], deadline: Duration, stat: F) -> Vec<DirP
 where
     F: Fn(&Path) -> std::io::Result<bool> + Send + Clone + 'static,
 {
-    let in_flight = || DIR_PROBES_IN_FLIGHT.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    let in_flight = || {
+        DIR_PROBES_IN_FLIGHT
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    };
     let (tx, rx) = std::sync::mpsc::channel::<(usize, DirProbe)>();
     let mut out = vec![DirProbe::Unknown; paths.len()];
     let mut pending = 0usize;
@@ -564,14 +609,16 @@ where
             continue; // still stuck from last time: Unknown, and no new thread
         }
         let (tx, stat, key) = (tx.clone(), stat.clone(), path.clone());
-        let spawned = std::thread::Builder::new().name("cairn-dir-probe".into()).spawn(move || {
-            let probe = classify_dir_stat(stat(Path::new(&key)));
-            DIR_PROBES_IN_FLIGHT
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .remove(&key);
-            let _ = tx.send((i, probe));
-        });
+        let spawned = std::thread::Builder::new()
+            .name("cairn-dir-probe".into())
+            .spawn(move || {
+                let probe = classify_dir_stat(stat(Path::new(&key)));
+                DIR_PROBES_IN_FLIGHT
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .remove(&key);
+                let _ = tx.send((i, probe));
+            });
         if spawned.is_ok() {
             pending += 1;
         } else {
@@ -582,7 +629,9 @@ where
     let until = Instant::now() + deadline;
     while pending > 0 {
         let left = until.saturating_duration_since(Instant::now());
-        let Ok((i, probe)) = rx.recv_timeout(left) else { break };
+        let Ok((i, probe)) = rx.recv_timeout(left) else {
+            break;
+        };
         if let Some(slot) = out.get_mut(i) {
             *slot = probe;
         }
@@ -638,10 +687,18 @@ fn classify_dir_stat(r: std::io::Result<bool>) -> DirProbe {
 /// could undo is a removal the user has to make twice, and this is the same
 /// synchronous atomic write `confirm_close` takes.
 pub fn forget_vault(state: &AppState, root: &str) -> Result<(), VaultError> {
-    if state.vault().is_some_and(|v| v.root().to_string_lossy() == root) {
-        return Err(VaultError::invalid_path(root, "Can't remove a currently open vault."));
+    if state
+        .vault()
+        .is_some_and(|v| v.root().to_string_lossy() == root)
+    {
+        return Err(VaultError::invalid_path(
+            root,
+            "Can't remove a currently open vault.",
+        ));
     }
-    let Some(prefs) = state.prefs() else { return Ok(()) };
+    let Some(prefs) = state.prefs() else {
+        return Ok(());
+    };
     prefs.edit(|s| {
         s.recents.retain(|r| r != root);
         // …AND `State.vault`, WHICH IS THE ONE THE FIRST DRAFT MISSED.  `vault`
@@ -680,7 +737,11 @@ pub async fn rescan_all(app: impl AppCtx) -> Result<VaultInfo, VaultError> {
         // no watcher is running.  The old one is dropped with no lock held:
         // its `Drop` joins a thread that takes the vault lock (see
         // `open_vault_blocking`, step 2).
-        let old = state.watcher.lock().unwrap_or_else(std::sync::PoisonError::into_inner).take();
+        let old = state
+            .watcher
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .take();
         drop(old);
         let sink_app = handle.clone();
         match VaultWatcher::start(
@@ -691,7 +752,10 @@ pub async fn rescan_all(app: impl AppCtx) -> Result<VaultInfo, VaultError> {
             Ok(w) => {
                 // A vault switch that raced this Refresh owns the slot now.
                 let same_vault = state.vault().is_some_and(|v| v.root() == root);
-                let mut slot = state.watcher.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+                let mut slot = state
+                    .watcher
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
                 let stale = if same_vault && slot.is_none() {
                     *slot = Some(w);
                     None
@@ -705,21 +769,34 @@ pub async fn rescan_all(app: impl AppCtx) -> Result<VaultInfo, VaultError> {
             Err(reason) => emit_degraded(&handle, reason),
         }
 
-        let epoch = repair(state).ok_or_else(|| {
-            VaultError::not_found(vault.root().to_string_lossy().into_owned())
-        })?;
+        let epoch = repair(state)
+            .ok_or_else(|| VaultError::not_found(vault.root().to_string_lossy().into_owned()))?;
         handle.emit_event("nc://tree-changed", TreeChanged { epoch });
 
-        let last_note =
-            state.open_note.lock().unwrap_or_else(std::sync::PoisonError::into_inner).clone();
+        let last_note = state
+            .open_note
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
         // §7.6.1.  A rescan re-reports the persisted set, which is harmless:
         // the FRONTEND applies it only when `switched` is true (§7.6.1's
         // application rule), so a watcher-driven refresh cannot stomp live
         // expansion.
         let key = vault.root().to_string_lossy().into_owned();
-        let (expanded, scroll_top) =
-            state.prefs().map_or_else(|| (Vec::new(), 0.0), |p| p.view_state(&key));
-        let info = vault::info(&vault, last_note, state.watching(), expanded, scroll_top);
+        let (expanded, scroll_top) = state
+            .prefs()
+            .map_or_else(|| (Vec::new(), 0.0), |p| p.view_state(&key));
+        let bookmarks = state
+            .prefs()
+            .map_or_else(std::collections::BTreeMap::new, |p| p.bookmarks(&key));
+        let info = vault::info(
+            &vault,
+            last_note,
+            state.watching(),
+            expanded,
+            scroll_top,
+            bookmarks,
+        );
         handle.emit_event("nc://vault-opened", info.clone());
         Ok(info)
     })
@@ -743,12 +820,18 @@ fn on_watch_event(app: &impl AppCtx, ev: WatchEvent) {
             let mut told_open = false;
             if let Some(root) = root {
                 for hit in &flush.content_hits {
-                    let Some(rel) = rel_of(&root, &hit.abs) else { continue };
+                    let Some(rel) = rel_of(&root, &hit.abs) else {
+                        continue;
+                    };
                     if state.open_note_is(&rel) {
                         told_open = true;
                         app.emit_event(
                             "nc://note-external-change",
-                            ExternalChange { path: rel, mtime_ms: hit.mtime_ms, size: hit.len },
+                            ExternalChange {
+                                path: rel,
+                                mtime_ms: hit.mtime_ms,
+                                size: hit.len,
+                            },
                         );
                     }
                 }
@@ -834,10 +917,21 @@ fn on_watch_event(app: &impl AppCtx, ev: WatchEvent) {
             let old = tree::take_vault(&state.vault);
             drop(old);
             state.set_open_note(None);
-            app.emit_event("nc://vault-lost", VaultLost { path: path.to_string_lossy().into_owned() });
+            app.emit_event(
+                "nc://vault-lost",
+                VaultLost {
+                    path: path.to_string_lossy().into_owned(),
+                },
+            );
         }
         WatchEvent::Degraded { reason, hint } => {
-            app.emit_event("nc://watch-degraded", Degraded { reason: reason.as_str(), hint });
+            app.emit_event(
+                "nc://watch-degraded",
+                Degraded {
+                    reason: reason.as_str(),
+                    hint,
+                },
+            );
         }
     }
 }
@@ -851,7 +945,10 @@ fn emit_degraded(app: &impl AppCtx, reason: DegradeReason) {
     };
     app.emit_event(
         "nc://watch-degraded",
-        Degraded { reason: reason.as_str(), hint: hint.to_string() },
+        Degraded {
+            reason: reason.as_str(),
+            hint: hint.to_string(),
+        },
     );
 }
 
@@ -883,7 +980,10 @@ pub fn set_sort(app: &impl AppCtx, state: &AppState, sort: u8) -> Result<u64, Va
     // Under `repair_lock`: a repair walking with the OLD sort would otherwise
     // install its tree over this one and silently undo the change.
     let (epoch, root) = {
-        let _serial = state.repair_lock.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let _serial = state
+            .repair_lock
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let epoch = state.next_epoch();
         let mut t = vault.write();
         t.set_sort(mode, epoch);
@@ -894,7 +994,15 @@ pub fn set_sort(app: &impl AppCtx, state: &AppState, sort: u8) -> Result<u64, Va
         (epoch, t.root_path.to_string_lossy().into_owned())
     };
     if let Some(p) = state.prefs() {
-        p.edit(|s| s.apply(Some(&root), &UiPatch { sort: Some(sort), ..UiPatch::default() }));
+        p.edit(|s| {
+            s.apply(
+                Some(&root),
+                &UiPatch {
+                    sort: Some(sort),
+                    ..UiPatch::default()
+                },
+            )
+        });
         p.save_debounced();
     }
     app.emit_event("nc://tree-changed", TreeChanged { epoch });
@@ -931,6 +1039,23 @@ pub fn read_note_with_claim(
     Ok(framed)
 }
 
+/// CONTRACT §0.55 E108, command 28.  RAW OUT: the EPUB as it sits on disk.
+///
+/// Opening a book claims `AppState.open_note` for the same reason `read_note`
+/// does — the tree's active row, the persisted `lastNote`, and §1.4's
+/// external-change filter all key on it.  A book has no editor buffer, so the
+/// only consequence of a later external change is the ordinary tree refresh.
+pub fn read_book(state: &AppState, path: &str) -> Result<Vec<u8>, VaultError> {
+    let vault = state.require_vault()?;
+    let (abs, is_dir) = resolve(&vault, path)?;
+    if is_dir {
+        return Err(VaultError::not_found(path));
+    }
+    let bytes = fsops::read_book(&abs, path)?;
+    state.set_open_note(Some(path.to_string()));
+    Ok(bytes)
+}
+
 /// Command 9.  RAW IN + headers.  `write_note` NEVER CREATES unless `x-create`
 /// is '1' (§7.1 rule 1), and that header is set in exactly one place in the whole
 /// app: the "Save as…" button on §7.3 case 5's bar.
@@ -958,6 +1083,11 @@ pub fn write_note(
     };
 
     let receipt = fsops::write_note(&abs, args, body, &state.self_writes)?;
+    // The secret-row mark's cache is keyed on whole-second mtime, so a create
+    // and its template write in one second would otherwise keep the `false`
+    // verdict.  The next `secret_notes` re-reads this file's head even though
+    // its second did not move.
+    vault.invalidate_secret(&args.rel);
 
     if structural {
         state.set_open_note(Some(args.rel.clone()));
@@ -996,7 +1126,10 @@ pub fn create_note(
     let vault = state.require_vault()?;
     let (abs, _) = resolve(&vault, parent)?;
     let (_, file_name) = fsops::create_note(&abs, name, &state.self_writes)?;
-    Ok(CreateResult { path: join_rel(parent, &file_name), epoch: repair_and_emit(app, state) })
+    Ok(CreateResult {
+        path: join_rel(parent, &file_name),
+        epoch: repair_and_emit(app, state),
+    })
 }
 
 /// Command 11.
@@ -1010,7 +1143,40 @@ pub fn create_folder(
     let vault = state.require_vault()?;
     let (abs, _) = resolve(&vault, parent)?;
     let (_, file_name) = fsops::create_folder(&abs, name, &state.self_writes)?;
-    Ok(CreateResult { path: join_rel(parent, &file_name), epoch: repair_and_emit(app, state) })
+    Ok(CreateResult {
+        path: join_rel(parent, &file_name),
+        epoch: repair_and_emit(app, state),
+    })
+}
+
+/// Command 29 (§0.55 E108).  MOVE an EPUB the shell's picker chose into
+/// `parent` (the folder that was right-clicked, or `""` for the vault root).
+///
+/// The SOURCE is an absolute path supplied by the MAIN process after the system
+/// dialog, never by the renderer; this function is not in the renderer's
+/// command map.  It resolves the destination through the arena exactly like
+/// every other create, then `fsops::import_epub` performs the move and records
+/// the watcher fingerprints.
+pub fn import_epub(
+    app: &impl AppCtx,
+    state: &AppState,
+    source: &str,
+    parent: &str,
+) -> Result<CreateResult, VaultError> {
+    let _busy = WriteInFlight::new(state);
+    let vault = state.require_vault()?;
+    let (dst_dir, is_dir) = resolve(&vault, parent)?;
+    if !is_dir {
+        return Err(VaultError::not_a_directory(parent));
+    }
+    let dst = fsops::import_epub(Path::new(source), &dst_dir, &state.self_writes)?;
+    let final_name = dst
+        .file_name()
+        .map_or_else(String::new, |n| n.to_string_lossy().into_owned());
+    Ok(CreateResult {
+        path: join_rel(parent, &final_name),
+        epoch: repair_and_emit(app, state),
+    })
 }
 
 /// Command 12.  MUST update `AppState.open_note` under the write lock (M54):
@@ -1032,15 +1198,19 @@ pub fn rename_entry(
     // one or the note detaches.
     let final_abs = fsops::rename_entry(&src, &dst, &state.self_writes)?;
 
-    let final_name = final_abs
-        .file_name()
-        .map_or_else(|| new_name.to_string(), |n| n.to_string_lossy().into_owned());
+    let final_name = final_abs.file_name().map_or_else(
+        || new_name.to_string(),
+        |n| n.to_string_lossy().into_owned(),
+    );
     let parent = path.rfind('/').map_or("", |i| path.get(..i).unwrap_or(""));
     let new_rel = join_rel(parent, &final_name);
 
     reparent_open_note(state, path, &new_rel, is_dir);
 
-    Ok(RenameResult { path: new_rel, epoch: repair_and_emit(app, state) })
+    Ok(RenameResult {
+        path: new_rel,
+        epoch: repair_and_emit(app, state),
+    })
 }
 
 /// Command 24.  Drag-to-move: `path` into `dest_parent` (`""` = vault root).
@@ -1091,7 +1261,10 @@ pub fn move_entry(
     // Already there: no-op. The parent of `a/b.md` is `a`; of `a.md` is `""`.
     let src_parent = path.rfind('/').map_or("", |i| path.get(..i).unwrap_or(""));
     if src_parent == dest_parent {
-        return Ok(RenameResult { path: path.to_string(), epoch: state.epoch() });
+        return Ok(RenameResult {
+            path: path.to_string(),
+            epoch: state.epoch(),
+        });
     }
     let dst_abs = fsops::move_entry(&src_abs, &dst_dir_abs, is_dir, &state.self_writes)?;
     let final_name = dst_abs
@@ -1101,7 +1274,10 @@ pub fn move_entry(
 
     reparent_open_note(state, path, &new_rel, is_dir);
 
-    Ok(RenameResult { path: new_rel, epoch: repair_and_emit(app, state) })
+    Ok(RenameResult {
+        path: new_rel,
+        epoch: repair_and_emit(app, state),
+    })
 }
 
 /// Command 13.  Delete of the OPEN note is ORDERED, not raced (B17), and
@@ -1123,7 +1299,9 @@ pub fn delete_entry(
     // instead of resurrecting the file the user just deleted.
     clear_open_note_under(state, path, is_dir);
 
-    Ok(DeleteResult { epoch: repair_and_emit(app, state) })
+    Ok(DeleteResult {
+        epoch: repair_and_emit(app, state),
+    })
 }
 
 /// M54, the rename half.  The open note may be the renamed entry ITSELF, or may
@@ -1137,12 +1315,15 @@ pub fn delete_entry(
 /// The prefix test is on `"{path}/"`, never on `path`: renaming `Work` must not
 /// drag `Workshop/a.md` with it.
 fn reparent_open_note(state: &AppState, old_rel: &str, new_rel: &str, is_dir: bool) {
-    let mut g = state.open_note.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    let mut g = state
+        .open_note
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     let next = match g.as_deref() {
         Some(cur) if cur == old_rel => Some(new_rel.to_string()),
-        Some(cur) if is_dir && cur.starts_with(&format!("{old_rel}/")) => {
-            cur.get(old_rel.len()..).map(|rest| format!("{new_rel}{rest}"))
-        }
+        Some(cur) if is_dir && cur.starts_with(&format!("{old_rel}/")) => cur
+            .get(old_rel.len()..)
+            .map(|rest| format!("{new_rel}{rest}")),
         _ => None,
     };
     if next.is_some() {
@@ -1152,7 +1333,10 @@ fn reparent_open_note(state: &AppState, old_rel: &str, new_rel: &str, is_dir: bo
 
 /// M54, the delete half.  Same containment rule, same `"{path}/"` prefix.
 fn clear_open_note_under(state: &AppState, path: &str, is_dir: bool) {
-    let mut g = state.open_note.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    let mut g = state
+        .open_note
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     let hit = g
         .as_deref()
         .is_some_and(|cur| cur == path || (is_dir && cur.starts_with(&format!("{path}/"))));
@@ -1187,19 +1371,23 @@ pub async fn search_start<S: MsgSink + Send + 'static>(
     on_event: S,
 ) -> Result<(), VaultError> {
     let snapshot = state.vault().map_or_else(
-        || Arc::new(VaultSnapshot { root: PathBuf::new(), files: Vec::new(), epoch: 0 }),
+        || {
+            Arc::new(VaultSnapshot {
+                root: PathBuf::new(),
+                files: Vec::new(),
+                epoch: 0,
+            })
+        },
         |v| v.snapshot(),
     );
     search::start(&state.search, snapshot, query, generation, on_event).await
 }
 
 /// Command 15.
-pub fn search_expand(
-    state: &AppState,
-    query: &str,
-    rel: &str,
-) -> Result<Vec<Snippet>, VaultError> {
-    let Some(vault) = state.vault() else { return Ok(Vec::new()) };
+pub fn search_expand(state: &AppState, query: &str, rel: &str) -> Result<Vec<Snippet>, VaultError> {
+    let Some(vault) = state.vault() else {
+        return Ok(Vec::new());
+    };
     search::expand(&vault.root(), query, rel)
 }
 
@@ -1213,7 +1401,9 @@ pub fn search_cancel(state: &AppState, generation: u64) {
 /// Command 17.  §7.6, debounced 1,000 ms.
 pub fn save_ui_state(state: &AppState, patch: &UiPatch) {
     let Some(prefs) = state.prefs() else { return };
-    let root = state.vault().map(|v| v.root().to_string_lossy().into_owned());
+    let root = state
+        .vault()
+        .map(|v| v.root().to_string_lossy().into_owned());
     prefs.edit(|s| s.apply(root.as_deref(), patch));
     // The frontend's `last_note` is the SAME fact as `AppState.open_note`, and
     // two copies of one fact drift.  The outer `Option` is "the patch mentioned
@@ -1269,7 +1459,12 @@ pub fn begin_close(app: &impl AppCtx) -> bool {
         return false;
     }
     let token = state.close_token.fetch_add(1, Ordering::SeqCst) + 1;
-    app.emit_event("nc://flush-and-close", FlushAndClose { deadline_ms: CLOSE_DEADLINE_MS });
+    app.emit_event(
+        "nc://flush-and-close",
+        FlushAndClose {
+            deadline_ms: CLOSE_DEADLINE_MS,
+        },
+    );
 
     let handle = app.clone();
     /* THE SPAWN RESULT IS READ.  It was `let _ = …`, which silently removed
@@ -1286,78 +1481,80 @@ pub fn begin_close(app: &impl AppCtx) -> bool {
      *     on the very path where the user wants out.
      * So the close still proceeds and still waits for `confirm_close`, which is
      * the normal path; only the hung-disk backstop is gone, and now it says so. */
-    let spawned = std::thread::Builder::new().name("cairn-close".into()).spawn(move || {
-        let state = handle.app_state();
-        // The deadline runs from the last vault write activity, not from the
-        // arming: the frontend's flush is itself a `write_note`, and quitting
-        // while it is in `sync_data` strands its bytes in a temp file the next
-        // open deletes.  `CLOSE_HARD_CAP_MS` still bounds the whole wait.
-        let quiet_for = Duration::from_millis(CLOSE_DEADLINE_MS);
-        let cap = close_hard_cap(state);
-        let armed_at = Instant::now();
-        let mut quiet_since = armed_at;
-        let mut seen = state.write_activity.load(Ordering::SeqCst);
-        let capped = loop {
-            std::thread::sleep(CLOSE_POLL);
-            // Somebody answered (either way): their `fetch_add` moved the token.
-            if state.close_token.load(Ordering::SeqCst) != token {
-                return;
-            }
-            let activity = state.write_activity.load(Ordering::SeqCst);
-            if activity != seen || state.writes_in_flight.load(Ordering::SeqCst) > 0 {
-                seen = activity;
-                quiet_since = Instant::now();
-            }
-            if quiet_since.elapsed() >= quiet_for {
-                break false;
-            }
-            if armed_at.elapsed() >= cap {
-                break true;
-            }
-        };
-        // THE WATCHDOG EXISTS FOR A HUNG DISK, NOT FOR A REFUSED WRITE (§1.6).
-        // Only a frontend that has not answered at all reaches here, and this
-        // path logs what it is discarding.  The prefs flush is BEST-EFFORT with
-        // a bounded wait: on the hung disk this backstop exists for, a
-        // synchronous flush would block the quit it is supposed to guarantee,
-        // leaving the window unclosable except via SIGKILL.
-        if capped {
-            eprintln!(
-                "cairn: a vault write was still in progress {} ms after flush-and-close; \
+    let spawned = std::thread::Builder::new()
+        .name("cairn-close".into())
+        .spawn(move || {
+            let state = handle.app_state();
+            // The deadline runs from the last vault write activity, not from the
+            // arming: the frontend's flush is itself a `write_note`, and quitting
+            // while it is in `sync_data` strands its bytes in a temp file the next
+            // open deletes.  `CLOSE_HARD_CAP_MS` still bounds the whole wait.
+            let quiet_for = Duration::from_millis(CLOSE_DEADLINE_MS);
+            let cap = close_hard_cap(state);
+            let armed_at = Instant::now();
+            let mut quiet_since = armed_at;
+            let mut seen = state.write_activity.load(Ordering::SeqCst);
+            let capped = loop {
+                std::thread::sleep(CLOSE_POLL);
+                // Somebody answered (either way): their `fetch_add` moved the token.
+                if state.close_token.load(Ordering::SeqCst) != token {
+                    return;
+                }
+                let activity = state.write_activity.load(Ordering::SeqCst);
+                if activity != seen || state.writes_in_flight.load(Ordering::SeqCst) > 0 {
+                    seen = activity;
+                    quiet_since = Instant::now();
+                }
+                if quiet_since.elapsed() >= quiet_for {
+                    break false;
+                }
+                if armed_at.elapsed() >= cap {
+                    break true;
+                }
+            };
+            // THE WATCHDOG EXISTS FOR A HUNG DISK, NOT FOR A REFUSED WRITE (§1.6).
+            // Only a frontend that has not answered at all reaches here, and this
+            // path logs what it is discarding.  The prefs flush is BEST-EFFORT with
+            // a bounded wait: on the hung disk this backstop exists for, a
+            // synchronous flush would block the quit it is supposed to guarantee,
+            // leaving the window unclosable except via SIGKILL.
+            if capped {
+                eprintln!(
+                    "cairn: a vault write was still in progress {} ms after flush-and-close; \
                  closing anyway and discarding whatever was unflushed",
-                cap.as_millis()
-            );
-        } else {
-            eprintln!(
+                    cap.as_millis()
+                );
+            } else {
+                eprintln!(
                 "cairn: the frontend did not answer flush-and-close within {CLOSE_DEADLINE_MS} ms; \
                  closing anyway and discarding whatever was unflushed"
             );
-        }
-        // Best-effort prefs flush on an owned Arc: `state` is borrowed from
-        // `handle`, which cannot cross the inner spawn boundary, but the prefs
-        // store is already an Arc and is all the flush needs.
-        let prefs = state.prefs().cloned();
-        let flush = std::thread::Builder::new()
-            .name("cairn-close-flush".into())
-            .spawn(move || {
-                if let Some(p) = prefs {
-                    if let Err(e) = p.flush_now() {
-                        eprintln!("cairn: could not write state.json: {e}");
-                    }
-                }
-            });
-        if let Ok(join) = flush {
-            let deadline = std::time::Instant::now() + std::time::Duration::from_millis(500);
-            while !join.is_finished() && std::time::Instant::now() < deadline {
-                std::thread::sleep(std::time::Duration::from_millis(10));
             }
-            // Quit regardless: a hung flush must not veto the close.  The
-            // handle is detached on timeout; its write either lands or it does
-            // not, and losing a window position is never worth hanging a quit.
-        }
-        state.close_ok.store(true, Ordering::SeqCst);
-        handle.quit(0);
-    });
+            // Best-effort prefs flush on an owned Arc: `state` is borrowed from
+            // `handle`, which cannot cross the inner spawn boundary, but the prefs
+            // store is already an Arc and is all the flush needs.
+            let prefs = state.prefs().cloned();
+            let flush = std::thread::Builder::new()
+                .name("cairn-close-flush".into())
+                .spawn(move || {
+                    if let Some(p) = prefs {
+                        if let Err(e) = p.flush_now() {
+                            eprintln!("cairn: could not write state.json: {e}");
+                        }
+                    }
+                });
+            if let Ok(join) = flush {
+                let deadline = std::time::Instant::now() + std::time::Duration::from_millis(500);
+                while !join.is_finished() && std::time::Instant::now() < deadline {
+                    std::thread::sleep(std::time::Duration::from_millis(10));
+                }
+                // Quit regardless: a hung flush must not veto the close.  The
+                // handle is detached on timeout; its write either lands or it does
+                // not, and losing a window position is never worth hanging a quit.
+            }
+            state.close_ok.store(true, Ordering::SeqCst);
+            handle.quit(0);
+        });
     if spawned.is_err() {
         eprintln!(
             "cairn: could not spawn the close watchdog; §1.6's {CLOSE_DEADLINE_MS} ms backstop is              NOT armed for this close. The flush-and-close handshake still runs — only a frontend              that never answers at all will now hang instead of closing."
@@ -1411,7 +1608,9 @@ fn flush_prefs(state: &AppState) {
 /// an offline share is not a deleted folder.  The probes run before
 /// `prefs.edit`, so no stat ever happens under the prefs lock.
 pub fn prune_missing_vaults(state: &AppState) -> bool {
-    let Some(prefs) = state.prefs() else { return false };
+    let Some(prefs) = state.prefs() else {
+        return false;
+    };
     let snap = prefs.snapshot();
     let mut roots = snap.recents;
     if let Some(v) = snap.vault {
@@ -1465,7 +1664,9 @@ pub fn spawn_startup_open(app: &impl AppCtx) {
     let state = app.app_state();
     let Some(prefs) = state.prefs() else { return };
     prune_missing_vaults(state);
-    let Some(path) = prefs.snapshot().vault else { return };
+    let Some(path) = prefs.snapshot().vault else {
+        return;
+    };
     if probe_dirs(std::slice::from_ref(&path)).first() != Some(&DirProbe::Dir) {
         return;
     }
@@ -1477,13 +1678,15 @@ pub fn spawn_startup_open(app: &impl AppCtx) {
     // TRUE and the vault never opening, with nothing on stderr. Inline is not
     // an option — §7.5 says `setup()` MUST NOT BLOCK ON THE VAULT WALK — so
     // `loading` is released and the failure is named.
-    let spawned = std::thread::Builder::new().name("cairn-vault-open".into()).spawn(move || {
-        let state = handle.app_state();
-        if let Err(e) = open_vault_blocking(&handle, state, &path) {
-            state.loading.store(false, Ordering::SeqCst);
-            eprintln!("cairn: could not reopen {path}: {e}");
-        }
-    });
+    let spawned = std::thread::Builder::new()
+        .name("cairn-vault-open".into())
+        .spawn(move || {
+            let state = handle.app_state();
+            if let Err(e) = open_vault_blocking(&handle, state, &path) {
+                state.loading.store(false, Ordering::SeqCst);
+                eprintln!("cairn: could not reopen {path}: {e}");
+            }
+        });
     if spawned.is_err() {
         // `loading` was set TRUE above and nothing else clears it on this path,
         // so releasing it here is what keeps the UI from waiting forever on a
@@ -1553,7 +1756,10 @@ mod tests {
         let epoch = repair(&state).expect("repair");
         let blob = tree_blob(&state).expect("blob");
         let from_blob = u64::from_le_bytes(
-            blob.get(24..32).expect("header").try_into().expect("8 bytes"),
+            blob.get(24..32)
+                .expect("header")
+                .try_into()
+                .expect("8 bytes"),
         );
         assert_eq!(from_blob, epoch);
         assert_eq!(from_blob, state.epoch());
@@ -1641,8 +1847,14 @@ mod tests {
     #[test]
     fn rel_of_and_join_rel_are_inverses_at_the_root_and_below() {
         let root = Path::new("/vault");
-        assert_eq!(rel_of(root, Path::new("/vault/a.md")).as_deref(), Some("a.md"));
-        assert_eq!(rel_of(root, Path::new("/vault/p/a.md")).as_deref(), Some("p/a.md"));
+        assert_eq!(
+            rel_of(root, Path::new("/vault/a.md")).as_deref(),
+            Some("a.md")
+        );
+        assert_eq!(
+            rel_of(root, Path::new("/vault/p/a.md")).as_deref(),
+            Some("p/a.md")
+        );
         // The root itself has no relative form; `None` is what stops
         // `nc://note-external-change` firing with an empty path.
         assert_eq!(rel_of(root, Path::new("/vault")), None);
@@ -1670,7 +1882,11 @@ mod tests {
 
         let v = state.vault().expect("vault");
         assert!(resolve(&v, "Late.md").is_ok());
-        assert_eq!(v.read().epoch, epoch, "the arena carries the published epoch");
+        assert_eq!(
+            v.read().epoch,
+            epoch,
+            "the arena carries the published epoch"
+        );
     }
 
     /// A repair rebuilds the arena in place, so the `Arc<Vault>` IDENTITY does
@@ -1687,11 +1903,18 @@ mod tests {
         repair(&state).expect("repair");
 
         let v2 = state.vault().expect("vault");
-        assert!(Arc::ptr_eq(&v1, &v2), "the Vault Arc is reused, not replaced");
+        assert!(
+            Arc::ptr_eq(&v1, &v2),
+            "the Vault Arc is reused, not replaced"
+        );
         // The OLD snapshot is still valid and still says 3 — nothing rewrote it
         // under a holder.
         assert_eq!(snap1.files.len(), 3);
-        assert_eq!(v2.snapshot().files.len(), 4, "a new epoch rebuilds the cache");
+        assert_eq!(
+            v2.snapshot().files.len(),
+            4,
+            "a new epoch rebuilds the cache"
+        );
     }
 
     /* ── command 25: the secret-note set ────────────────────────────────── */
@@ -1703,7 +1926,11 @@ mod tests {
         let (dir, state) = fixture();
         let root = dir.path();
         fs::write(root.join("Creds.md"), "---\ncairn-type: secrets\n---\n").expect("write");
-        fs::write(root.join("Projects/Keys.md"), "---\ncairn-type: secrets\n---\n").expect("write");
+        fs::write(
+            root.join("Projects/Keys.md"),
+            "---\ncairn-type: secrets\n---\n",
+        )
+        .expect("write");
         fs::write(root.join("Plain.md"), "# plain\n").expect("write");
         fs::write(root.join("notes.txt"), "cairn-type: secrets\n").expect("write");
         repair(&state).expect("repair");
@@ -1711,7 +1938,10 @@ mod tests {
         let v = state.vault().expect("vault");
         let mut got = v.secret_notes();
         got.sort();
-        assert_eq!(got, vec!["Creds.md".to_string(), "Projects/Keys.md".to_string()]);
+        assert_eq!(
+            got,
+            vec!["Creds.md".to_string(), "Projects/Keys.md".to_string()]
+        );
         // Unchanged: the memo answers, no head is re-opened.
         let mut again = v.secret_notes();
         again.sort();
@@ -1734,7 +1964,10 @@ mod tests {
         // Rewrite without the marker and move the mtime past the arena's
         // one-second grain, or the memo cannot tell anything changed.
         fs::write(&creds, "# now plain\n").expect("write");
-        let f = std::fs::OpenOptions::new().write(true).open(&creds).expect("open");
+        let f = std::fs::OpenOptions::new()
+            .write(true)
+            .open(&creds)
+            .expect("open");
         f.set_modified(std::time::SystemTime::now() + std::time::Duration::from_secs(2))
             .expect("mtime");
         drop(f);
@@ -1763,7 +1996,10 @@ mod tests {
 
         assert_eq!(repair(&state), None);
         let v = state.vault().expect("the vault is still there");
-        assert!(resolve(&v, "Top.md").is_ok(), "the last good arena still answers");
+        assert!(
+            resolve(&v, "Top.md").is_ok(),
+            "the last good arena still answers"
+        );
         assert_eq!(state.epoch(), epoch_before, "a failed walk burns no epoch");
     }
 
@@ -1973,7 +2209,13 @@ mod tests {
             s.touch_vault("/kept");
             s.touch_vault(&gone_key);
             // Give the doomed vault some view state, so its `vaults` key is real.
-            s.apply(Some(&gone_key), &UiPatch { sort: Some(2), ..UiPatch::default() });
+            s.apply(
+                Some(&gone_key),
+                &UiPatch {
+                    sort: Some(2),
+                    ..UiPatch::default()
+                },
+            );
         });
         prefs.flush_now().expect("flush");
         assert_eq!(prefs.snapshot().recents.len(), 2);
@@ -1983,13 +2225,19 @@ mod tests {
         // In memory…
         let snap = prefs.snapshot();
         assert_eq!(snap.recents, vec!["/kept".to_string()]);
-        assert!(!snap.vaults.contains_key(&gone_key), "the per-vault key outlived its recent");
+        assert!(
+            !snap.vaults.contains_key(&gone_key),
+            "the per-vault key outlived its recent"
+        );
         // …and `vault` — the root the NEXT LAUNCH reopens — no longer names it.
         // `touch_vault` set it, which is §7.3 case 8's shape exactly: the folder
         // is gone, nothing is open, and `state.json` still points at it. Without
         // this the app reopens the vault the user just removed, AND `sanitise`
         // keeps its `vaults` key, because it spares the current vault by name.
-        assert_eq!(snap.vault, None, "state.json still reopens the forgotten vault");
+        assert_eq!(
+            snap.vault, None,
+            "state.json still reopens the forgotten vault"
+        );
 
         // …and on disk, because the point of `flush_now` is that a crash cannot
         // undo a removal the user asked for.
@@ -2001,7 +2249,10 @@ mod tests {
         // …and the vault itself is untouched. THIS is the assertion that matters
         // most to a user reading the word "Close".
         assert!(gone.is_dir(), "forget_vault removed the folder");
-        assert_eq!(std::fs::read(gone.join("Note.md")).expect("read"), b"# keep me\n");
+        assert_eq!(
+            std::fs::read(gone.join("Note.md")).expect("read"),
+            b"# keep me\n"
+        );
     }
 
     /// Obsidian REFUSES to remove a vault a window has open (`"Can't remove a
@@ -2019,19 +2270,20 @@ mod tests {
         state.init_prefs(dir.path().join("state.json"));
         let prefs = state.prefs().expect("prefs");
         prefs.edit(|s| s.touch_vault(&key));
-        *state.vault.write().expect("lock") =
-            Some(std::sync::Arc::new(crate::tree::Vault::new(crate::tree::VaultTree::new(
-                root.clone(),
-                crate::tree::SortMode::NameAsc,
-                1,
-            ))));
+        *state.vault.write().expect("lock") = Some(std::sync::Arc::new(crate::tree::Vault::new(
+            crate::tree::VaultTree::new(root.clone(), crate::tree::SortMode::NameAsc, 1),
+        )));
 
         let err = forget_vault(&state, &key).expect_err("the open vault was forgotten");
         assert!(
             matches!(err, VaultError::InvalidPath { .. }),
             "a refusal must be §1.5's invalidPath, not an io or a panic: {err:?}"
         );
-        assert_eq!(prefs.snapshot().recents, vec![key], "a refused removal still edited the list");
+        assert_eq!(
+            prefs.snapshot().recents,
+            vec![key],
+            "a refused removal still edited the list"
+        );
     }
 
     /// User ruling, 2026-09-14: a launch drops every tracked vault whose folder
@@ -2058,8 +2310,20 @@ mod tests {
             // restore the order this case is about: kept first, gone current.
             s.recents = vec![kept_key.clone(), gone_key.clone()];
             s.vault = Some(gone_key.clone());
-            s.apply(Some(&kept_key), &UiPatch { sort: Some(2), ..UiPatch::default() });
-            s.apply(Some(&gone_key), &UiPatch { sort: Some(1), ..UiPatch::default() });
+            s.apply(
+                Some(&kept_key),
+                &UiPatch {
+                    sort: Some(2),
+                    ..UiPatch::default()
+                },
+            );
+            s.apply(
+                Some(&gone_key),
+                &UiPatch {
+                    sort: Some(1),
+                    ..UiPatch::default()
+                },
+            );
         });
         prefs.flush_now().expect("flush");
 
@@ -2067,9 +2331,18 @@ mod tests {
 
         let snap = prefs.snapshot();
         assert_eq!(snap.recents, vec![kept_key.clone()]);
-        assert_eq!(snap.vault, None, "state.json still reopens the missing vault");
-        assert!(snap.vaults.contains_key(&kept_key), "the kept vault lost its view state");
-        assert!(!snap.vaults.contains_key(&gone_key), "the missing vault kept its view state");
+        assert_eq!(
+            snap.vault, None,
+            "state.json still reopens the missing vault"
+        );
+        assert!(
+            snap.vaults.contains_key(&kept_key),
+            "the kept vault lost its view state"
+        );
+        assert!(
+            !snap.vaults.contains_key(&gone_key),
+            "the missing vault kept its view state"
+        );
 
         let reloaded = PrefsStore::load(prefs_path).snapshot();
         assert_eq!(reloaded.recents, vec![kept_key]);
@@ -2077,7 +2350,10 @@ mod tests {
         assert!(!reloaded.vaults.contains_key(&gone_key));
 
         // And a launch with nothing missing changes nothing and reports so.
-        assert!(!prune_missing_vaults(&state), "a clean launch reported a prune");
+        assert!(
+            !prune_missing_vaults(&state),
+            "a clean launch reported a prune"
+        );
     }
 
     /// With no config directory the app must still run: `prefs()` is `None`,
@@ -2089,7 +2365,13 @@ mod tests {
         let state = AppState::new();
         assert!(state.prefs().is_none());
         assert!(recent_vaults(&state).is_empty());
-        save_ui_state(&state, &UiPatch { sort: Some(2), ..UiPatch::default() });
+        save_ui_state(
+            &state,
+            &UiPatch {
+                sort: Some(2),
+                ..UiPatch::default()
+            },
+        );
         flush_prefs(&state);
     }
 
@@ -2105,18 +2387,33 @@ mod tests {
         state.set_open_note(Some("Top.md".into()));
 
         // Outer None: the patch did not mention it, so nothing changes.
-        save_ui_state(&state, &UiPatch { sort: Some(1), ..UiPatch::default() });
+        save_ui_state(
+            &state,
+            &UiPatch {
+                sort: Some(1),
+                ..UiPatch::default()
+            },
+        );
         assert!(state.open_note_is("Top.md"));
 
         // Inner Some: a different note is now open.
         save_ui_state(
             &state,
-            &UiPatch { last_note: Some(Some("Other.md".into())), ..UiPatch::default() },
+            &UiPatch {
+                last_note: Some(Some("Other.md".into())),
+                ..UiPatch::default()
+            },
         );
         assert!(state.open_note_is("Other.md"));
 
         // Inner None: the last note was CLOSED, and that must survive a restart.
-        save_ui_state(&state, &UiPatch { last_note: Some(None), ..UiPatch::default() });
+        save_ui_state(
+            &state,
+            &UiPatch {
+                last_note: Some(None),
+                ..UiPatch::default()
+            },
+        );
         assert!(state.open_note.lock().expect("lock").is_none());
     }
 
@@ -2187,7 +2484,10 @@ mod tests {
             .expect("canonical root")
             .to_string_lossy()
             .into_owned();
-        assert!(on_disk.contains(&key), "state.json is not keyed by the vault root: {on_disk}");
+        assert!(
+            on_disk.contains(&key),
+            "state.json is not keyed by the vault root: {on_disk}"
+        );
 
         // ── session 2: relaunch, and read what the frontend reads ──────────
         let second = launch();
@@ -2228,7 +2528,9 @@ mod tests {
         );
 
         for _ in 0..3 {
-            let VaultState::Open { info } = current_vault(&state) else { panic!("open") };
+            let VaultState::Open { info } = current_vault(&state) else {
+                panic!("open")
+            };
             assert_eq!(info.expanded, vec!["Projects".to_string()]);
             assert!((info.scroll_top - 96.0).abs() < f64::EPSILON);
         }
@@ -2241,7 +2543,9 @@ mod tests {
     fn the_read_path_falls_back_to_the_defaults_with_no_prefs_store() {
         let (_d, state) = fixture();
         assert!(state.prefs().is_none());
-        let VaultState::Open { info } = current_vault(&state) else { panic!("open") };
+        let VaultState::Open { info } = current_vault(&state) else {
+            panic!("open")
+        };
         assert!(info.expanded.is_empty());
         assert!((info.scroll_top - 0.0).abs() < f64::EPSILON);
     }
@@ -2272,7 +2576,10 @@ mod tests {
         // "Keep editing": the token moves, so the sleeping watchdog returns.
         state.close_token.fetch_add(1, Ordering::SeqCst);
         assert_ne!(state.close_token.load(Ordering::SeqCst), armed);
-        assert!(!state.close_ok.load(Ordering::SeqCst), "a refusal never authorises the close");
+        assert!(
+            !state.close_ok.load(Ordering::SeqCst),
+            "a refusal never authorises the close"
+        );
 
         // A second close is a second arming, and it is a different token.
         let rearmed = state.close_token.fetch_add(1, Ordering::SeqCst) + 1;
@@ -2316,7 +2623,10 @@ mod tests {
 
     impl TestCtx {
         fn new(state: Arc<AppState>) -> Self {
-            Self { state, quits: Arc::new(Mutex::new(Vec::new())) }
+            Self {
+                state,
+                quits: Arc::new(Mutex::new(Vec::new())),
+            }
         }
         fn quits(&self) -> Vec<(i32, Instant)> {
             self.quits.lock().expect("quits").clone()
@@ -2339,7 +2649,10 @@ mod tests {
             &self.state
         }
         fn quit(&self, code: i32) {
-            self.quits.lock().expect("quits").push((code, Instant::now()));
+            self.quits
+                .lock()
+                .expect("quits")
+                .push((code, Instant::now()));
         }
     }
 
@@ -2361,7 +2674,9 @@ mod tests {
                 park_next_repair_after_walk(walked_tx, release_rx);
                 repair(st)
             });
-            walked_rx.recv_timeout(Duration::from_secs(10)).expect("repair A never walked");
+            walked_rx
+                .recv_timeout(Duration::from_secs(10))
+                .expect("repair A never walked");
 
             fs::write(dir.path().join("Late.md"), "# late\n").expect("write");
             let (b_done_tx, b_done_rx) = std::sync::mpsc::channel();
@@ -2382,7 +2697,11 @@ mod tests {
             resolve(&v, "Late.md").is_ok(),
             "a walk that predates the create installed over the repair that saw it"
         );
-        assert_eq!(v.read().epoch, state.epoch(), "the arena is not carrying the newest epoch");
+        assert_eq!(
+            v.read().epoch,
+            state.epoch(),
+            "the arena is not carrying the newest epoch"
+        );
     }
 
     /// `set_sort` re-sorts in place.  A repair already walking with the old
@@ -2402,7 +2721,9 @@ mod tests {
                 park_next_repair_after_walk(walked_tx, release_rx);
                 repair(st)
             });
-            walked_rx.recv_timeout(Duration::from_secs(10)).expect("repair A never walked");
+            walked_rx
+                .recv_timeout(Duration::from_secs(10))
+                .expect("repair A never walked");
 
             let (b_done_tx, b_done_rx) = std::sync::mpsc::channel();
             let b = s.spawn(move || {
@@ -2417,7 +2738,11 @@ mod tests {
         });
 
         let v = state.vault().expect("vault");
-        assert_eq!(v.read().sort, SortMode::NameDesc, "a repair installed the old sort over set_sort");
+        assert_eq!(
+            v.read().sort,
+            SortMode::NameDesc,
+            "a repair installed the old sort over set_sort"
+        );
         assert_eq!(v.read().epoch, state.epoch());
     }
 
@@ -2427,10 +2752,26 @@ mod tests {
     fn only_not_found_classifies_a_root_as_gone() {
         use std::io::{Error, ErrorKind};
         assert_eq!(classify_dir_stat(Ok(true)), DirProbe::Dir);
-        assert_eq!(classify_dir_stat(Ok(false)), DirProbe::Gone, "a file where the vault was");
-        assert_eq!(classify_dir_stat(Err(Error::from(ErrorKind::NotFound))), DirProbe::Gone);
-        assert_eq!(classify_dir_stat(Err(Error::from_raw_os_error(libc::ENOTDIR))), DirProbe::Gone);
-        for errno in [libc::EACCES, libc::EPERM, libc::EIO, libc::ETIMEDOUT, libc::ESTALE] {
+        assert_eq!(
+            classify_dir_stat(Ok(false)),
+            DirProbe::Gone,
+            "a file where the vault was"
+        );
+        assert_eq!(
+            classify_dir_stat(Err(Error::from(ErrorKind::NotFound))),
+            DirProbe::Gone
+        );
+        assert_eq!(
+            classify_dir_stat(Err(Error::from_raw_os_error(libc::ENOTDIR))),
+            DirProbe::Gone
+        );
+        for errno in [
+            libc::EACCES,
+            libc::EPERM,
+            libc::EIO,
+            libc::ETIMEDOUT,
+            libc::ESTALE,
+        ] {
             assert_eq!(
                 classify_dir_stat(Err(Error::from_raw_os_error(errno))),
                 DirProbe::Unknown,
@@ -2468,13 +2809,23 @@ mod tests {
         let got = probe_dirs_with(&paths, Duration::from_millis(300), stat.clone());
         let took = t.elapsed();
         assert_eq!(got, vec![DirProbe::Dir, DirProbe::Gone, DirProbe::Unknown]);
-        assert!(took < Duration::from_millis(1_500), "the probe waited {took:?} on a hung stat");
+        assert!(
+            took < Duration::from_millis(1_500),
+            "the probe waited {took:?} on a hung stat"
+        );
 
         let t = Instant::now();
         let again = probe_dirs_with(&paths, Duration::from_millis(300), stat);
-        assert_eq!(again, vec![DirProbe::Dir, DirProbe::Gone, DirProbe::Unknown]);
+        assert_eq!(
+            again,
+            vec![DirProbe::Dir, DirProbe::Gone, DirProbe::Unknown]
+        );
         assert!(t.elapsed() < Duration::from_millis(1_500));
-        assert_eq!(slow_calls.load(Ordering::SeqCst), 1, "a root still stuck was stat'ed again");
+        assert_eq!(
+            slow_calls.load(Ordering::SeqCst),
+            1,
+            "a root still stuck was stat'ed again"
+        );
     }
 
     /// A REAL permission error on a vault's root: the folder is there, the
@@ -2511,20 +2862,37 @@ mod tests {
         prefs.edit(|s| {
             s.recents = vec![kept_key.clone(), behind_key.clone()];
             s.vault = Some(behind_key.clone());
-            s.apply(Some(&behind_key), &UiPatch { sort: Some(2), ..UiPatch::default() });
+            s.apply(
+                Some(&behind_key),
+                &UiPatch {
+                    sort: Some(2),
+                    ..UiPatch::default()
+                },
+            );
         });
         prefs.flush_now().expect("flush");
 
-        assert!(!prune_missing_vaults(&state), "an unreadable vault was pruned as missing");
+        assert!(
+            !prune_missing_vaults(&state),
+            "an unreadable vault was pruned as missing"
+        );
         let snap = prefs.snapshot();
         assert_eq!(snap.recents, vec![kept_key.clone(), behind_key.clone()]);
         assert_eq!(snap.vault.as_deref(), Some(behind_key.as_str()));
-        assert_eq!(snap.ui(&behind_key).map(|u| u.sort), Some(2), "its view state was dropped");
+        assert_eq!(
+            snap.ui(&behind_key).map(|u| u.sort),
+            Some(2),
+            "its view state was dropped"
+        );
 
         let rows = recent_vaults(&state);
         let exists = |k: &str| rows.iter().find(|r| r.root == k).map(|r| r.exists);
         assert_eq!(exists(&kept_key), Some(true));
-        assert_eq!(exists(&behind_key), Some(false), "an unreachable vault was offered as openable");
+        assert_eq!(
+            exists(&behind_key),
+            Some(false),
+            "an unreachable vault was offered as openable"
+        );
     }
 
     /* ── §1.6: the watchdog and vault writes in flight ───────────────────── */
@@ -2540,11 +2908,16 @@ mod tests {
         assert!(begin_close(&ctx));
 
         std::thread::sleep(Duration::from_millis(CLOSE_DEADLINE_MS + 700));
-        assert!(ctx.quits().is_empty(), "the watchdog quit under a vault write in flight");
+        assert!(
+            ctx.quits().is_empty(),
+            "the watchdog quit under a vault write in flight"
+        );
 
         let ended = Instant::now();
         drop(write);
-        let (code, at) = ctx.wait_for_quit(Duration::from_secs(5)).expect("it never quit after the write");
+        let (code, at) = ctx
+            .wait_for_quit(Duration::from_secs(5))
+            .expect("it never quit after the write");
         assert_eq!(code, 0);
         let after = at.duration_since(ended);
         assert!(
@@ -2562,7 +2935,9 @@ mod tests {
         let ctx = TestCtx::new(Arc::clone(&state));
         let armed = Instant::now();
         assert!(begin_close(&ctx));
-        let (_, at) = ctx.wait_for_quit(Duration::from_secs(5)).expect("the watchdog never fired");
+        let (_, at) = ctx
+            .wait_for_quit(Duration::from_secs(5))
+            .expect("the watchdog never fired");
         let took = at.duration_since(armed);
         assert!(
             took >= Duration::from_millis(CLOSE_DEADLINE_MS - 100)
@@ -2581,7 +2956,9 @@ mod tests {
         let _stuck = WriteInFlight::new(&state);
         let armed = Instant::now();
         assert!(begin_close(&ctx));
-        let (_, at) = ctx.wait_for_quit(Duration::from_secs(8)).expect("the cap never fired");
+        let (_, at) = ctx
+            .wait_for_quit(Duration::from_secs(8))
+            .expect("the cap never fired");
         let took = at.duration_since(armed);
         assert!(
             took >= Duration::from_millis(2_900) && took <= Duration::from_millis(4_500),
@@ -2614,7 +2991,10 @@ mod tests {
     fn the_overflow_backstop_does_not_report_our_own_write() {
         use crate::note_frame::WriteArgs;
         let (_d, state) = fixture();
-        let ctx = Rec { state: Arc::new(state), events: Arc::default() };
+        let ctx = Rec {
+            state: Arc::new(state),
+            events: Arc::default(),
+        };
         let st = &ctx.state;
         st.set_open_note(Some("Top.md".into()));
         let v = st.vault().expect("vault");
@@ -2625,16 +3005,34 @@ mod tests {
             touch_mtime(&v, "Top.md", 0);
             on_watch_event(
                 &ctx,
-                WatchEvent::Flush(crate::watcher::Flush { full_rescan: true, ..Default::default() }),
+                WatchEvent::Flush(crate::watcher::Flush {
+                    full_rescan: true,
+                    ..Default::default()
+                }),
             );
-            ctx.events.lock().unwrap().iter().any(|e| e == "nc://note-external-change")
+            ctx.events
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|e| e == "nc://note-external-change")
         };
 
-        let args = WriteArgs { rel: "Top.md".into(), flags: 0, base_mtime_ms: None, create: false };
+        let args = WriteArgs {
+            rel: "Top.md".into(),
+            flags: 0,
+            base_mtime_ms: None,
+            create: false,
+        };
         fsops::write_note(&abs, &args, b"# ours\n", &st.self_writes).expect("write");
-        assert!(!rescan(), "our own save was reported to the editor as an external change");
+        assert!(
+            !rescan(),
+            "our own save was reported to the editor as an external change"
+        );
 
         fs::write(&abs, b"# theirs, longer\n").expect("external write");
-        assert!(rescan(), "the backstop no longer reports a real external change");
+        assert!(
+            rescan(),
+            "the backstop no longer reports a real external change"
+        );
     }
 }

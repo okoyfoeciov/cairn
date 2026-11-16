@@ -40,9 +40,9 @@
  *   - `depth[i] === depth[parent[i]] + 1` — `restore()`'s ancestor stack is
  *     addressed by depth, so a depth that skips a level builds a wrong path and
  *     therefore restores the wrong folder's expansion.
- *   - `kind` bits 3..7 zero, and a folder's bits 1..2 zero — reserved bits
- *     MUST be 0 (§3.2), so a future encoder that starts using one must not
- *     have its rows silently misread here.
+ *   - `kind` bit 3 is `KIND_BOOK`; bits 4..7 carry the book extension's
+ *     ASCII case and are zero for every note.  A folder's bits 1..2 are zero.
+ *     Unknown combinations are rejected rather than silently misread.
  *
  * The whole validation is integer work over already-decoded typed arrays: five
  * O(N) passes, no allocation, no string work.  Measured cost is reported in the
@@ -59,9 +59,12 @@ export const FLAG_TRUNCATED_NODES = 1 << 0
 export const FLAG_TRUNCATED_DEPTH = 1 << 1
 /** `kind` bit 0 — a directory. */
 export const KIND_DIR = 1 << 0
-/** `kind` bits 1..2 — a file's extension case: bit 1 = `M`, bit 2 = `D`. */
+/** `kind` bits 1..2 — a note's extension case: bit 1 = `M`, bit 2 = `D`. */
 export const KIND_EXT_UPPER_M = 1 << 1
 export const KIND_EXT_UPPER_D = 1 << 2
+/** `kind` bit 3 — an EPUB book (§0.55 E108).  Its `names` entry is the display
+ *  stem, `.epub` stripped; bits 4..7 carry the four letters' case for `extOf`. */
+export const KIND_BOOK = 1 << 3
 
 /**
  * A note's extension as it is on disk, indexed by `(kind >> 1) & 3`.  `names`
@@ -132,10 +135,12 @@ export class TreeBlob {
   readonly nameOff: Uint32Array
   /** 0 = top level; hard cap 255 (§3.3). */
   readonly depth: Uint8Array
-  /** bit0 = is_directory; bits 1..2 = a file's extension case (`extOf`);
-   *  bits 3..7 reserved and validated zero. */
+  /** bit0 = is_directory; bits 1..2 = a note's extension case; bit3 = an EPUB
+   *  book; bits 4..7 = a book's four-letter `.epub` case mask (`extOf`).  The
+   *  high nibble is zero for notes and folders. */
   readonly kind: Uint8Array
-  /** Concatenated UTF-8 DISPLAY names — a file's trailing `.md` is stripped. */
+  /** Concatenated UTF-8 DISPLAY names — a file's trailing `.md`/`.epub` is
+   *  stripped; folders keep their names. */
   readonly names: Uint8Array
 
   /** node index -> decoded name.  Hard-capped at NAME_CACHE_MAX (§3.2). */
@@ -223,8 +228,14 @@ export class TreeBlob {
     return (this.kind[i]! & 1) !== 0
   }
 
+  /** `kind` bit 3 — an EPUB book.  A book is a file, never a folder. */
+  isBook(i: number): boolean {
+    return (this.kind[i]! & KIND_BOOK) !== 0
+  }
+
   /**
-   * The DISPLAY name — a file's trailing `.md` is already stripped by Rust.
+   * The DISPLAY name — a note's `.md` and a book's `.epub` are already stripped
+   * by Rust.
    * Cached; the cache is dropped wholesale at NAME_CACHE_MAX (§3.2).
    */
   nameOf(i: number): string {
@@ -237,12 +248,24 @@ export class TreeBlob {
   }
 
   /**
-   * A file's extension exactly as it is on disk (`.md`, `.MD`, …); `''` for a
-   * folder.  The tree holds nothing but directories and notes (§3.6).
+   * A file's extension exactly as it is on disk (`.md`, `.MD`, `.epub`,
+   * `.EPUB`, …); `''` for a folder.  A book's four-letter case is the high
+   * nibble of `kind`; a note's is bits 1..2 (§3.6, E108).
    */
   extOf(i: number): string {
     const k = this.kind[i]!
-    return (k & KIND_DIR) !== 0 ? '' : MD_EXT[(k >> 1) & 3]!
+    if ((k & KIND_DIR) !== 0) return ''
+    if ((k & KIND_BOOK) !== 0) {
+      const m = (k >> 4) & 0xf
+      return (
+        '.' +
+        (m & 1 ? 'E' : 'e') +
+        (m & 2 ? 'P' : 'p') +
+        (m & 4 ? 'U' : 'u') +
+        (m & 8 ? 'B' : 'b')
+      )
+    }
+    return MD_EXT[(k >> 1) & 3]!
   }
 
   /**
@@ -298,7 +321,10 @@ export class TreeBlob {
   resolveLink(target: string, fromPath: string | null): string | null {
     const t = target.trim()
     if (t === '') return null
-    const noExt = t.length > 3 && t.slice(-3).toLowerCase() === '.md' ? t.slice(0, -3) : t
+    const lowerT = t.toLowerCase()
+    const wantsNote = lowerT.endsWith('.md')
+    const wantsBook = lowerT.endsWith('.epub')
+    const noExt = wantsNote ? t.slice(0, -3) : wantsBook ? t.slice(0, -5) : t
     const slash = noExt.lastIndexOf('/')
     const base = slash < 0 ? noExt : noExt.slice(slash + 1)
     if (base === '') return null
@@ -313,14 +339,22 @@ export class TreeBlob {
       for (let k = 0; k < want.length; k++) {
         if (fold(this.names[a + k]!) !== fold(want[k]!)) { ok = false; break }
       }
-      if (ok) hits.push(i)
+      if (ok && (!wantsBook || this.isBook(i)) && (!wantsNote || !this.isBook(i))) hits.push(i)
     }
     if (hits.length === 0) return null
     const paths = hits.map((i) => this.pathOf(i))
 
     if (slash >= 0) {
-      const exact = (noExt + '.md').toLowerCase()
-      return paths.find((p) => p.toLowerCase() === exact) ?? null
+      const exactNote = (noExt + '.md').toLowerCase()
+      const exactBook = (noExt + '.epub').toLowerCase()
+      return (
+        paths.find((p) => {
+          const lower = p.toLowerCase()
+          if (wantsNote) return lower === exactNote
+          if (wantsBook) return lower === exactBook
+          return lower === exactNote || lower === exactBook
+        }) ?? null
+      )
     }
     if (paths.length === 1) return paths[0]!
 
@@ -371,13 +405,23 @@ export class TreeBlob {
       // depth is what restore()'s ancestor stack is addressed by.
       const d = p < 0 ? 0 : depth[p]! + 1
       if (depth[i] !== d) bad('depth[' + i + '] = ' + depth[i] + ', expected ' + d)
-      // §3.2: bits 3..7 reserved, MUST be 0; a folder has no extension bits.
+      // §3.2: bits 4..7 are the BOOK extension case and MUST be 0 otherwise.
+      // A folder has no extension and no book bit; a book has no note bits.
       const k = kind[i]!
-      if ((k & 0xf8) !== 0 || ((k & KIND_DIR) !== 0 && (k & (KIND_EXT_UPPER_M | KIND_EXT_UPPER_D)) !== 0)) {
+      if (
+        (k & KIND_DIR) !== 0 &&
+        (k & (KIND_EXT_UPPER_M | KIND_EXT_UPPER_D | KIND_BOOK | 0xf0)) !== 0
+      ) {
+        bad('kind[' + i + '] = ' + k + ' marks a folder as a file')
+      }
+      if ((k & 0xf0) !== 0 && (k & KIND_BOOK) === 0) {
         bad('kind[' + i + '] = ' + k + ' sets a reserved bit')
       }
+      if ((k & KIND_BOOK) !== 0 && (k & (KIND_EXT_UPPER_M | KIND_EXT_UPPER_D)) !== 0) {
+        bad('kind[' + i + '] = ' + k + ' marks a book with note-extension bits')
+      }
       // A folder's parent is always a folder (invariant P, third sentence).
-      if (p >= 0 && (kind[p]! & 1) === 0) bad('node ' + i + "'s parent " + p + ' is not a folder')
+      if (p >= 0 && (kind[p]! & KIND_DIR) === 0) bad('node ' + i + "'s parent " + p + ' is not a folder')
       if (nameOff[i + 1]! < nameOff[i]!) bad('name_off is not monotonic at ' + i)
     }
   }

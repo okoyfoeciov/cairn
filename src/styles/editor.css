@@ -124,9 +124,9 @@
 .cm-scroller::-webkit-scrollbar       { width: var(--scrollbar-w-editor); background: transparent; }
 .cm-scroller::-webkit-scrollbar-track { background: var(--scrollbar-track); }
 /* The SAME thumb the sidebar draws (tree.css) — Obsidian's styled thumb applies
- * to every scroller it has, and the token is translucent precisely so this one
- * reads #333333 over the editor's #1c1c1c while the sidebar's reads #383838 over
- * #222222, with no second colour declared anywhere.  The rule is restated here
+ * to every scroller it has, and the token is translucent precisely so it reads
+ * a different shade over the editor's `--bg-primary` than over the sidebar's
+ * `--bg-secondary`, with no second colour declared anywhere.  The rule is restated here
  * and NOT grouped with tree.css's because §5.12.4.2 requires this selector to
  * name `.cm-scroller` itself; what must never be duplicated is the
  * `::-webkit-scrollbar` WIDTH, and that is still declared once per scroller. */
@@ -186,14 +186,15 @@
  * which expands to `.cm-editor.cm-dark .cm-content` at (0,3,0).  Ordering
  * cannot rescue it — StyleModule deliberately injects at the TOP of `<head>` so
  * author rules win at EQUAL specificity, and these are not equal.  Measured in
- * the live app 2026-09-12: `--caret-color` resolved to `#dadada` on
- * `.cm-content` and `caret-color` computed **`rgb(255, 255, 255)`**.
+ * the live app 2026-09-12 (pre-Oceanic): `--caret-color` resolved to `#dadada`
+ * on `.cm-content` and `caret-color` computed **`rgb(255, 255, 255)`**.
  *
  * So the caret has been WHITE since CM6 was mounted, against a token marked
  * `[M]`.  Obsidian's own is `--caret-color: var(--text-normal)` (app.css:2154)
- * applied at `.cm-content { caret-color: var(--caret-color) }` (app.css:3238),
- * and Cairn's `--text-normal` IS `#dadada` — the same value the token already
- * carried. **This restores an intended value, it does not choose a new one.**
+ * applied at `.cm-content { caret-color: var(--caret-color) }` (app.css:3238).
+ * Cairn's `--text-normal` is now Oceanic `#d7dfe9`; it is still the token the
+ * caret must follow. **This restores an intended value, it does not choose a
+ * new one.**
  *
  * Found while removing the caret from the empty pane (§0.45 E92), by reading
  * the computed style rather than the declaration — the declaration was right
@@ -270,12 +271,12 @@
  *
  * No syntax highlighting anywhere in a code block (§9 E4, settled). */
 .nc-cb {
-  background-color: var(--bg-primary-alt);  /* #212121 [M] */
+  background-color: var(--bg-primary-alt);  /* Oceanic #212a34 (was #232323) */
   margin: 0;                                /* NOT 0 -16px */
   font-family: var(--font-mono);
   font-size: var(--fs-code);                /* 14px [M]; spec-03's 13.8px is STRUCK */
   line-height: var(--lh-code);              /* the INTEGER 21px [M], never 1.5 (X4) */
-  color: var(--text-normal);                /* #dadada — fences included */
+  color: var(--text-normal);                /* Oceanic #d7dfe9 — fences included */
   border: 0;                                /* [M] no ring around the fill */
 }
 /* THE 16px LIVES IN A (0,4,0) RULE AND NOT IN THE BLOCK ABOVE.  §5.3's reset is
@@ -584,10 +585,10 @@
  *
  *   table   border-collapse: collapse · line-height 20.8px (1.3) · margin 16px
  *           0 16px · word-break: normal
- *   th, td  padding 4px 8px · border 1px solid rgb(51,51,51) · min-width 6ch
+ *   th, td  padding 4px 8px · border 1px solid --bg-modifier-border (Oceanic #334052) · min-width 6ch
  *           max-width none · vertical-align top · white-space break-spaces
  *           text-align start · overflow hidden
- *   th      font-weight 600 · color rgb(218,218,218) · 16px
+ *   th      font-weight 600 · color --text-normal (Oceanic #d7dfe9) · 16px
  *   td      font-weight 400 · colour inherited
  *   thead tr  background transparent  (`--table-header-background`)
  *

@@ -683,8 +683,8 @@ test('§5.4.5: folding sets is-collapsed on all three elements', { skip: SKIP },
 test('§5.4.5: collapsed, the arrow is visible, accent-coloured and rotated', { skip: SKIP }, async () => {
   const { before, collapsed } = await probeOnce()
   assert.equal(collapsed.fold.opacity, '1', 'app.css:7253 — `.is-collapsed .collapse-indicator`')
-  assert.equal(collapsed.fold.colour, 'rgb(166, 138, 249)',
-    '--text-accent = hsl(255, 89.76%, 75.9%); a faint grey here is the reported defect')
+  assert.equal(collapsed.fold.colour, 'rgb(140, 191, 230)',
+    '--text-accent = Oceanic #8cbfe6; a faint grey here is the reported defect')
   assert.notEqual(collapsed.fold.colour, before.fold.colour, 'the two states must differ')
   // `rotate(-90deg)` is `matrix(0, -1, 1, 0, 0, 0)`.  On the SVG, not the box:
   // the box is absolutely positioned with 6px of side padding, so rotating it
@@ -851,7 +851,7 @@ test('PR-2: the Properties fold survives the widget rebuild an edit causes',
  * declaration that is correct, present and outranked fails in total silence
  * here — §0.45 E93's caret, §0.24.5 E53's transitions, twice more since — so a
  * test that read the stylesheet would pass against a rule the cascade throws
- * away. `--text-muted` is `#b3b3b3`. */
+ * away. `--text-muted` is Oceanic `#a5b1c2`. */
 test('§5.4.4: a ticked task line is struck through and muted; an open one is not',
   { skip: SKIP }, async () => {
     const { before } = await probeOnce()
@@ -864,12 +864,12 @@ test('§5.4.4: a ticked task line is struck through and muted; an open one is no
 
     assert.match(done[0].cls, /\bnc-li-done\b/)
     assert.equal(done[0].decoration, 'line-through', '--checklist-done-decoration')
-    assert.equal(done[0].color, 'rgb(179, 179, 179)', '--checklist-done-color = --text-muted')
+    assert.equal(done[0].color, 'rgb(165, 177, 194)', '--checklist-done-color = --text-muted (Oceanic #a5b1c2)')
 
     // The open one must be untouched, or the rule is firing on "is a task".
     assert.doesNotMatch(open[0].cls, /nc-li-done/)
     assert.equal(open[0].decoration, 'none')
-    assert.notEqual(open[0].color, 'rgb(179, 179, 179)')
+    assert.notEqual(open[0].color, 'rgb(165, 177, 194)')
   })
 
 /* =========================================================================
@@ -904,8 +904,8 @@ test('PR-1: a refused rename writes nothing and flashes the row it collided with
     // `um()` — the collision is pointed AT, on the row that owns the name.
     assert.deepEqual(pr1.flashed.map((f) => f.key), ['name'],
       'exactly the colliding row must carry `is-flashing`')
-    assert.equal(pr1.flashed[0].bg, 'rgba(255, 208, 0, 0.4)',
-      '`--highlight-bg` is Obsidian`s own --text-highlight-bg')
+    assert.equal(pr1.flashed[0].bg, 'rgba(255, 208, 0, 0.42)',
+      '`--highlight-bg` is Oceanic 0.42 (Obsidian`s own --text-highlight-bg was 0.4)')
     assert.equal(pr1.flashed[0].blend, 'lighten',
       '`.theme-dark`s own --highlight-mix-blend-mode (app.css:2960)')
   })
@@ -956,8 +956,9 @@ test('§0.24.6: a nameless property row draws its glyph dimmed, and a named one 
   })
 
 /* The user measured this one off a brightness profile before I did: Obsidian's
- * strokes peak at 151 against Cairn's 74 on the same ground, which is #b3b3b3
- * against #666666. `.metadata-property-icon` takes `--icon-color`, and
+ * strokes peak at 151 against Cairn's 74 on the same ground, which was
+ * Obsidian's #b3b3b3 against #666666; Oceanic retints `--text-muted` to
+ * #a5b1c2 and `--text-faint` to #626d7e. `.metadata-property-icon` takes `--icon-color`, and
  * `--icon-color` is `--text-muted` (app.css:2346) — not `--text-faint`. */
 /* =========================================================================
  * §0.36 E83 — THE LINKS, IN THE ENGINE.  `livepreview.test.mjs` already proves
@@ -986,7 +987,7 @@ test('§0.36 E83: a bare url and a wikilink both render as links', { skip: SKIP 
   // The accent, underlined, in both — `--link-color` and
   // `--link-external-color` are separate tokens holding one value.
   for (const l of links) {
-    assert.equal(l.color, 'rgb(166, 138, 249)', l.text)
+    assert.equal(l.color, 'rgb(140, 191, 230)', l.text)
     assert.equal(l.decoration, 'underline', l.text)
   }
   // Obsidian puts the link cursor on `.cm-underline`, which a bare url never
@@ -1040,7 +1041,7 @@ test('§0.40 E87: and it is dressed in Obsidian`s own measured table style', { s
   assert.equal(t.marginTop, '16px', '--p-spacing, so a table sits in a paragraph`s rhythm')
   assert.equal(t.marginBottom, '16px')
   assert.equal(t.thPad, '4px 8px', '--size-2-2 --size-4-2')
-  assert.equal(t.thBorderColor, 'rgb(51, 51, 51)', '--background-modifier-border')
+  assert.equal(t.thBorderColor, 'rgb(51, 64, 82)', '--bg-modifier-border (Oceanic #334052)')
   // …and the WIDTH is asserted through Chromium's snapping rather than against
   // it. `--table-border-width` is 1px; a border is laid out in whole DEVICE
   // pixels, so at dpr 1.25 the used value is floor(1.25)/1.25 = 0.8 — which is
@@ -1093,7 +1094,7 @@ test('§0.40 E87: and it is dressed in Obsidian`s own measured table style', { s
 
 test('§5.4.5: the property glyphs are --text-muted, not --text-faint', { skip: SKIP }, async () => {
   const { before } = await probeOnce()
-  assert.equal(before.iconColour, 'rgb(179, 179, 179)')
+  assert.equal(before.iconColour, 'rgb(165, 177, 194)')
 })
 
 /* The user's DevTools gave Obsidian's own number for this box — 22 x 28 — which

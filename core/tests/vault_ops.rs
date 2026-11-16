@@ -33,7 +33,12 @@ fn sw() -> Mutex<SelfWrites> {
 }
 
 fn args(rel: &str, flags: u32, base: Option<i64>, create: bool) -> WriteArgs {
-    WriteArgs { rel: rel.into(), flags, base_mtime_ms: base, create }
+    WriteArgs {
+        rel: rel.into(),
+        flags,
+        base_mtime_ms: base,
+        create,
+    }
 }
 
 /// Names of everything in `dir`, sorted.  Gate G8 is read off this.
@@ -90,9 +95,18 @@ fn g_rt_t2_1_read_then_save_with_no_edit_is_byte_identical() {
         ("crlf.md", b"one\r\ntwo\r\nthree\r\n".to_vec()),
         ("bom-lf.md", [&bom[..], b"one\ntwo\n"].concat()),
         ("bom-crlf.md", [&bom[..], b"one\r\ntwo\r\n"].concat()),
-        ("bom-crlf-cjk.md", [&bom[..], format!("{cjk}\r\n{cjk}\r\n").as_bytes()].concat()),
-        ("cjk-200k.md", cjk.repeat(200 * 1024 / cjk.len()).into_bytes()),
-        ("ascii-1m.md", b"the quick brown fox\n".repeat(1024 * 1024 / 20)),
+        (
+            "bom-crlf-cjk.md",
+            [&bom[..], format!("{cjk}\r\n{cjk}\r\n").as_bytes()].concat(),
+        ),
+        (
+            "cjk-200k.md",
+            cjk.repeat(200 * 1024 / cjk.len()).into_bytes(),
+        ),
+        (
+            "ascii-1m.md",
+            b"the quick brown fox\n".repeat(1024 * 1024 / 20),
+        ),
     ];
 
     for (name, original) in &cases {
@@ -101,7 +115,10 @@ fn g_rt_t2_1_read_then_save_with_no_edit_is_byte_identical() {
 
         let read = fsops::read_note(&abs, name).unwrap();
         // Nothing the editor receives may carry a BOM or a CR (§2.4).
-        assert!(!read.bytes.starts_with(&bom), "{name}: a BOM reached the editor");
+        assert!(
+            !read.bytes.starts_with(&bom),
+            "{name}: a BOM reached the editor"
+        );
         assert!(
             !read.bytes.windows(2).any(|w| w == b"\r\n"),
             "{name}: a CRLF reached the editor"
@@ -172,13 +189,22 @@ fn case_3_a_deleted_note_is_never_resurrected_by_autosave() {
     // Now every flush the editor could possibly issue, in the order it would
     // issue them: the idle flush, the blur flush, the close flush.
     for base in [Some(read.mtime_ms), None] {
-        let e = fsops::write_note(&abs, &args("Misc.md", read.flags, base, false), b"typed\n", &s)
-            .unwrap_err();
+        let e = fsops::write_note(
+            &abs,
+            &args("Misc.md", read.flags, base, false),
+            b"typed\n",
+            &s,
+        )
+        .unwrap_err();
         assert_eq!(e.kind(), "notFound", "an autosave recreated a deleted note");
     }
 
     assert!(!abs.exists(), "the note came back");
-    assert!(entries(&root).is_empty(), "the vault is not empty: {:?}", entries(&root));
+    assert!(
+        entries(&root).is_empty(),
+        "the vault is not empty: {:?}",
+        entries(&root)
+    );
 }
 
 /// §7.3 case 6: a FOLDER is deleted while a note inside it is open.  Identical
@@ -197,10 +223,18 @@ fn case_6_a_folder_delete_takes_the_open_note_with_it_and_nothing_comes_back() {
     fsops::delete_entry(&root.join("A"), "A", true, &s).unwrap();
     assert!(!root.join("A").exists());
 
-    let e = fsops::write_note(&abs, &args("A/B/n.md", read.flags, None, false), b"typed\n", &s)
-        .unwrap_err();
+    let e = fsops::write_note(
+        &abs,
+        &args("A/B/n.md", read.flags, None, false),
+        b"typed\n",
+        &s,
+    )
+    .unwrap_err();
     assert_eq!(e.kind(), "notFound");
-    assert!(!root.join("A").exists(), "the write recreated the folder tree");
+    assert!(
+        !root.join("A").exists(),
+        "the write recreated the folder tree"
+    );
     assert!(entries(&root).is_empty());
 }
 
@@ -229,24 +263,51 @@ fn case_5_an_external_rename_stops_autosave_and_save_as_is_the_only_way_out() {
     fs::rename(&old, &new).unwrap();
 
     // The autosave that was already queued.
-    let e = fsops::write_note(&old, &args("Misc.md", read.flags, Some(read.mtime_ms), false), b"dirty\n", &s)
-        .unwrap_err();
+    let e = fsops::write_note(
+        &old,
+        &args("Misc.md", read.flags, Some(read.mtime_ms), false),
+        b"dirty\n",
+        &s,
+    )
+    .unwrap_err();
     assert_eq!(e.kind(), "notFound");
     assert!(!old.exists(), "autosave recreated the old name");
-    assert_eq!(fs::read(&new).unwrap(), b"original\n", "autosave followed the rename");
+    assert_eq!(
+        fs::read(&new).unwrap(),
+        b"original\n",
+        "autosave followed the rename"
+    );
 
     // Save as… into a fresh name: exactly one write, with create = true.
     let fresh = root.join("Rescued.md");
-    fsops::write_note(&fresh, &args("Rescued.md", read.flags, None, true), b"dirty\n", &s).unwrap();
+    fsops::write_note(
+        &fresh,
+        &args("Rescued.md", read.flags, None, true),
+        b"dirty\n",
+        &s,
+    )
+    .unwrap();
     assert_eq!(fs::read(&fresh).unwrap(), b"dirty\n");
 
     // Save as… into an EXISTING name: refused, and zero writes.
-    let e = fsops::write_note(&new, &args("Other.md", read.flags, None, true), b"dirty\n", &s)
-        .unwrap_err();
+    let e = fsops::write_note(
+        &new,
+        &args("Other.md", read.flags, None, true),
+        b"dirty\n",
+        &s,
+    )
+    .unwrap_err();
     assert_eq!(e.kind(), "alreadyExists");
-    assert_eq!(fs::read(&new).unwrap(), b"original\n", "Save-As overwrote an existing note");
+    assert_eq!(
+        fs::read(&new).unwrap(),
+        b"original\n",
+        "Save-As overwrote an existing note"
+    );
 
-    assert_eq!(entries(&root), vec!["Other.md".to_string(), "Rescued.md".to_string()]);
+    assert_eq!(
+        entries(&root),
+        vec!["Other.md".to_string(), "Rescued.md".to_string()]
+    );
 }
 
 /* ── §7.3 case 7: concurrent edit from Obsidian ──────────────────────────── */
@@ -269,18 +330,29 @@ fn case_7_an_obsidian_edit_is_never_silently_clobbered() {
 
     let a = args("Shared.md", read.flags, Some(read.mtime_ms), false);
     match fsops::write_note(&abs, &a, b"my typing\n", &s) {
-        Err(VaultError::Conflict { path, disk_mtime_ms }) => {
+        Err(VaultError::Conflict {
+            path,
+            disk_mtime_ms,
+        }) => {
             assert_eq!(path, "Shared.md");
             assert!(disk_mtime_ms != read.mtime_ms);
         }
         other => panic!("expected a conflict, got {other:?}"),
     }
     assert_eq!(fs::read(&abs).unwrap(), b"obsidian wrote this\n");
-    assert!(temp_files(&root).is_empty(), "the refused write left a temp behind");
+    assert!(
+        temp_files(&root).is_empty(),
+        "the refused write left a temp behind"
+    );
 
     // Autosave stops for that note; the user picks "Keep mine".
-    fsops::write_note(&abs, &args("Shared.md", read.flags, None, false), b"my typing\n", &s)
-        .unwrap();
+    fsops::write_note(
+        &abs,
+        &args("Shared.md", read.flags, None, false),
+        b"my typing\n",
+        &s,
+    )
+    .unwrap();
     assert_eq!(fs::read(&abs).unwrap(), b"my typing\n");
 }
 
@@ -302,11 +374,14 @@ fn case_10_case_only_rename_succeeds_and_a_case_collision_is_refused() {
     fsops::rename_entry(&lower, &upper, &s).unwrap();
     assert_eq!(fs::read(&upper).unwrap(), b"the content\n");
     assert_eq!(entries(&root), vec!["Notes.md".to_string()]);
-    assert!(temp_files(&root).is_empty(), "the two-step rename left its intermediate behind");
+    assert!(
+        temp_files(&root).is_empty(),
+        "the two-step rename left its intermediate behind"
+    );
 
     // A second file created from a shell, then renamed to collide only by case.
-    let case_insensitive = fs::write(root.join("NOTES.md"), b"other\n").is_ok()
-        && entries(&root).len() == 1;
+    let case_insensitive =
+        fs::write(root.join("NOTES.md"), b"other\n").is_ok() && entries(&root).len() == 1;
     if case_insensitive {
         // On APFS's default, `NOTES.md` IS `Notes.md`; the shell just
         // overwrote it.  That is the filesystem's answer, and the app must not
@@ -361,7 +436,9 @@ fn case_1_m67_the_sweep_clears_dead_debris_and_spares_everything_else() {
 #[test]
 #[ignore = "spawned by case_1_killed_mid_save_is_all_or_nothing"]
 fn kill_child_writer() {
-    let Ok(dir) = std::env::var("CAIRN_KILL_DIR") else { return };
+    let Ok(dir) = std::env::var("CAIRN_KILL_DIR") else {
+        return;
+    };
     let root = PathBuf::from(dir);
     let abs = root.join("Note.md");
     let s = sw();
@@ -517,8 +594,13 @@ fn g8_a_whole_session_leaves_only_the_users_notes() {
     let (note, name) = fsops::create_note(&folder, None, &s).unwrap();
     assert_eq!(name, "Untitled.md");
 
-    fsops::write_note(&note, &args("Projects/Untitled.md", 0, None, false), b"# Ideas\n", &s)
-        .unwrap();
+    fsops::write_note(
+        &note,
+        &args("Projects/Untitled.md", 0, None, false),
+        b"# Ideas\n",
+        &s,
+    )
+    .unwrap();
 
     let renamed = fsops::rename_target(&note, "Ideas", true).unwrap();
     fsops::rename_entry(&note, &renamed, &s).unwrap();
@@ -554,7 +636,11 @@ fn case_15_an_over_cap_note_is_refused_without_reading_it_all() {
     fs::write(&abs, vec![b'x'; limit as usize + 1]).unwrap();
 
     match fsops::read_note(&abs, "Huge.md") {
-        Err(VaultError::TooLarge { path, bytes, limit: l }) => {
+        Err(VaultError::TooLarge {
+            path,
+            bytes,
+            limit: l,
+        }) => {
             assert_eq!(path, "Huge.md");
             assert_eq!(bytes, limit + 1);
             assert_eq!(l, limit);
@@ -572,7 +658,11 @@ fn case_15_an_over_cap_note_is_refused_without_reading_it_all() {
     )
     .unwrap_err();
     assert_eq!(e.kind(), "tooLarge");
-    assert_eq!(fs::metadata(&abs).unwrap().len(), limit + 1, "the refused write still landed");
+    assert_eq!(
+        fs::metadata(&abs).unwrap().len(),
+        limit + 1,
+        "the refused write still landed"
+    );
 }
 
 /// T2.6 / §7.3 case 14, end to end: the refusal is what protects the bytes, and
@@ -585,8 +675,15 @@ fn t2_6_a_non_utf8_note_is_refused_and_survives_untouched() {
     let raw = b"caf\xE9\r\nna\xEFve\r\n".to_vec();
     fs::write(&abs, &raw).unwrap();
 
-    assert_eq!(fsops::read_note(&abs, "Binary.md").unwrap_err().kind(), "notUtf8");
-    assert_eq!(fs::read(&abs).unwrap(), raw, "a lossy decode rewrote the file");
+    assert_eq!(
+        fsops::read_note(&abs, "Binary.md").unwrap_err().kind(),
+        "notUtf8"
+    );
+    assert_eq!(
+        fs::read(&abs).unwrap(),
+        raw,
+        "a lossy decode rewrote the file"
+    );
     assert!(temp_files(&root).is_empty());
 }
 
@@ -648,7 +745,11 @@ fn fixture() -> PathBuf {
         .args(["--seed", "1"])
         .output()
         .expect("tools/gen-vault.sh must be runnable");
-    assert!(out.status.success(), "gen-vault.sh: {}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "gen-vault.sh: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     dir
 }
 
@@ -657,7 +758,9 @@ fn tmpdir() -> tempfile::TempDir {
 }
 
 fn walk(root: &Path) -> VaultTree {
-    scan::walk_vault(root, SortMode::NameAsc, 1).expect("walk_vault").tree
+    scan::walk_vault(root, SortMode::NameAsc, 1)
+        .expect("walk_vault")
+        .tree
 }
 
 /* ── gate G1 ──────────────────────────────────────────────────────────────── */
@@ -669,7 +772,11 @@ fn walk(root: &Path) -> VaultTree {
 #[test]
 fn g1_node_is_exactly_24_bytes() {
     assert_eq!(std::mem::size_of::<Node>(), 24, "gate G1");
-    assert_eq!(std::mem::align_of::<Node>(), 4, "align 4 => the field order produces NO padding");
+    assert_eq!(
+        std::mem::align_of::<Node>(),
+        4,
+        "align 4 => the field order produces NO padding"
+    );
     // The sum of the fields IS the struct, which is the whole claim `#[repr(C)]`
     // with this field order is making.
     assert_eq!(4 * 5 + 2 + 1 + 1, 24);
@@ -697,7 +804,11 @@ fn g1_node_is_exactly_24_bytes() {
 fn g2_per_node_byte_budget() {
     let tree = walk(&fixture());
     let n = tree.node_count() as u64;
-    assert_eq!(n, (FIXTURE_NOTES + FIXTURE_FOLDERS) as u64, "5,000 notes + 620 folders");
+    assert_eq!(
+        n,
+        (FIXTURE_NOTES + FIXTURE_FOLDERS) as u64,
+        "5,000 notes + 620 folders"
+    );
     assert_eq!(tree.n_notes as usize, FIXTURE_NOTES);
     assert_eq!(tree.n_dirs as usize, FIXTURE_FOLDERS);
 
@@ -722,7 +833,10 @@ fn g2_per_node_byte_budget() {
     // spec-02 §4.3's own claim, which 81.6 "confirmed with room to spare" —
     // asserted against the resident figure so pre-reserve slack cannot grow
     // unnoticed either.
-    assert!(resident_per_node <= 97.0, "spec-02 §4.3 claims 97 B/node including slack");
+    assert!(
+        resident_per_node <= 97.0,
+        "spec-02 §4.3 claims 97 B/node including slack"
+    );
 }
 
 /* ── gate G3 ──────────────────────────────────────────────────────────────── */
@@ -755,8 +869,14 @@ fn g3_cold_walk_of_the_fixture() {
     eprintln!(
         "G3 walk median={:.1} ms  runs={:?}  profile={}",
         runs[2].as_secs_f64() * 1e3,
-        runs.iter().map(|d| format!("{:.1}", d.as_secs_f64() * 1e3)).collect::<Vec<_>>(),
-        if cfg!(debug_assertions) { "debug" } else { "release" }
+        runs.iter()
+            .map(|d| format!("{:.1}", d.as_secs_f64() * 1e3))
+            .collect::<Vec<_>>(),
+        if cfg!(debug_assertions) {
+            "debug"
+        } else {
+            "release"
+        }
     );
     let median = runs[2];
 
@@ -767,14 +887,17 @@ fn g3_cold_walk_of_the_fixture() {
              release, but 500 ms means something algorithmic broke"
         );
     } else {
-        assert!(median <= Duration::from_millis(50), "gate G3: <= 50 ms, got {median:?}");
+        assert!(
+            median <= Duration::from_millis(50),
+            "gate G3: <= 50 ms, got {median:?}"
+        );
     }
 }
 
 /* ── §3.6, what the tree contains ─────────────────────────────────────────── */
 
 #[test]
-fn the_tree_contains_directories_and_md_only() {
+fn the_tree_contains_directories_notes_and_books() {
     let d = tmpdir();
     let root = d.path();
     fs::create_dir_all(root.join("Folder/Nested")).unwrap();
@@ -785,9 +908,15 @@ fn the_tree_contains_directories_and_md_only() {
     fs::write(root.join("note.md"), b"# n").unwrap();
     fs::write(root.join("UPPER.MD"), b"# u").unwrap(); // ASCII case-insensitive
     fs::write(root.join("image.png"), b"x").unwrap();
+    fs::write(root.join("book.epub"), b"PK\x03\x04").unwrap();
+    fs::write(root.join("UPPER.EPUB"), b"PK\x03\x04").unwrap();
     fs::write(root.join("README"), b"x").unwrap();
     fs::write(root.join("Folder/Nested/deep.md"), b"# d").unwrap();
-    fs::write(root.join(format!(".half.md.tmp-{}-0", std::process::id())), b"x").unwrap();
+    fs::write(
+        root.join(format!(".half.md.tmp-{}-0", std::process::id())),
+        b"x",
+    )
+    .unwrap();
     std::os::unix::fs::symlink("..", root.join("loop")).unwrap();
     std::os::unix::fs::symlink(root.join("note.md"), root.join("alias.md")).unwrap();
 
@@ -797,18 +926,87 @@ fn the_tree_contains_directories_and_md_only() {
 
     assert_eq!(
         got,
-        ["Empty", "Folder", "Folder/Nested", "Folder/Nested/deep.md", "UPPER.MD", "note.md"]
-            .iter()
-            .map(|s| (*s).to_string())
-            .collect::<BTreeSet<_>>(),
-        "directories and .md only; dotfiles, non-.md files and symlinks are excluded, and \
-         EMPTY FOLDERS ARE SHOWN (§3.6)"
+        [
+            "Empty",
+            "Folder",
+            "Folder/Nested",
+            "Folder/Nested/deep.md",
+            "UPPER.EPUB",
+            "UPPER.MD",
+            "book.epub",
+            "note.md",
+        ]
+        .iter()
+        .map(|s| (*s).to_string())
+        .collect::<BTreeSet<_>>(),
+        "directories, .md and .epub only; dotfiles, other files and symlinks are excluded, and \
+         EMPTY FOLDERS ARE SHOWN (§3.6, E108)"
     );
     // §7.3 case 12: the symlink loop did not make the walk diverge, and no node
     // in the arena can name anything outside the root.
     for rel in &got {
         assert!(!rel.contains(".."), "no arena path contains `..`");
     }
+}
+
+/// §0.55 E108: an EPUB is a regular tree file with its own count.  Its display
+/// name is the stem, like a note's, and the blob's high nibble rebuilds the
+/// extension's case for the path.
+#[test]
+fn an_epub_is_a_tree_file_with_its_own_kind_and_display_name() {
+    let d = tmpdir();
+    let root = d.path();
+    fs::write(root.join("Book.epub"), b"PK\x03\x04").unwrap();
+    fs::write(root.join("UPPER.EPUB"), b"PK\x03\x04").unwrap();
+    fs::write(root.join("Mixed.EpUb"), b"PK\x03\x04").unwrap();
+    fs::write(root.join("note.md"), b"# n").unwrap();
+    let tree = walk(root);
+    assert_eq!((tree.n_notes, tree.n_books, tree.n_dirs), (1, 3, 0));
+
+    let bytes = tree.encode_blob();
+    let b = Blob::parse(&bytes);
+    let mut seen = Vec::new();
+    for i in 0..b.n {
+        if b.is_book(i) {
+            seen.push((b.name(i).to_string(), b.rel(i)));
+            assert_eq!(b.kind(i) & 0x06, 0, "a book has no note-extension bits");
+            assert_eq!(b.kind(i) & tree::KIND_BOOK, tree::KIND_BOOK);
+        }
+    }
+    seen.sort();
+    assert_eq!(
+        seen,
+        vec![
+            ("Book".to_string(), "Book.epub".to_string()),
+            ("Mixed".to_string(), "Mixed.EpUb".to_string()),
+            ("UPPER".to_string(), "UPPER.EPUB".to_string()),
+        ]
+    );
+}
+
+/// §0.55 E108 and the secret-row timing fix: the verdict cache is keyed on
+/// whole-second mtime, so a write must be able to force a re-read.
+#[test]
+fn a_secret_verdict_can_be_reclassified_after_a_write_in_the_same_second() {
+    let d = tmpdir();
+    let root = d.path();
+    let abs = root.join("Creds.md");
+    fs::write(&abs, b"").unwrap();
+    let old = fs::metadata(&abs).unwrap().modified().unwrap();
+    let vault = cairn_lib::tree::Vault::new(walk(root));
+    assert!(
+        vault.secret_notes().is_empty(),
+        "an empty note is not a secret"
+    );
+
+    fs::write(&abs, b"---\ncairn-type: secrets\n---\n").unwrap();
+    // Force the same whole-second mtime the scan cached; the write path's
+    // invalidation is the only thing that can make the next call see the marker.
+    let f = fs::OpenOptions::new().write(true).open(&abs).unwrap();
+    f.set_times(fs::FileTimes::new().set_modified(old)).unwrap();
+
+    vault.invalidate_secret("Creds.md");
+    assert_eq!(vault.secret_notes(), vec!["Creds.md".to_string()]);
 }
 
 /// §7.3 case 1 / M67, at the SCAN seam rather than at the write seam (Part 1's
@@ -836,14 +1034,29 @@ fn the_walk_collects_sweep_candidates_for_free() {
         .collect();
     assert_eq!(
         candidates,
-        [debris.clone(), live.clone()].into_iter().collect::<BTreeSet<_>>(),
+        [debris.clone(), live.clone()]
+            .into_iter()
+            .collect::<BTreeSet<_>>(),
         "`.not-a-temp` is a dotfile but not OUR temp, so it is never a sweep candidate"
     );
-    assert_eq!(result.tree.n_notes, 1, "and none of them entered the tree (§3.6)");
+    assert_eq!(
+        result.tree.n_notes, 1,
+        "and none of them entered the tree (§3.6)"
+    );
 
-    assert_eq!(scan::sweep_temps(&result.sweep), 1, "the dead PID's file, and only that one");
-    assert!(!root.join(&debris).exists(), "crash debris is unlinked ON SIGHT (M67)");
-    assert!(root.join(&live).exists(), "a LIVE pid's temp may be another instance mid-write");
+    assert_eq!(
+        scan::sweep_temps(&result.sweep),
+        1,
+        "the dead PID's file, and only that one"
+    );
+    assert!(
+        !root.join(&debris).exists(),
+        "crash debris is unlinked ON SIGHT (M67)"
+    );
+    assert!(
+        root.join(&live).exists(),
+        "a LIVE pid's temp may be another instance mid-write"
+    );
     assert!(root.join(".not-a-temp").exists());
 }
 
@@ -857,13 +1070,26 @@ fn open_at_walks_then_sweeps() {
     fs::write(root.join(format!(".Ideas.md.tmp-{dead}-0")), b"half").unwrap();
 
     let (vault, swept) = cairn_lib::vault::open_at(root, SortMode::NameAsc, 1).unwrap();
-    assert_eq!(swept, 1, "§7.3 case 1: the next vault open leaves ZERO .tmp- files");
+    assert_eq!(
+        swept, 1,
+        "§7.3 case 1: the next vault open leaves ZERO .tmp- files"
+    );
     assert!(temp_files(root).is_empty());
     // §7.6.1 (errata 3, Z2): `info()` now takes the persisted view state too.
     // This test has no `PrefsStore`, so it passes the same defaults `app.rs`
     // falls back to when none is initialised.
-    let info = cairn_lib::vault::info(&vault, None, true, Vec::new(), 0.0);
-    assert_eq!((info.n_notes, info.n_dirs, info.sort, info.epoch), (1, 0, 0, 1));
+    let info = cairn_lib::vault::info(
+        &vault,
+        None,
+        true,
+        Vec::new(),
+        0.0,
+        std::collections::BTreeMap::new(),
+    );
+    assert_eq!(
+        (info.n_notes, info.n_dirs, info.sort, info.epoch),
+        (1, 0, 0, 1)
+    );
     assert!(!info.truncated && !info.truncated_depth);
 
     // A root that is not a directory, and one that is not there at all.
@@ -899,8 +1125,14 @@ fn depth_cap_truncates_and_sets_only_its_own_bit() {
 
     let tree = walk(root);
     assert!(tree.truncated_depth, "the depth cap was hit");
-    assert!(!tree.truncated_nodes, "and the NODE cap was not — separate facts, separate bits");
-    assert!(tree.resolve("shallow.md").is_some(), "the rest of the tree still paints");
+    assert!(
+        !tree.truncated_nodes,
+        "and the NODE cap was not — separate facts, separate bits"
+    );
+    assert!(
+        tree.resolve("shallow.md").is_some(),
+        "the rest of the tree still paints"
+    );
     assert_eq!(tree.rel_path(tree.resolve("d").unwrap()), "d");
 
     // The deepest node the arena holds is at exactly MAX_DEPTH, and nothing
@@ -909,7 +1141,10 @@ fn depth_cap_truncates_and_sets_only_its_own_bit() {
     assert_eq!(deepest, MAX_DEPTH);
 
     let blob = tree.encode_blob();
-    assert_eq!(blob_u32(&blob, 20) & FLAG_TRUNCATED_DEPTH, FLAG_TRUNCATED_DEPTH);
+    assert_eq!(
+        blob_u32(&blob, 20) & FLAG_TRUNCATED_DEPTH,
+        FLAG_TRUNCATED_DEPTH
+    );
     assert_eq!(blob_u32(&blob, 20) & FLAG_TRUNCATED_NODES, 0);
 }
 
@@ -927,7 +1162,10 @@ fn an_empty_folder_at_the_depth_cap_raises_no_banner() {
     fs::create_dir_all(&p).unwrap();
 
     let tree = walk(root);
-    assert!(!tree.truncated_depth, "nothing was truncated, so nothing is claimed to be");
+    assert!(
+        !tree.truncated_depth,
+        "nothing was truncated, so nothing is claimed to be"
+    );
     assert_eq!(tree.node_count(), usize::from(MAX_DEPTH));
 }
 
@@ -956,10 +1194,17 @@ fn node_cap_stops_the_walk_descending() {
     let tree = walk(root);
     assert!(tree.truncated_nodes, "the node cap was hit");
     assert!(!tree.truncated_depth, "and the DEPTH cap was not");
-    assert!(tree.node_count() <= MAX_NODES, "never more than the cap, got {}", tree.node_count());
+    assert!(
+        tree.node_count() <= MAX_NODES,
+        "never more than the cap, got {}",
+        tree.node_count()
+    );
 
     let blob = tree.encode_blob();
-    assert_eq!(blob_u32(&blob, 20) & FLAG_TRUNCATED_NODES, FLAG_TRUNCATED_NODES);
+    assert_eq!(
+        blob_u32(&blob, 20) & FLAG_TRUNCATED_NODES,
+        FLAG_TRUNCATED_NODES
+    );
     assert_eq!(blob_u32(&blob, 8) as usize, tree.node_count());
 }
 
@@ -1022,9 +1267,13 @@ impl<'a> Blob<'a> {
         let (s, e) = (self.name_off(i), self.name_off(i + 1));
         std::str::from_utf8(&self.bytes[base + s..base + e]).expect("names are UTF-8")
     }
+    fn is_book(&self, i: usize) -> bool {
+        self.kind(i) & tree::KIND_BOOK != 0
+    }
     /// What the frontend actually does: the vault-relative path of a row, built
-    /// from `parent` and the DISPLAY names plus the `.md` the blob stripped, in
-    /// the case `kind` bits 1..2 record.
+    /// from `parent` and the DISPLAY names plus the extension the blob
+    /// stripped.  Notes carry their case in bits 1..2; books carry the four
+    /// letters' case in bits 4..7.
     fn rel(&self, i: usize) -> String {
         let mut parts = Vec::new();
         let mut cur = i as i32;
@@ -1032,9 +1281,31 @@ impl<'a> Blob<'a> {
             let k = cur as usize;
             parts.push(if self.is_dir(k) {
                 self.name(k).to_string()
+            } else if self.is_book(k) {
+                let mask = (self.kind(k) >> 4) & 0xf;
+                let letter = |bit: u8, lower: char, upper: char| -> char {
+                    if mask & bit != 0 {
+                        upper
+                    } else {
+                        lower
+                    }
+                };
+                let e = letter(1, 'e', 'E');
+                let p = letter(2, 'p', 'P');
+                let u = letter(4, 'u', 'U');
+                let b = letter(8, 'b', 'B');
+                format!("{}.{e}{p}{u}{b}", self.name(k))
             } else {
-                let m = if self.kind(k) & tree::KIND_EXT_UPPER_M != 0 { 'M' } else { 'm' };
-                let d = if self.kind(k) & tree::KIND_EXT_UPPER_D != 0 { 'D' } else { 'd' };
+                let m = if self.kind(k) & tree::KIND_EXT_UPPER_M != 0 {
+                    'M'
+                } else {
+                    'm'
+                };
+                let d = if self.kind(k) & tree::KIND_EXT_UPPER_D != 0 {
+                    'D'
+                } else {
+                    'd'
+                };
                 format!("{}.{m}{d}", self.name(k))
             });
             cur = self.parent(k);
@@ -1050,7 +1321,11 @@ fn treeblob_v1_round_trips_the_fixture() {
     let bytes = tree.encode_blob();
     let b = Blob::parse(&bytes);
 
-    assert_eq!(b.n, FIXTURE_NOTES + FIXTURE_FOLDERS, "the root is EXCLUDED from the blob");
+    assert_eq!(
+        b.n,
+        FIXTURE_NOTES + FIXTURE_FOLDERS,
+        "the root is EXCLUDED from the blob"
+    );
     assert_eq!(b.sort_order(), u32::from(SortMode::NameAsc.as_u8()));
     assert_eq!(b.flags(), 0, "the fixture trips neither cap");
     assert_eq!(b.epoch(), tree.epoch);
@@ -1063,34 +1338,66 @@ fn treeblob_v1_round_trips_the_fixture() {
         // parent always has a LOWER index.
         let sub = b.subtree(i) as usize;
         assert!(i + sub < b.n, "subtree stays inside the array");
-        assert!(b.parent(i) < i as i32, "invariant P: the parent has a lower index");
+        assert!(
+            b.parent(i) < i as i32,
+            "invariant P: the parent has a lower index"
+        );
         for k in (i + 1)..=(i + sub) {
             let mut cur = b.parent(k);
             while cur > i as i32 {
                 cur = b.parent(cur as usize);
             }
-            assert_eq!(cur, i as i32, "index {k} is in i={i}'s claimed range but not below it");
+            assert_eq!(
+                cur, i as i32,
+                "index {k} is in i={i}'s claimed range but not below it"
+            );
         }
         if b.parent(i) >= 0 {
-            assert!(b.is_dir(b.parent(i) as usize), "a folder's parent is always a folder");
+            assert!(
+                b.is_dir(b.parent(i) as usize),
+                "a folder's parent is always a folder"
+            );
             assert_eq!(b.depth(i), b.depth(b.parent(i) as usize) + 1);
         } else {
             assert_eq!(b.depth(i), 0, "0 == top level");
         }
-        assert_eq!(b.kind(i) & !7u8, 0, "bits 3..7 of `kind` are reserved and MUST be 0");
         if b.is_dir(i) {
-            assert_eq!(b.kind(i), tree::KIND_DIR, "a folder has no extension bits");
+            assert_eq!(
+                b.kind(i),
+                tree::KIND_DIR,
+                "a folder has no extension or book bits"
+            );
+        } else if !b.is_book(i) {
+            assert_eq!(
+                b.kind(i) & 0xf0,
+                0,
+                "bits 4..7 are book extension case only"
+            );
         }
         if b.is_dir(i) {
             dirs += 1;
         } else {
             assert_eq!(sub, 0, "a file has no descendants");
-            assert!(!b.name(i).ends_with(".md"), "§3.2: the blob carries DISPLAY names");
+            if b.is_book(i) {
+                assert!(
+                    !b.name(i).ends_with(".epub"),
+                    "the book stem is display (E108)"
+                );
+                assert_eq!(b.kind(i) & 0x06, 0, "a book has no note-extension bits");
+            } else {
+                assert!(
+                    !b.name(i).ends_with(".md"),
+                    "§3.2: the blob carries DISPLAY names"
+                );
+            }
         }
         names_seen += b.name(i).len();
     }
     assert_eq!(dirs, FIXTURE_FOLDERS);
-    assert_eq!(names_seen, b.m, "name_off[N] == M and the sections tile exactly");
+    assert_eq!(
+        names_seen, b.m,
+        "name_off[N] == M and the sections tile exactly"
+    );
 
     // The identity that matters: every row's reconstructed path is the arena's
     // path for the same node, in the same order.
@@ -1101,7 +1408,9 @@ fn treeblob_v1_round_trips_the_fixture() {
 
     // …and every one of them resolves back to the node it came from.
     for rel in &arena {
-        let id = tree.resolve(rel).unwrap_or_else(|| panic!("{rel} must resolve"));
+        let id = tree
+            .resolve(rel)
+            .unwrap_or_else(|| panic!("{rel} must resolve"));
         assert_eq!(&tree.rel_path(id), rel);
     }
 }
@@ -1134,17 +1443,28 @@ fn display_names_strip_md_for_files_and_never_for_folders() {
     fs::create_dir(d.path().join("Archive.md")).unwrap();
     fs::write(d.path().join("Archive.md/inner.MD"), b"# i").unwrap();
     fs::write(d.path().join("plain.md"), b"# p").unwrap();
+    fs::write(d.path().join("book.EPUB"), b"PK").unwrap();
 
     let tree = walk(d.path());
     let bytes = tree.encode_blob();
     let b = Blob::parse(&bytes);
     assert_eq!(b.name(0), "Archive.md", "a FOLDER keeps its name verbatim");
     assert!(b.is_dir(0));
-    assert_eq!(b.name(1), "inner", "and `.MD` is stripped ASCII-case-insensitively");
-    assert_eq!(b.name(2), "plain");
+    let names: Vec<&str> = (1..b.n).map(|i| b.name(i)).collect();
+    assert!(
+        names.contains(&"inner"),
+        "`.MD` is stripped ASCII-case-insensitively: {names:?}"
+    );
+    assert!(names.contains(&"plain"), "{names:?}");
+    assert!(
+        names.contains(&"book"),
+        "a book's `.EPUB` is stripped the same way: {names:?}"
+    );
     // The arena keeps the ON-DISK name; only the blob strips, for display (§5.1).
     assert!(tree.resolve("Archive.md/inner.MD").is_some());
+    assert!(tree.resolve("book.EPUB").is_some());
     assert_eq!(vpath::display_name("inner.MD", false), "inner");
+    assert_eq!(vpath::display_name("book.EPUB", false), "book");
     assert_eq!(vpath::display_name("Archive.md", true), "Archive.md");
 }
 
@@ -1173,19 +1493,30 @@ fn every_blob_row_rebuilds_to_its_own_node_whatever_the_extension_case() {
     let mut arena: Vec<String> = Vec::with_capacity(b.n);
     preorder_rel(&tree, ROOT, &mut arena);
     let rebuilt: Vec<String> = (0..b.n).map(|i| b.rel(i)).collect();
-    assert_eq!(rebuilt, arena, "each row rebuilds to the arena's own on-disk path");
+    assert_eq!(
+        rebuilt, arena,
+        "each row rebuilds to the arena's own on-disk path"
+    );
 
     let mut seen = BTreeSet::new();
     for (i, rel) in rebuilt.iter().enumerate() {
         assert!(seen.insert(rel.clone()), "two rows rebuild to {rel}");
-        let id = tree.resolve(rel).unwrap_or_else(|| panic!("{rel} must resolve"));
+        let id = tree
+            .resolve(rel)
+            .unwrap_or_else(|| panic!("{rel} must resolve"));
         assert_eq!(tree.rel_path(id), *rel);
         if !b.is_dir(i) {
-            assert!(fs::metadata(root.join(rel)).is_ok(), "{rel} is a file on disk");
+            assert!(
+                fs::metadata(root.join(rel)).is_ok(),
+                "{rel} is a file on disk"
+            );
         }
     }
     for want in ["Foo.MD", "x.Md", "Sub/inner.mD", "plain.md"] {
-        assert!(seen.contains(want), "{want} is addressable from its row: {seen:?}");
+        assert!(
+            seen.contains(want),
+            "{want} is addressable from its row: {seen:?}"
+        );
     }
     // Display names are unchanged: the extension is stripped whatever its case.
     let names: BTreeSet<&str> = (0..b.n).map(|i| b.name(i)).collect();
@@ -1196,7 +1527,11 @@ fn every_blob_row_rebuilds_to_its_own_node_whatever_the_extension_case() {
     assert_eq!(vpath::md_ext_case("a.mD"), 2);
     assert_eq!(vpath::md_ext_case("a.MD"), 3);
     assert_eq!(vpath::md_ext_case("a.txt"), 0);
-    assert_eq!(vpath::md_ext_case(".MD"), 0, "not a note: is_md needs a stem");
+    assert_eq!(
+        vpath::md_ext_case(".MD"),
+        0,
+        "not a note: is_md needs a stem"
+    );
 }
 
 /* ── §4.4, paths are reconstructed, never stored ──────────────────────────── */
@@ -1256,9 +1591,17 @@ fn path_reconstruction_is_cheap_enough_for_the_snapshot_build() {
         bytes += buf.len();
     }
     let per = t.elapsed().as_secs_f64() / ids.len() as f64;
-    eprintln!("rel_path_into: {:.0} ns/path over {} nodes ({bytes} B)", per * 1e9, ids.len());
+    eprintln!(
+        "rel_path_into: {:.0} ns/path over {} nodes ({bytes} B)",
+        per * 1e9,
+        ids.len()
+    );
     let ceiling = if cfg!(debug_assertions) { 20e-6 } else { 2e-6 };
-    assert!(per < ceiling, "{:.0} ns/path is not a parent-chain walk any more", per * 1e9);
+    assert!(
+        per < ceiling,
+        "{:.0} ns/path is not a parent-chain walk any more",
+        per * 1e9
+    );
 }
 
 /* ── §4.5, the four sort orders ───────────────────────────────────────────── */
@@ -1266,18 +1609,41 @@ fn path_reconstruction_is_cheap_enough_for_the_snapshot_build() {
 #[test]
 fn nat_cmp_is_natural_case_insensitive_and_total() {
     use std::cmp::Ordering;
-    assert_eq!(tree::nat_cmp("Note 2.md", "Note 10.md"), Ordering::Less, "2 before 10");
+    assert_eq!(
+        tree::nat_cmp("Note 2.md", "Note 10.md"),
+        Ordering::Less,
+        "2 before 10"
+    );
     assert_eq!(tree::nat_cmp("a9", "a10"), Ordering::Less);
-    assert_eq!(tree::nat_cmp("a010", "a9"), Ordering::Greater, "leading zeros are stripped");
-    assert_eq!(tree::nat_cmp("readme", "README"), Ordering::Greater, "folded equal => a.cmp(b)");
-    assert_ne!(tree::nat_cmp("README", "readme"), Ordering::Equal, "the order is TOTAL");
+    assert_eq!(
+        tree::nat_cmp("a010", "a9"),
+        Ordering::Greater,
+        "leading zeros are stripped"
+    );
+    assert_eq!(
+        tree::nat_cmp("readme", "README"),
+        Ordering::Greater,
+        "folded equal => a.cmp(b)"
+    );
+    assert_ne!(
+        tree::nat_cmp("README", "readme"),
+        Ordering::Equal,
+        "the order is TOTAL"
+    );
     assert_eq!(tree::nat_cmp("x", "x"), Ordering::Equal);
     // Unsigned numeric order without parsing, so a 400-digit run cannot overflow.
     let big_a = format!("n{}1", "9".repeat(400));
     let big_b = format!("n{}2", "9".repeat(400));
     assert_eq!(tree::nat_cmp(&big_a, &big_b), Ordering::Less);
-    assert_eq!(tree::nat_cmp("Zebra.md", "apple.md"), Ordering::Greater, "case-insensitive");
-    assert_eq!(tree::nat_cmp("\u{65e5}\u{672c}", "\u{65e5}\u{672c}\u{8a9e}"), Ordering::Less);
+    assert_eq!(
+        tree::nat_cmp("Zebra.md", "apple.md"),
+        Ordering::Greater,
+        "case-insensitive"
+    );
+    assert_eq!(
+        tree::nat_cmp("\u{65e5}\u{672c}", "\u{65e5}\u{672c}\u{8a9e}"),
+        Ordering::Less
+    );
 }
 
 /// Sorting compares DISPLAY names, not on-disk ones — user report, 2026-09-15:
@@ -1290,24 +1656,44 @@ fn nat_cmp_is_natural_case_insensitive_and_total() {
 fn a_longer_name_that_starts_with_a_shorter_ones_stem_sorts_after_it() {
     let d = tmpdir();
     let root = d.path();
-    for name in ["Note 0212.md", "Note 0212 a very long filename.md", "Note 0213.md"] {
+    for name in [
+        "Note 0212.md",
+        "Note 0212 a very long filename.md",
+        "Note 0213.md",
+    ] {
         fs::write(root.join(name), b"# x").unwrap();
     }
     let t = walk(root);
-    let names: Vec<String> = t.children(ROOT).iter().map(|&c| t.name(c).to_string()).collect();
+    let names: Vec<String> = t
+        .children(ROOT)
+        .iter()
+        .map(|&c| t.name(c).to_string())
+        .collect();
     assert_eq!(
         names,
-        ["Note 0212.md", "Note 0212 a very long filename.md", "Note 0213.md"],
+        [
+            "Note 0212.md",
+            "Note 0212 a very long filename.md",
+            "Note 0213.md"
+        ],
         "the on-disk '.md' must not decide an order the basenames already settled"
     );
     // The same folder-vs-file boundary, so a folder's own name (which HAS no
     // extension to strip) is unaffected: `vpath::display_name` is a no-op there.
     let mut t2 = t;
     t2.set_sort(SortMode::NameDesc, 2);
-    let names2: Vec<String> = t2.children(ROOT).iter().map(|&c| t2.name(c).to_string()).collect();
+    let names2: Vec<String> = t2
+        .children(ROOT)
+        .iter()
+        .map(|&c| t2.name(c).to_string())
+        .collect();
     assert_eq!(
         names2,
-        ["Note 0213.md", "Note 0212 a very long filename.md", "Note 0212.md"],
+        [
+            "Note 0213.md",
+            "Note 0212 a very long filename.md",
+            "Note 0212.md"
+        ],
         "NameDesc must reverse the SAME (correct) order, not a differently-broken one"
     );
 }
@@ -1325,14 +1711,21 @@ fn the_four_sort_orders_and_their_stability() {
         fs::create_dir(&p).unwrap();
         set_mtime(&p, secs);
     }
-    for (name, secs) in [("Note 10.md", 3_000), ("Note 2.md", 1_000), ("apple.md", 2_000)] {
+    for (name, secs) in [
+        ("Note 10.md", 3_000),
+        ("Note 2.md", 1_000),
+        ("apple.md", 2_000),
+    ] {
         let p = root.join(name);
         fs::write(&p, b"# x").unwrap();
         set_mtime(&p, secs);
     }
 
     let names = |t: &VaultTree| -> Vec<String> {
-        t.children(ROOT).iter().map(|&c| t.name(c).to_string()).collect()
+        t.children(ROOT)
+            .iter()
+            .map(|&c| t.name(c).to_string())
+            .collect()
     };
 
     let mut t = walk(root);
@@ -1340,19 +1733,31 @@ fn the_four_sort_orders_and_their_stability() {
     // Rule 3: NameAsc/NameDesc use NATURAL, case-insensitive order — so
     // `apple.md` precedes `Note 2.md` (a < n) and `Note 2.md` precedes
     // `Note 10.md` (2 < 10, which a lexicographic sort gets backwards).
-    assert_eq!(names(&t), ["Alpha", "zeta", "apple.md", "Note 2.md", "Note 10.md"]);
+    assert_eq!(
+        names(&t),
+        ["Alpha", "zeta", "apple.md", "Note 2.md", "Note 10.md"]
+    );
 
     t.set_sort(SortMode::NameDesc, 2);
-    assert_eq!(names(&t), ["zeta", "Alpha", "Note 10.md", "Note 2.md", "apple.md"]);
+    assert_eq!(
+        names(&t),
+        ["zeta", "Alpha", "Note 10.md", "Note 2.md", "apple.md"]
+    );
     assert_eq!(t.epoch, 2, "a sort change bumps the epoch");
 
     // Rule 2: within a group, the mode's key — and the folders are ordered by
     // their OWN mtimes, because rule 1 groups them but does not sort them.
     t.set_sort(SortMode::MtimeDesc, 3);
-    assert_eq!(names(&t), ["Alpha", "zeta", "Note 10.md", "apple.md", "Note 2.md"]);
+    assert_eq!(
+        names(&t),
+        ["Alpha", "zeta", "Note 10.md", "apple.md", "Note 2.md"]
+    );
 
     t.set_sort(SortMode::MtimeAsc, 4);
-    assert_eq!(names(&t), ["zeta", "Alpha", "Note 2.md", "apple.md", "Note 10.md"]);
+    assert_eq!(
+        names(&t),
+        ["zeta", "Alpha", "Note 2.md", "apple.md", "Note 10.md"]
+    );
 
     // Round-tripping back to NameAsc reproduces the WALK's own order exactly.
     // The walk sorts as it reads and `set_sort` re-sorts in place, and the two
@@ -1368,13 +1773,20 @@ fn the_four_sort_orders_and_their_stability() {
     assert_eq!(t.epoch, before);
 
     // The blob echoes the active mode, and its preorder follows it.
-    for mode in [SortMode::NameAsc, SortMode::NameDesc, SortMode::MtimeDesc, SortMode::MtimeAsc] {
+    for mode in [
+        SortMode::NameAsc,
+        SortMode::NameDesc,
+        SortMode::MtimeDesc,
+        SortMode::MtimeAsc,
+    ] {
         t.set_sort(mode, t.epoch + 1);
         let bytes = t.encode_blob();
         let b = Blob::parse(&bytes);
         assert_eq!(b.sort_order(), u32::from(mode.as_u8()));
-        let from_blob: Vec<String> =
-            (0..b.n).filter(|&i| b.depth(i) == 0).map(|i| b.rel(i)).collect();
+        let from_blob: Vec<String> = (0..b.n)
+            .filter(|&i| b.depth(i) == 0)
+            .map(|i| b.rel(i))
+            .collect();
         let from_arena: Vec<String> = t.children(ROOT).iter().map(|&c| t.rel_path(c)).collect();
         assert_eq!(from_blob, from_arena, "mode {mode:?}");
     }
@@ -1395,7 +1807,10 @@ fn time_modes_are_stable_across_rescans() {
     let order = |mode: SortMode| -> Vec<String> {
         let mut t = walk(root);
         t.set_sort(mode, 2);
-        t.children(ROOT).iter().map(|&c| t.name(c).to_string()).collect()
+        t.children(ROOT)
+            .iter()
+            .map(|&c| t.name(c).to_string())
+            .collect()
     };
     for mode in [SortMode::MtimeDesc, SortMode::MtimeAsc] {
         let a = order(mode);
@@ -1403,7 +1818,10 @@ fn time_modes_are_stable_across_rescans() {
         assert_eq!(a, b, "{mode:?} must be total, not implementation-defined");
         let mut sorted = a.clone();
         sorted.sort();
-        assert_eq!(a, sorted, "the tie-break is nat_cmp ASCENDING in both time modes");
+        assert_eq!(
+            a, sorted,
+            "the tie-break is nat_cmp ASCENDING in both time modes"
+        );
     }
 }
 
@@ -1454,9 +1872,15 @@ fn apfs_case_collision_produces_one_node_and_a_byte_exact_lookup() {
     );
 
     let tree = walk(root);
-    assert_eq!(tree.n_notes, 1, "ONE directory entry => ONE node, never two");
+    assert_eq!(
+        tree.n_notes, 1,
+        "ONE directory entry => ONE node, never two"
+    );
     assert_eq!(tree.node_count(), 1);
-    assert!(tree.resolve("notes.md").is_some(), "the on-disk spelling resolves");
+    assert!(
+        tree.resolve("notes.md").is_some(),
+        "the on-disk spelling resolves"
+    );
     assert!(
         tree.resolve("NOTES.md").is_none(),
         "and the other spelling does NOT: arena lookup is byte-exact, which is why the rename \
@@ -1469,7 +1893,11 @@ fn apfs_case_collision_produces_one_node_and_a_byte_exact_lookup() {
     fs::write(root.join("NOTES.md"), b"clobbered\n").unwrap();
     let tree = walk(root);
     assert_eq!(tree.node_count(), 1);
-    assert_eq!(tree.name(tree.resolve("notes.md").unwrap()), "notes.md", "the spelling is kept");
+    assert_eq!(
+        tree.name(tree.resolve("notes.md").unwrap()),
+        "notes.md",
+        "the spelling is kept"
+    );
     assert_eq!(fs::read(root.join("notes.md")).unwrap(), b"clobbered\n");
 }
 
@@ -1486,7 +1914,10 @@ fn the_snapshot_is_lazy_cached_and_epoch_invalidated() {
     let vault = Vault::new(walk(root));
     let first = vault.snapshot();
     let again = vault.snapshot();
-    assert!(std::sync::Arc::ptr_eq(&first, &again), "cached: same epoch => the SAME Arc");
+    assert!(
+        std::sync::Arc::ptr_eq(&first, &again),
+        "cached: same epoch => the SAME Arc"
+    );
 
     // FILES ONLY, in the blob's preorder — and the directory `A` is not in it,
     // which is the whole of X14: index i here and node i there are different
@@ -1500,7 +1931,10 @@ fn the_snapshot_is_lazy_cached_and_epoch_invalidated() {
 
     let blob = walk(root).encode_blob();
     let b = Blob::parse(&blob);
-    assert_eq!(b.n, 3, "the blob has three nodes; the snapshot has two files");
+    assert_eq!(
+        b.n, 3,
+        "the blob has three nodes; the snapshot has two files"
+    );
 
     // A mutation only BUMPS the epoch; the next call whose epoch differs
     // replaces the cache entry, and the old Arc stays alive exactly as long as
@@ -1508,9 +1942,15 @@ fn the_snapshot_is_lazy_cached_and_epoch_invalidated() {
     // never be rewritten under it.
     vault.write().epoch = 2;
     let third = vault.snapshot();
-    assert!(!std::sync::Arc::ptr_eq(&first, &third), "a new epoch => a fresh Arc");
+    assert!(
+        !std::sync::Arc::ptr_eq(&first, &third),
+        "a new epoch => a fresh Arc"
+    );
     assert_eq!(third.epoch, 2);
-    assert_eq!(first.files[0].rel, third.files[0].rel, "and the old one is still readable");
+    assert_eq!(
+        first.files[0].rel, third.files[0].rel,
+        "and the old one is still readable"
+    );
 }
 
 /* ── path.rs helpers (the two VALIDATORS live in tests/path_safety.rs) ─────── */
@@ -1519,7 +1959,24 @@ fn the_snapshot_is_lazy_cached_and_epoch_invalidated() {
 fn path_helpers() {
     assert!(vpath::is_md("a.md") && vpath::is_md("A.MD") && vpath::is_md("x.Md"));
     assert!(!vpath::is_md(".md") && !vpath::is_md("md") && !vpath::is_md("a.mdx"));
-    assert!(!vpath::is_md("caf\u{e9}"), "a multi-byte tail is not a `.md` boundary");
+    assert!(
+        !vpath::is_md("caf\u{e9}"),
+        "a multi-byte tail is not a `.md` boundary"
+    );
+
+    assert!(vpath::is_epub("a.epub") && vpath::is_epub("A.EPUB") && vpath::is_epub("x.EpUb"));
+    assert!(!vpath::is_epub(".epub") && !vpath::is_epub("epub") && !vpath::is_epub("a.epubx"));
+    assert_eq!(vpath::display_name("Book.epub", false), "Book");
+    assert_eq!(vpath::display_name("Book.EPUB", false), "Book");
+    assert_eq!(vpath::display_name("Book.EPUB", true), "Book.EPUB");
+    assert_eq!(vpath::epub_ext_case("Book.epub"), 0);
+    assert_eq!(vpath::epub_ext_case("Book.EPUB"), 0b1111);
+    assert_eq!(vpath::epub_ext_case("Book.EpUb"), 0b0101);
+    assert_eq!(
+        vpath::epub_ext_case("Book.md"),
+        0,
+        "a note has no book extension case"
+    );
 
     assert_eq!(vpath::basename_span("a/b/note.md"), (4, 4));
     assert_eq!(vpath::basename_span("note.md"), (0, 4));
@@ -1552,7 +2009,10 @@ fn preorder_ids(t: &VaultTree, id: tree::NodeId, out: &mut Vec<tree::NodeId>) {
 /// `utimes` rather than sleeping: the sort tests need known, distinct mtimes,
 /// and a test that sleeps to get them is both slow and flaky.
 fn set_mtime(path: &Path, secs: i64) {
-    let tv = libc::timeval { tv_sec: secs as libc::time_t, tv_usec: 0 };
+    let tv = libc::timeval {
+        tv_sec: secs as libc::time_t,
+        tv_usec: 0,
+    };
     let times = [tv, tv];
     let c = std::ffi::CString::new(path.as_os_str().as_encoded_bytes()).unwrap();
     // SAFETY: `c` is a valid NUL-terminated path and `times` is the 2-element
@@ -1564,7 +2024,9 @@ fn set_mtime(path: &Path, secs: i64) {
 /// A process that has exited AND been reaped, so its PID is genuinely gone
 /// rather than a zombie (a zombie still answers `kill(pid, 0)` with 0).
 fn reaped_pid() -> u32 {
-    let mut child = Command::new("/usr/bin/true").spawn().expect("spawn /usr/bin/true");
+    let mut child = Command::new("/usr/bin/true")
+        .spawn()
+        .expect("spawn /usr/bin/true");
     let pid = child.id();
     child.wait().expect("wait");
     for _ in 0..50 {

@@ -48,7 +48,8 @@ pub struct ScanResult {
 ///     deeply-nested tree must not blow the stack.
 ///  2. pre-reserve `nodes`/`kids`/`names` (`VaultTree::new`).
 ///  3. skip rules per `DirEntry`, IN THIS ORDER: symlink, non-UTF-8, leading
-///     `.`, and non-`.md` non-directory.  Empty folders ARE kept.
+///     `.`, and a non-directory that is neither a note nor an EPUB.  Empty
+///     folders ARE kept.
 ///  4. the two caps.
 ///  5. `stat` eagerly — `DirEntry::metadata()` costs a measured +6 ms over the
 ///     whole 5,000-note walk, and a lazy-stat state machine to save that is not
@@ -74,7 +75,9 @@ pub fn walk_vault(root: &Path, sort: SortMode, epoch: u64) -> Result<ScanResult,
     let mut entries: Vec<(String, bool, u32)> = Vec::with_capacity(64);
 
     while head < queue.len() {
-        let Some((dir_id, dir_path)) = queue.get(head).map(|(a, b)| (*a, b.clone())) else { break };
+        let Some((dir_id, dir_path)) = queue.get(head).map(|(a, b)| (*a, b.clone())) else {
+            break;
+        };
         head += 1;
 
         // §3.3: the node cap stops the walk DESCENDING; the tree already read is
@@ -121,13 +124,17 @@ pub fn walk_vault(root: &Path, sort: SortMode, epoch: u64) -> Result<ScanResult,
                 continue;
             }
             let is_dir = ft.is_dir();
-            // A note is a REGULAR file.  A FIFO, socket or device named
-            // `*.md` is not one, and opening a FIFO to read it blocks until a
-            // writer appears — a worker parked for good per attempt.
-            if !is_dir && !(ft.is_file() && vpath::is_md(name)) {
+            // A tree file is a REGULAR file.  A FIFO, socket or device named
+            // `*.md`/`*.epub` is not one, and opening a FIFO to read it blocks
+            // until a writer appears — a worker parked for good per attempt.
+            if !is_dir && !(ft.is_file() && vpath::is_tree_file(name)) {
                 continue;
             }
-            let mtime = entry.metadata().ok().and_then(|m| m.modified().ok()).map_or(0, unix_secs);
+            let mtime = entry
+                .metadata()
+                .ok()
+                .and_then(|m| m.modified().ok())
+                .map_or(0, unix_secs);
             entries.push((name.to_string(), is_dir, mtime));
         }
 
@@ -156,7 +163,9 @@ pub fn walk_vault(root: &Path, sort: SortMode, epoch: u64) -> Result<ScanResult,
 
         let (off, len) = tree.add_children(dir_id, &mut entries);
         for k in 0..len as usize {
-            let Some(&child) = tree.kids.get(off as usize + k) else { continue };
+            let Some(&child) = tree.kids.get(off as usize + k) else {
+                continue;
+            };
             if tree.get(child).is_some_and(crate::tree::Node::is_dir) {
                 queue.push((child, dir_path.join(tree.name(child))));
             }
@@ -186,5 +195,6 @@ pub fn sweep_temps(candidates: &[PathBuf]) -> usize {
 /// as u32`, saturating.  Failure stores 0, which sorts last in `MtimeDesc` and
 /// first in `MtimeAsc` — a stat that did not happen is not a timestamp.
 fn unix_secs(t: SystemTime) -> u32 {
-    t.duration_since(UNIX_EPOCH).map_or(0, |d| u32::try_from(d.as_secs()).unwrap_or(u32::MAX))
+    t.duration_since(UNIX_EPOCH)
+        .map_or(0, |d| u32::try_from(d.as_secs()).unwrap_or(u32::MAX))
 }

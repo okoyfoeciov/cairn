@@ -22,6 +22,7 @@ use std::path::Path;
 use serde::Serialize;
 
 use crate::error::VaultError;
+use crate::prefs::Bookmark;
 use crate::scan;
 use crate::tree::{SortMode, Vault};
 
@@ -50,6 +51,9 @@ pub struct VaultInfo {
     /// vault.  Finite and >= 0, clamped by `State::sanitise`; `0.0` when nothing
     /// was persisted.  Serialised as `scrollTop`.
     pub scroll_top: f64,
+    /// §0.55 E108.  Per-book reading positions, keyed by vault-relative EPUB
+    /// path.  **This is the READ PATH for what `UiPatch.bookmarks` writes.**
+    pub bookmarks: std::collections::BTreeMap<String, Bookmark>,
     pub watching: bool,
     pub truncated: bool,
     pub truncated_depth: bool,
@@ -112,13 +116,15 @@ pub fn info(
     watching: bool,
     expanded: Vec<String>,
     scroll_top: f64,
+    bookmarks: std::collections::BTreeMap<String, Bookmark>,
 ) -> VaultInfo {
     let tree = vault.read();
     let root = tree.root_path.clone();
     VaultInfo {
-        name: root
-            .file_name()
-            .map_or_else(|| root.display().to_string(), |n| n.to_string_lossy().into_owned()),
+        name: root.file_name().map_or_else(
+            || root.display().to_string(),
+            |n| n.to_string_lossy().into_owned(),
+        ),
         // ONE SPELLING (§7.6.1).  This string is the `state.json` key: it is
         // what `save_ui_state` writes under and what `PrefsStore::view_state`
         // is looked up by, so it is written here with the SAME call those two
@@ -131,6 +137,7 @@ pub fn info(
         last_note,
         expanded,
         scroll_top,
+        bookmarks,
         watching,
         truncated: tree.truncated_nodes,
         truncated_depth: tree.truncated_depth,
@@ -198,8 +205,19 @@ mod tests {
         });
 
         // The key every frontend consumer has: `VaultInfo.root`.
-        let read_key = info(&vault, None, true, Vec::new(), 0.0).root;
-        assert_eq!(read_key, write_key, "VaultInfo.root is not the state.json key");
+        let read_key = info(
+            &vault,
+            None,
+            true,
+            Vec::new(),
+            0.0,
+            std::collections::BTreeMap::new(),
+        )
+        .root;
+        assert_eq!(
+            read_key, write_key,
+            "VaultInfo.root is not the state.json key"
+        );
 
         let (expanded, scroll_top) = prefs.view_state(&read_key);
         assert_eq!(expanded, vec!["Projects".to_string()]);
@@ -207,7 +225,14 @@ mod tests {
 
         // …and the whole round trip, through the widened builder, which is what
         // the frontend actually receives.
-        let out = info(&vault, None, true, expanded, scroll_top);
+        let out = info(
+            &vault,
+            None,
+            true,
+            expanded,
+            scroll_top,
+            std::collections::BTreeMap::new(),
+        );
         assert_eq!(out.expanded, vec!["Projects".to_string()]);
         assert!((out.scroll_top - 432.0).abs() < f64::EPSILON);
     }
@@ -232,17 +257,36 @@ mod tests {
         prefs.edit(|s| {
             s.apply(
                 Some(&key),
-                &UiPatch { expanded: Some(many), scroll_top: Some(90.0), ..UiPatch::default() },
+                &UiPatch {
+                    expanded: Some(many),
+                    scroll_top: Some(90.0),
+                    ..UiPatch::default()
+                },
             );
             // A NaN and a negative are REFUSED by `apply`, so the last good
             // value stands — never NaN, never < 0, on either path.
-            s.apply(Some(&key), &UiPatch { scroll_top: Some(f64::NAN), ..UiPatch::default() });
-            s.apply(Some(&key), &UiPatch { scroll_top: Some(-5.0), ..UiPatch::default() });
+            s.apply(
+                Some(&key),
+                &UiPatch {
+                    scroll_top: Some(f64::NAN),
+                    ..UiPatch::default()
+                },
+            );
+            s.apply(
+                Some(&key),
+                &UiPatch {
+                    scroll_top: Some(-5.0),
+                    ..UiPatch::default()
+                },
+            );
         });
 
         let (expanded, scroll_top) = prefs.view_state(&key);
         assert_eq!(expanded.len(), MAX_EXPANDED);
-        assert!(scroll_top.is_finite() && scroll_top >= 0.0, "scroll_top = {scroll_top}");
+        assert!(
+            scroll_top.is_finite() && scroll_top >= 0.0,
+            "scroll_top = {scroll_top}"
+        );
         assert!((scroll_top - 90.0).abs() < f64::EPSILON);
     }
 
@@ -262,7 +306,10 @@ mod tests {
         let prefs = PrefsStore::load(path);
         let (expanded, scroll_top) = prefs.view_state("/V");
         assert_eq!(expanded, vec!["A".to_string()]);
-        assert!((scroll_top - 0.0).abs() < f64::EPSILON, "scroll_top = {scroll_top}");
+        assert!(
+            (scroll_top - 0.0).abs() < f64::EPSILON,
+            "scroll_top = {scroll_top}"
+        );
     }
 
     /// The two new fields are camelCase on the wire (§1.1's casing rule, X13),
@@ -278,11 +325,11 @@ mod tests {
             true,
             vec!["Projects".into()],
             432.0,
+            std::collections::BTreeMap::new(),
         ))
         .unwrap();
         assert!(j.contains(r#""expanded":["Projects"]"#), "{j}");
         assert!(j.contains(r#""scrollTop":432.0"#), "{j}");
         assert!(!j.contains("scroll_top"), "{j}");
     }
-
 }

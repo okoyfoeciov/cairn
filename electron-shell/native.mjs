@@ -126,6 +126,8 @@ export function nativeCommands(addon) {
 
     read_note: async ({ path, claim_open }) =>
       asArrayBuffer(await addon.readNote(path, claim_open ?? true), 'read_note'),
+    // Command 28 (§0.55 E108): an EPUB's raw bytes, for the in-app reader.
+    read_epub: async ({ path }) => asArrayBuffer(await addon.readEpub(path), 'read_epub'),
     // `text` arrives as the Uint8Array `ipc-electron.mjs` encoded, not as a
     // string: §2.3's body is BYTES, and re-encoding it here would put a second
     // TextEncoder on the write path.

@@ -1155,7 +1155,8 @@ class MarkdownSource implements ConstructSource {
       if (ch === BANG && i + 1 < n && text.charCodeAt(i + 1) === LBRACKET) {
         // A pasted clipboard image renders through §4's `ImageWidget`.  Every
         // other image keeps the raw-source skip below: there is no file to
-        // resolve (the tree holds `.md` only) and no remote fetch to make.
+        // resolve (the tree holds notes and books, not note attachments) and no
+        // remote fetch to make.
         const dm = IMAGE_DATA_RE.exec(text.slice(i))
         if (dm) {
           const total = (dm[0] as string).length

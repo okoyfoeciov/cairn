@@ -146,11 +146,15 @@ export function parentOf(rel: string): string {
   return i < 0 ? '' : rel.slice(0, i)
 }
 
-/** A note's display name: the basename with a case-insensitive `.md` removed.
- *  §3.6 keeps `.md` on the wire; only the screen drops it. */
+/** A file's display name: the basename with a case-insensitive `.md` or
+ *  `.epub` removed.  §3.6 keeps the extension on the wire; only the screen
+ *  drops it. */
 export function displayName(rel: string): string {
   const b = basename(rel)
-  return b.length > 3 && b.slice(-3).toLowerCase() === '.md' ? b.slice(0, -3) : b
+  const lower = b.toLowerCase()
+  if (b.length > 3 && lower.endsWith('.md')) return b.slice(0, -3)
+  if (b.length > 5 && lower.endsWith('.epub')) return b.slice(0, -5)
+  return b
 }
 
 /**

@@ -62,7 +62,10 @@ fn out_dir() -> PathBuf {
 fn cases() -> Vec<(&'static str, Vec<u8>)> {
     let mut v: Vec<(&'static str, Vec<u8>)> = Vec::new();
 
-    v.push(("01-lf", b"# Meeting notes\n\n- ship it\n- then ship it again\n".to_vec()));
+    v.push((
+        "01-lf",
+        b"# Meeting notes\n\n- ship it\n- then ship it again\n".to_vec(),
+    ));
     v.push((
         "02-crlf",
         b"# Meeting notes\r\n\r\n- ship it\r\n- then ship it again\r\n".to_vec(),
@@ -80,14 +83,20 @@ fn cases() -> Vec<(&'static str, Vec<u8>)> {
     // which is what catches a normaliser that scans bytes without respecting
     // UTF-8 boundaries.
     let mut mixed = BOM.to_vec();
-    mixed.extend_from_slice("# 会議のメモ 🚀\r\n\r\n- 出荷する ✅\r\n- 日本語とemoji😀が混ざる\r\n".as_bytes());
+    mixed.extend_from_slice(
+        "# 会議のメモ 🚀\r\n\r\n- 出荷する ✅\r\n- 日本語とemoji😀が混ざる\r\n".as_bytes(),
+    );
     v.push(("05-bom-crlf-cjk-emoji", mixed));
 
     // 200 KiB of CJK. Built by repetition to an exact byte target, cut on a
     // character boundary (the unit is 3 bytes of UTF-8, so the arithmetic is
     // exact and no partial code point can be produced).
     let unit = "日本語のテキスト"; // 8 chars x 3 bytes = 24 bytes
-    assert_eq!(unit.len(), 24, "the 200 KiB case's size arithmetic assumes 24 bytes");
+    assert_eq!(
+        unit.len(),
+        24,
+        "the 200 KiB case's size arithmetic assumes 24 bytes"
+    );
     let target = 200 * 1024;
     let mut cjk = String::with_capacity(target + unit.len());
     while cjk.len() + unit.len() < target {
@@ -101,7 +110,11 @@ fn cases() -> Vec<(&'static str, Vec<u8>)> {
         cjk.push('.');
     }
     cjk.push('\n');
-    assert_eq!(cjk.len(), target, "the 200 KiB case must be exactly 200 KiB");
+    assert_eq!(
+        cjk.len(),
+        target,
+        "the 200 KiB case must be exactly 200 KiB"
+    );
     v.push(("06-cjk-200kib", cjk.into_bytes()));
 
     // 1 MiB of ASCII, LF-terminated lines.
@@ -143,7 +156,8 @@ fn emit_frame_fixtures() {
         // ---- §2.4, the invariant itself, in Rust, before anything is written.
         let back = note_frame::denormalise(&text, flags);
         assert_eq!(
-            &back, raw,
+            &back,
+            raw,
             "{name}: §2.4 round trip is not byte-identical (len {} -> {})",
             raw.len(),
             back.len(),
@@ -151,8 +165,14 @@ fn emit_frame_fixtures() {
 
         // ---- The two properties the frontend depends on: §2.4's "no BOM and
         // no CR ever leaking into the editor text" (spike B §5d).
-        assert!(!text.starts_with(BOM), "{name}: a BOM survived into the editor text");
-        assert!(!text.contains(&b'\r'), "{name}: a CR survived into the editor text");
+        assert!(
+            !text.starts_with(BOM),
+            "{name}: a BOM survived into the editor text"
+        );
+        assert!(
+            !text.contains(&b'\r'),
+            "{name}: a CR survived into the editor text"
+        );
 
         // ---- Flags must describe the source, not merely round-trip.
         assert_eq!(
@@ -193,7 +213,10 @@ fn emit_frame_fixtures() {
         .filter_map(|e| e.ok())
         .filter(|e| e.path().extension().is_some_and(|x| x == "frame"))
         .count();
-    assert_eq!(written, 7, "gate G-RT needs all seven §2.4 fixtures on disk");
+    assert_eq!(
+        written, 7,
+        "gate G-RT needs all seven §2.4 fixtures on disk"
+    );
 }
 
 /// The four flag combinations must be *distinguishable* in the emitted set,

@@ -20,7 +20,12 @@ use cairn_lib::note_frame::WriteArgs;
 use cairn_lib::watcher::SelfWrites;
 
 fn args(base: i64) -> WriteArgs {
-    WriteArgs { rel: "Note.md".into(), flags: 0, base_mtime_ms: Some(base), create: false }
+    WriteArgs {
+        rel: "Note.md".into(),
+        flags: 0,
+        base_mtime_ms: Some(base),
+        create: false,
+    }
 }
 
 #[test]
@@ -47,7 +52,10 @@ fn two_writes_with_the_same_base_never_both_succeed() {
             let (abs, sw, gate) = (Arc::clone(&abs), Arc::clone(&sw), Arc::clone(&gate));
             std::thread::spawn(move || {
                 gate.wait();
-                (fsops::write_note(&abs, &args(base), body.as_bytes(), &sw), body)
+                (
+                    fsops::write_note(&abs, &args(base), body.as_bytes(), &sw),
+                    body,
+                )
             })
         };
         let a = spawn(format!("older {round}\n"));
@@ -69,10 +77,21 @@ fn two_writes_with_the_same_base_never_both_succeed() {
         };
         let receipt = winner.as_ref().expect("ok");
         let disk = fs::metadata(&*abs).expect("stat");
-        assert_eq!(fs::read(&*abs).expect("read"), body.as_bytes(), "round {round}");
-        assert_eq!(receipt.mtime_ms, fsops::mtime_ms(&disk), "round {round}: receipt is not the disk");
+        assert_eq!(
+            fs::read(&*abs).expect("read"),
+            body.as_bytes(),
+            "round {round}"
+        );
+        assert_eq!(
+            receipt.mtime_ms,
+            fsops::mtime_ms(&disk),
+            "round {round}: receipt is not the disk"
+        );
         assert_eq!(receipt.size, disk.len(), "round {round}");
     }
 
-    assert_eq!(both_ok, 0, "same-base writes were both accepted in {both_ok}/{ROUNDS} rounds");
+    assert_eq!(
+        both_ok, 0,
+        "same-base writes were both accepted in {both_ok}/{ROUNDS} rounds"
+    );
 }

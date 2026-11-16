@@ -153,20 +153,14 @@ Recorded because it **cost a red G9 once** and will cost the next person the sam
 that asserts a revealed marker must take real window focus first, and `show()` alone does not do it —
 `app-main.mjs` needs all three of `show()`, `focus()` and `webContents.focus()`.
 
-### LP-16 · `--hr-color` is Obsidian 1.12.7's `#363636`; 1.13.7's is `#333333` 🟡
+### LP-16 · CLOSED — `--hr-color` is Oceanic `#334052`, not either Obsidian base-30
 
-**Opened 2026-09-13 (candidate 2).** `src/styles/tokens.css:606` reads `--hr-color: #363636`, and its
-comment cites 1.12.7's line numbers. In 1.13.7 the chain is `--hr-color` → `--background-modifier-border`
-(app.css:2873) → `--color-base-30`, which is **`#333333`** (:2976). Measured:
-
-| | rule pixels | computed `border-top-color` |
-|---|---|---|
-| Obsidian | `#333333` | `rgb(51,51,51)` |
-| Cairn | `#363636` | `rgb(54,54,54)` |
-
-No ruling keeps 1.12.7 for this token.
-
-*Closed by:* re-reading the token from 1.13.7.
+**Opened 2026-09-13 (candidate 2), closed 2026-09-30 by the Oceanic ruling.** The entry used to
+report that `tokens.css` carried Obsidian 1.12.7's `#363636` while 1.13.7 resolved
+`--hr-color` → `--background-modifier-border` → `--color-base-30` (`#333333`). Oceanic retuned the
+token to **`#334052`** (`[C]`), the same shared border value as `--bg-modifier-border`; the old
+1.12.7/1.13.7 comparison no longer describes the app. The historical measurement is kept in the
+contract's errata and in `tokens.css`'s provenance comment, not as an open issue.
 
 ### LP-17 · The thematic break sits 1.78px low in its line 🟡
 
@@ -503,9 +497,11 @@ from `--background-secondary-alt` to `--background-secondary` (`app.css:3998-400
 (`:6132-6143`, keyed on `body.is-focused .mod-active`). Cairn always draws the focused values.
 
 Found while diagnosing the user's Cairn-vs-Obsidian tab screenshots on 2026-09-10 (CONTRACT §0.26.3):
-the two crops differed in strip grey (`#333333` vs `#282828`) and label grey (`#dadada` vs `#b3b3b3`),
-and both differences are this — **that Obsidian window was not focused.** They read as palette
-defects, which is why they are written down here rather than left to be re-diagnosed.
+the two crops differed in strip grey and label grey — the pre-Oceanic values were `#333333` vs
+`#282828` and `#dadada` vs `#b3b3b3` — and both differences are this, **that Obsidian window was not
+focused.** They read as palette defects, which is why they are written down here rather than left to
+be re-diagnosed. Oceanic has since retuned Cairn's own values (`--bg-titlebar` `#323e4c`,
+`--text-normal` `#d7dfe9`), so a new capture must compare the ROLES, not those old hexes.
 
 *Closed by:* a focus class on `body` (Electron's `browser-window-focus`/`-blur`, or the page's own
 `window.onfocus`), plus the two token rows. Small, and nobody has ruled on whether an unfocused state
@@ -513,10 +509,11 @@ is wanted — Cairn is single-pane, so `.mod-active` has no analogue and only th
 applies.
 
 **The practical cost was measured 2026-09-13** (CONTRACT §0.53 E101): an unfocused Obsidian looks
-like a palette defect — the strip reads `#282828` against Cairn's `#333333` and the label `#b3b3b3`
-against `#dadada` — so any future capture comparison must record focus first and refuse a shot
-without it. In the 1.13.7 asar the focus rules are at **app.css:~4112-4123**, and 1.13.7's
-`--color-base-30` is `#333333` (:2976), so a focused Obsidian's strip is exactly Cairn's colour.
+like a palette defect — its strip reads `--background-secondary` against Cairn's
+`--bg-titlebar`, and its active label `--text-muted` against Cairn's `--text-normal` — so any
+future capture comparison must record focus first and refuse a shot without it. In the 1.13.7
+asar the focus rules are at **app.css:~4112-4123**; a focused Obsidian's strip is its base-30
+value, which Oceanic has now replaced in Cairn by `--bg-titlebar`.
 
 ### UI-4 · `--shadow-popover` is not Obsidian's modal shadow, and §5.1's "one permitted shadow" is false
 
@@ -637,7 +634,7 @@ inherit it by accident.**
 
 *Closed by:* a user ruling, recorded in CONTRACT §0.20.
 
-### X-13 · In-note find ships; no non-`.md` rows, and search is `.md`-only
+### X-13 · In-note find ships; the tree admits EPUB books, and content search is note-only
 
 **Opened 2026-09-23.** Three absences, one subject — what the app can look at. The first is now
 closed: Mod-F opens an in-note find bar over the NOTE viewer only (`src/find.ts`, `src/styles/find.css`,
@@ -650,10 +647,10 @@ instead of closing it; a pointer press outside the bar dismisses it. The Memoir 
 editor, the toggle refuses while it is visible, and every route to it hides the bar. The field takes
 no focus ring, by user ruling.
 
-Still open: the tree hides every entry that is not a directory or a regular `*.md` (§3.6, `scan.rs`),
-so a `.txt` or `.pdf` beside a note is not listed and cannot be opened from the app. Search greps
-`.md` files only, for the same reason. Each is a decision by construction, and none has a ruling of
-its own.
+Still open: the tree lists notes (`*.md`) and EPUB books (`*.epub`); every other regular file — a
+`.txt` or `.pdf` beside them — is still hidden by §3.6, so it cannot be opened from the app.
+Vault-wide search greps `.md` files only: EPUBs are excluded by design and have their own in-book
+find. Each remaining absence is a decision by construction, not an accidental omission.
 
 *Closed by:* a user ruling on each remaining absence, or the feature.
 
@@ -745,7 +742,59 @@ own rate, so the cap could not show there (inferred).
 *Closed by:* a scroll driver that is not capped at 120 Hz. Until then, quote `fps` and `deficit` only
 from a panel at or below 120 Hz.
 
-## 5. Traps that cost real time here — read before measuring
+## 5. The EPUB reader (v1) — recorded gaps, not defects
+
+**Opened 2026-11-15 with CONTRACT §0.55 E108.** The reader ships the minimal
+surface the ruling names: continuous scroll, Mod-F in-book search and automatic
+resume.  There is no reader header: no title strip, chapter arrows, percentage or
+progress line. These absences are scope, and each has a visible
+consequence worth knowing before filing it:
+
+- **Publisher CSS and fonts are ignored.** A book whose only italics/weight is
+  a stylesheet class loses that emphasis; semantic `<em>`/`<strong>` survive.
+  The reading type, measure and rhythm are Cairn's.
+- **Fixed-layout and comic EPUBs render as ordinary flow.** Their page geometry
+  is not interpreted; they are not refused, they are simply reflowed.
+- **DRM is unsupported.** An encrypted spine gets the reader's error page; there
+  is no DRM library and no network path.
+- **No Contents/TOC view, no Contents strip and no visible Search button.**
+  Continuous scrolling and Mod-F search are the whole navigation.
+- **No cover shelf, font-size/width controls, highlights or annotations.** The
+  ruling left all four out of v1.
+- **Import is a MOVE, by ruling, and has no undo.** A successful import removes
+  the source file; a failed copy or destination write leaves it untouched. A
+  name collision is uniquified, never overwritten.
+- **Progress is per-path.** A rename/move through the app re-keys the bookmark;
+  an external rename does not, and the old key is harmless but unused. A
+  replaced file restores to the nearest chapter by `href`/fraction.
+- **In-book search is literal, case-insensitive substring**, capped at 2,000
+  book-wide matches (`MAX_FIND_MATCHES`), non-overlapping. It does not index
+  publisher CSS or script text.
+- **ZIP64 and CRC verification are not implemented.** A ZIP64 book is refused
+  with a named error; a CRC mismatch in an otherwise-readable entry is not
+  detected. Declared uncompressed sizes are not trusted for the size cap — the
+  inflater counts actual output and aborts past 1 GiB.
+- **XML is decoded as UTF-8.** A UTF-16 `container.xml`/OPF is refused as
+  unreadable rather than transcoded.
+- **EXIF orientation on JPEGs is not interpreted.** A rotated photo can change
+  its rendered aspect ratio after decode; the late-layout re-centering keeps the
+  current find match stable, but a restored reading position may settle one
+  image-height differently.
+- **The 500-bookmark cap is lexicographic, not recency-based.** With more than
+  500 bookmarked books, the alphabetically last key can be dropped; the reader
+  has no way to pin the current book into the retained set.
+- **G9 has no EPUB fixture.** The gate exercises the tree, chrome and note
+  editor, not `.tr.is-book` or the reader surface; those are covered by unit
+  tests and headless probes, so a green G9 is not evidence for E108's pixels.
+- **An EPUB imported from inside the same vault is moved without re-keying its
+  bookmark.** The picker is normally used for an outside file; a source already
+  under the vault root keeps its old bookmark key.
+- **External rename/deletion of a book that is hidden behind the Memoir tab is
+  only noticed when the active row disappears.** The visible-book path detaches
+  (`reader.lost`) and suppresses further saves; a hidden book can keep its
+  in-memory text until the next open.
+
+## 6. Traps that cost real time here — read before measuring
 
 Not defects. Recorded because each one produced a **confident wrong answer** before it was found, and
 each will do it again.
@@ -756,6 +805,7 @@ each will do it again.
 | A backtick in a comment inside `executeJavaScript(\`…\`)` — same symptom, one file out. Now caught in 40 ms by `tests/frontend/shell-syntax.test.mjs` | CONTRACT §0.24.10 |
 | A **skip is a third kind of green**: no summary line separates "16 skipped" from "16 that cannot fail here" | CONTRACT §0.22.2 E40 |
 | **A test that reads the wrong file cannot fail**, and neither can a feature nobody has executed | CONTRACT §0.20.6.1 E36 |
+| **A relaunch while Cairn is open keeps the OLD renderer**: the single-instance lock hands the new process back to the existing window, and a `file://` script can be cached across launches. `npm run electron:app` then builds new files that nobody executes — every screenshot still shows the old bug | Dev shell: `app-main.mjs` reloads when the bundle stamp changes; `build-app.mjs` hashes the `app.js` URL |
 | Screenshot colour is **framebuffer bytes, not colour**, without `--force-color-profile=srgb` | CONTRACT §0.22.5 |
 | A **relative unit declared twice down one chain is applied twice** — `0.875em` on both the cell and its child is 12.25px | CONTRACT §0.24.9 E58 |
 | **A settle scroll is not neutral.** Scrolling the document twice before reading a line height re-creates every line's DOM, and the re-created lines take whatever strikes are cached — which is why four passes of the 0.8px-line investigation read 24.0 in instances that would have read 24.8. Read the first render, then settle | CONTRACT §0.50.5 E98 |
@@ -772,4 +822,4 @@ each will do it again.
 | **CDP emulation is not a rasterisation scale.** On a dpr-1 Mac, `Emulation` alone made `devicePixelRatio` read 1.25, while a 1.2px box still laid out on the host's grid at 1.1875. A `contain: paint` / `none` A/B differed in **0 of 2,892,000 px**. With the real `--force-device-scale-factor`, the box is 1.2000000477 and 8,372 px differ. A test that needs a fractional scale must launch at one, and must assert the raster, not `devicePixelRatio` | CONTRACT §0.53 E104 |
 | **A CSS-px number can move with dpr.** Chromium lays out in 1/64 of a DEVICE pixel and truncates, so `1.2px` of padding is 1.1875 at dpr 1 and 1.2 at 1.25. That is how the "fixed" 26.4 / 25.2 line boxes failed on the Mac. An inline-block's text width snaps UP instead. Derive the expected value from the page and its dpr; never fold one in from one machine | CONTRACT §0.53 E103 |
 | **A rigid pixel diff cannot see a misregistered 1px feature vanish — its count goes DOWN.** One pixel of drift under the Properties block meant that deleting strikethrough *lowered* a region count (29,709 → 29,693), and it passed. **A lower number is not evidence that anything was fixed** | CONTRACT §0.53 E102 |
-| **An unfocused Obsidian looks like a palette defect.** Another app took the front 3 s before a capture: the strip read `#282828` against Cairn's `#333333`, and the tab strip "failed" at 86.9%. Record focus with the capture, and refuse a shot without it | CONTRACT §0.53 E101, UI-1 |
+| **An unfocused Obsidian looks like a palette defect.** Another app took the front 3 s before a capture: its strip read `--background-secondary` against Cairn's `--bg-titlebar`, and the tab strip "failed" at 86.9%. Record focus with the capture, and refuse a shot without it | CONTRACT §0.53 E101, UI-1 |

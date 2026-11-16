@@ -15,7 +15,7 @@
  */
 
 import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, nativeImage, screen, shell } from 'electron'
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -129,9 +129,53 @@ if (!GOT_LOCK) {
   app.exit(0)
 }
 
+/* DEV RELOAD.  `npm run electron:app` rebuilds `app/` and then starts Electron.
+ * If a window is already open, the single-instance lock sends the new process
+ * home -- and the old window keeps running the OLD JavaScript, so every test
+ * after a fix looks exactly like the bug.  Record the bundle's stamp at load;
+ * when a second launch arrives and the files are newer, reload this window.
+ * Packaged builds keep Obsidian's plain "show me the one I have" behaviour. */
+const BUNDLE_FILES = [join(HERE, 'app', 'app.js'), join(HERE, 'app', 'index.html')]
+function bundleStamp() {
+  let stamp = 0
+  for (const file of BUNDLE_FILES) {
+    try { stamp = Math.max(stamp, statSync(file).mtimeMs) } catch {}
+  }
+  return stamp
+}
+let loadedBundleStamp = bundleStamp()
+let reloadTimer = null
+let reloadRequested = false
+
+function clearReloadRequest() {
+  reloadRequested = false
+  if (reloadTimer !== null) {
+    clearTimeout(reloadTimer)
+    reloadTimer = null
+  }
+}
+
 app.on('second-instance', () => {
   // What a person means by launching it twice is "show me the one I have".
   if (!win || win.isDestroyed()) return
+  if (!app.isPackaged) {
+    const next = bundleStamp()
+    if (next !== 0 && next !== loadedBundleStamp && !reloadRequested) {
+      // RELOAD THROUGH THE FLUSH HANDSHAKE.  The old code called
+      // `webContents.reload()` here; that bypasses §1.6 and can drop unsaved
+      // note/journal text.  Ask the page to flush first, and reload only on an
+      // explicit `reload-ready {ok:true}`.
+      clearReloadRequest()
+      reloadRequested = true
+      console.log('cairn: rebuilt frontend detected; asking the window to flush before reload')
+      send('nc://flush-for-reload', {})
+      reloadTimer = setTimeout(() => {
+        if (!reloadRequested || !win || win.isDestroyed()) return
+        console.error('cairn: reload refused or timed out; keeping the old renderer (no data lost)')
+        clearReloadRequest()
+      }, 8_000)
+    }
+  }
   if (win.isMinimized()) win.restore()
   if (!HEADLESS) win.show()
   win.focus()
@@ -189,8 +233,8 @@ function geometry() {
   // 1918x958 UNTIL 2026-09-09. Corrected to the reference PNG's real content
   // box: spike-O §3.5 measured rows 31..994 x columns 0..1919, re-measured
   // independently this session (x=0 reads #4e4e4e = 78, which is 34 + 0.1991
-  // of the way to white over the sidebar's #222222 -- a WASH OVER CONTENT, not
-  // a 1px frame, so those columns are content). The old numbers came from
+  // of the way to white over the reference's pre-Oceanic sidebar ground -- a
+  // WASH OVER CONTENT, not a 1px frame, so those columns are content). The old numbers came from
   // "1920 screenshot - 1px chrome each side", and that chrome does not exist.
   if (PIXELTEST) return { width: 1920, height: 964 }
   return { width: 1000, height: 700 }
@@ -239,6 +283,20 @@ const COMMANDS = {
       properties: ['openDirectory', 'createDirectory'],
     })
     return r.canceled || r.filePaths.length === 0 ? null : r.filePaths[0]
+  },
+
+  /** Command 29 (§0.55 E108). The file picker is the MAIN process's, for
+      command 1's security reason: the renderer never names a filesystem path
+      outside the vault.  The addon then MOVES the chosen EPUB into `parent`,
+      which is the folder row (or vault root) the menu was opened on. */
+  async import_epub({ parent }) {
+    const r = await dialog.showOpenDialog(win, {
+      title: 'Import an EPUB file',
+      properties: ['openFile'],
+      filters: [{ name: 'EPUB books', extensions: ['epub', 'EPUB'] }],
+    })
+    if (r.canceled || r.filePaths.length === 0) return null
+    return addon.importEpub(r.filePaths[0], parent ?? '')
   },
 
   show_main_window: () => {
@@ -471,6 +529,18 @@ ipcMain.on('cairn:emit', (_e, event, payload) => {
   // mapped already maximized therefore draws the restore glyph on frame one.
   if (event === 'frontend-ready') emitWindowState(true)
   if (event === 'window-control') handleWindowControl(payload)
+  if (event === 'reload-ready' && reloadRequested) {
+    clearReloadRequest()
+    if (payload && payload.ok === true && win && !win.isDestroyed()) {
+      loadedBundleStamp = bundleStamp()
+      console.log('cairn: buffers flushed; reloading the existing window')
+      win.webContents.reload()
+    } else {
+      console.error(
+        'cairn: reload refused (' + String((payload && payload.detail) || 'unknown') + '); keeping the old renderer'
+      )
+    }
+  }
   /* CONTRACT §5.11, "consume it" -- the exact contract `lib.rs:508-515` keeps,
      through the exact frontend path: chrome.ts's `runGeometryProbe()` fires on
      the first rAF after `nc://vault-opened` and hands the report to
@@ -501,7 +571,7 @@ ipcMain.on('cairn:emit', (_e, event, payload) => {
  * about the code. `lib.rs` withheld it for exactly this reason and said so.
  *
  * It is read from `state.json` HERE rather than fetched through a command,
- * because the command table is CLOSED AT TWENTY (§1.3) and this is one field of
+ * because the command table is CLOSED AT TWENTY-NINE (§1.3) and this is one field of
  * a file whose path the shell already owns. `lib.rs` did the same thing with
  * `prefs::State::load`.
  */

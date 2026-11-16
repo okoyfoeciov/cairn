@@ -42,7 +42,7 @@ export const enum SortMode { NameAsc = 0, NameDesc = 1, MtimeDesc = 2, MtimeAsc 
 export interface VaultInfo {
   root: string;              // absolute, for the vault-switcher button
   name: string;              // final path component
-  nNotes: number;
+  nNotes: number;            // markdown notes only; EPUBs are tree entries, not search files
   nDirs: number;
   sort: SortMode;            // 0..3
   epoch: number;             // matches the blob header
@@ -54,6 +54,9 @@ export interface VaultInfo {
   /** §7.6, errata 3 Z2. The persisted sidebar scroll offset for THIS vault. Finite and >= 0;
    *  `0` when nothing was persisted. THE READ PATH for what `UiPatch.scrollTop` writes. */
   scrollTop: number;
+  /** §0.55 E108. Per-book reading positions, keyed by vault-relative EPUB path.
+   *  Already sanitised by Rust. THE READ PATH for what `UiPatch.bookmarks` writes. */
+  bookmarks: Record<VaultPath, EpubBookmark>;
   watching: boolean;         // false => the watcher-degraded banner is showing (§0.12 E14)
   truncated: boolean;        // the 50,000-node cap was hit (nodes only; depth is banner-only, §3.3)
   truncatedDepth: boolean;   // the 255-depth cap was hit — drives the second §3.3 banner
@@ -73,6 +76,16 @@ export interface CreateResult { path: VaultPath; epoch: number }
 export interface RenameResult { path: VaultPath; epoch: number }
 export interface DeleteResult { epoch: number }
 
+/** §0.55 E108. One EPUB's last reading position. `chapter` is the 0-based spine
+ *  index, `href` the spine document's href inside the ZIP, `offset` the fraction
+ *  through that chapter, and `progress` the whole book's fraction. */
+export interface EpubBookmark {
+  chapter: number;
+  href: string;
+  offset: number;
+  progress: number;
+}
+
 export interface UiPatch {
   win?: { w: number; h: number; x: number; y: number; max: boolean };
   /** §0.7 E9.  The sidebar width in px, GLOBAL like `win` and not per-vault.
@@ -84,6 +97,8 @@ export interface UiPatch {
   sort?: SortMode;
   expanded?: VaultPath[];    // folders only; capped at 2000, see §7.6
   scrollTop?: number;
+  /** §0.55 E108. The whole bookmark map; last writer wins. `{}` clears it. */
+  bookmarks?: Record<VaultPath, EpubBookmark>;
 }
 
 /* ── search ───────────────────────────────────────────────────────────────── */

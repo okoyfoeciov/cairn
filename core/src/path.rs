@@ -67,7 +67,10 @@ pub fn validate_name(name: &str) -> Result<(), VaultError> {
     }
     for c in name.chars() {
         if RESERVED.contains(&c) {
-            return Err(bad_name(name, "a name cannot contain \\ / : * ? \" < > or |"));
+            return Err(bad_name(
+                name,
+                "a name cannot contain \\ / : * ? \" < > or |",
+            ));
         }
         if (c as u32) < 0x20 {
             return Err(bad_name(name, "a name cannot contain control characters"));
@@ -132,23 +135,50 @@ pub fn validate_rel_for_lookup(rel: &str) -> Result<(), VaultError> {
 
 /* ── small pure helpers on vault-relative paths ───────────────────────────── */
 
-/// CONTRACT §3.6: the tree contains directories and files whose name ends
-/// `.md`, ASCII case-insensitively.
+/// CONTRACT §3.6: a note is a file whose name ends `.md`, ASCII
+/// case-insensitively.
 #[must_use]
 pub fn is_md(name: &str) -> bool {
-    name.len() > 3 && name.get(name.len() - 3..).is_some_and(|e| e.eq_ignore_ascii_case(".md"))
+    name.len() > 3
+        && name
+            .get(name.len() - 3..)
+            .is_some_and(|e| e.eq_ignore_ascii_case(".md"))
 }
 
-/// CONTRACT §3.2: `names` holds **display** names — a file's trailing `.md` is
-/// stripped by Rust, a folder's name is untouched.  The real filename is
-/// `display` plus the extension in its on-disk case for files (`md_ext_case`
-/// carries that case in the blob's `kind`), and `display` for folders.
+/// CONTRACT §3.6, amended by §0.55 E108: the tree also contains EPUB books, a
+/// regular file whose name ends `.epub` (ASCII case-insensitive).  The stem is
+/// required, so a file literally named `.epub` is not a book.
+#[must_use]
+pub fn is_epub(name: &str) -> bool {
+    name.len() > 5
+        && name
+            .get(name.len() - 5..)
+            .is_some_and(|e| e.eq_ignore_ascii_case(".epub"))
+}
+
+/// The one predicate for "a regular file belongs in the tree": notes and books.
+#[must_use]
+pub fn is_tree_file(name: &str) -> bool {
+    is_md(name) || is_epub(name)
+}
+
+/// CONTRACT §3.2: `names` holds **display** names — a file's trailing `.md` or
+/// `.epub` is stripped by Rust, a folder's name is untouched.  The real
+/// filename is `display` plus the extension in its on-disk case for files
+/// (`md_ext_case` / `epub_ext_case` carry that case in the blob's `kind`), and
+/// `display` for folders.
 #[must_use]
 pub fn display_name(name: &str, is_dir: bool) -> &str {
-    if is_dir || !is_md(name) {
+    if is_dir {
         return name;
     }
-    name.get(..name.len() - 3).unwrap_or(name)
+    if is_md(name) {
+        return name.get(..name.len() - 3).unwrap_or(name);
+    }
+    if is_epub(name) {
+        return name.get(..name.len() - 5).unwrap_or(name);
+    }
+    name
 }
 
 /// The case of a note's `.md` as two bits: bit 0 when the `m` is `M`, bit 1
@@ -163,6 +193,24 @@ pub fn md_ext_case(name: &str) -> u8 {
     let b = name.as_bytes();
     let n = b.len();
     u8::from(b.get(n - 2) == Some(&b'M')) | (u8::from(b.get(n - 1) == Some(&b'D')) << 1)
+}
+
+/// The case of a book's `.epub` as a four-bit mask: bit 0 = `E`, bit 1 = `P`,
+/// bit 2 = `U`, bit 3 = `B`; 0 for lowercase `.epub` and for a non-book.
+/// `display_name` strips all five characters, so this is what reconstructs
+/// `Book.EPUB` or `Book.ePub` exactly; the four bits are the blob `kind`'s high
+/// nibble, and are zero for every note and folder.
+#[must_use]
+pub fn epub_ext_case(name: &str) -> u8 {
+    if !is_epub(name) {
+        return 0;
+    }
+    let b = name.as_bytes();
+    let n = b.len();
+    u8::from(b.get(n - 4) == Some(&b'E'))
+        | (u8::from(b.get(n - 3) == Some(&b'P')) << 1)
+        | (u8::from(b.get(n - 2) == Some(&b'U')) << 2)
+        | (u8::from(b.get(n - 1) == Some(&b'B')) << 3)
 }
 
 /// Byte offset of the basename inside a vault-relative path, and its length

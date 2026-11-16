@@ -54,6 +54,12 @@ node electron-shell/build-app.mjs
 
 WORK=$(mktemp -d "${TMPDIR:-/tmp}/cairn-g9e-XXXXXX")
 trap 'rm -rf "$WORK"' EXIT
+# Electron writes NSS/profile noise to stderr.  `2>&1` used to interleave it
+# into the 45 KB report line, truncating the JSON at an arbitrary byte and
+# failing the parser while the gate itself had run.  Keep the streams apart;
+# stderr is still shown after the verdict.
+OUTLOG="$WORK/electron-stdout.log"
+ERRLOG="$WORK/electron-stderr.log"
 V="$WORK/vault"; mkdir -p "$V"
 V=$(cd "$V" && pwd -P)
 
@@ -83,9 +89,14 @@ else
   echo "   1920x964 centred for ~20s, gate=TRUE"
 fi
 
-set +e; OUT=$(node_modules/.bin/electron electron-shell/app-main.mjs 2>&1); RC=$?; set -e
+set +e; node_modules/.bin/electron electron-shell/app-main.mjs >"$OUTLOG" 2>"$ERRLOG"; RC=$?; set -e
+# A FILE, not `$(...)`: the report is a single ~45 KB line, and Electron's
+# `app.exit()` can cut a PIPE write short (measured: 40,642 of 45,082 bytes,
+# which surfaced as a JSON parse error while the probe had run correctly).
+# A regular-file redirect is synchronous and the full line survives.
+OUT=$(cat "$OUTLOG")
 echo "$OUT" | grep -v '^{' || true
-JSON=$(echo "$OUT" | grep '^{' | tail -1)
+JSON=$(printf '%s\n' "$OUT" | grep '^{' | tail -1)
 if [ -n "$JSON" ]; then
   printf '%s' "$JSON" > "$WORK/report.json"
   python3 - "$WORK/report.json" <<'PY'
@@ -136,6 +147,11 @@ for x in r.get("results", []):
 PY
 else
   echo "  no JSON report was printed - the probe never ran (see output above)"
+fi
+if [ -s "$ERRLOG" ]; then
+  echo
+  echo "--- electron stderr (kept out of the report stream) ---"
+  cat "$ERRLOG"
 fi
 echo
 echo "exit=$RC   (0 = G9 PASS; anything else = not green)"

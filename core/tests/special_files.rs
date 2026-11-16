@@ -26,14 +26,23 @@ fn mkfifo(p: &Path) {
     let c = CString::new(p.as_os_str().as_bytes()).unwrap();
     // SAFETY: a valid NUL-terminated path; mkfifo does not retain it.
     let rc = unsafe { libc::mkfifo(c.as_ptr(), 0o644) };
-    assert_eq!(rc, 0, "mkfifo {}: {}", p.display(), std::io::Error::last_os_error());
+    assert_eq!(
+        rc,
+        0,
+        "mkfifo {}: {}",
+        p.display(),
+        std::io::Error::last_os_error()
+    );
 }
 
 /// Releases a reader parked in `open()` on `fifo`, so a failing run does not
 /// leave a thread blocked for the rest of the test binary.
 fn unblock(fifo: &Path) {
     use std::os::unix::fs::OpenOptionsExt;
-    let _ = std::fs::OpenOptions::new().write(true).custom_flags(libc::O_NONBLOCK).open(fifo);
+    let _ = std::fs::OpenOptions::new()
+        .write(true)
+        .custom_flags(libc::O_NONBLOCK)
+        .open(fifo);
 }
 
 /// Runs `f` on its own thread and gives it `secs` to answer.
@@ -52,7 +61,12 @@ fn vault_dir() -> (tempfile::TempDir, PathBuf) {
 }
 
 fn rels(v: &cairn_lib::tree::Vault) -> Vec<String> {
-    let mut r: Vec<String> = v.snapshot().files.iter().map(|f| f.rel.to_string()).collect();
+    let mut r: Vec<String> = v
+        .snapshot()
+        .files
+        .iter()
+        .map(|f| f.rel.to_string())
+        .collect();
     r.sort();
     r
 }
@@ -65,19 +79,28 @@ fn a_fifo_or_socket_named_md_is_not_a_note() {
     let _sock = std::os::unix::net::UnixListener::bind(root.join("sock.md")).unwrap();
 
     let (v, _) = vault::open_at(&root, SortMode::default(), 1).unwrap();
-    assert_eq!(rels(&v), vec!["a.md".to_string()], "a special file was admitted as a note");
+    assert_eq!(
+        rels(&v),
+        vec!["a.md".to_string()],
+        "a special file was admitted as a note"
+    );
 
     let secrets = within(3, move || v.secret_notes());
     if secrets.is_none() {
         unblock(&root.join("pipe.md"));
     }
-    assert_eq!(secrets, Some(vec!["a.md".to_string()]), "secret_notes blocked on a FIFO");
+    assert_eq!(
+        secrets,
+        Some(vec!["a.md".to_string()]),
+        "secret_notes blocked on a FIFO"
+    );
 }
 
 /// The tree can be one refresh behind the disk: a note replaced by a FIFO
 /// after the walk is still in the snapshot.  Classifying it must not block.
 #[test]
-fn secret_notes_does_not_block_on_a_note_replaced_by_a_fifo() {    let (_d, root) = vault_dir();
+fn secret_notes_does_not_block_on_a_note_replaced_by_a_fifo() {
+    let (_d, root) = vault_dir();
     std::fs::write(root.join("a.md"), SECRET).unwrap();
     std::fs::write(root.join("pipe.md"), b"plain\n").unwrap();
     let (v, _) = vault::open_at(&root, SortMode::default(), 1).unwrap();
@@ -90,7 +113,11 @@ fn secret_notes_does_not_block_on_a_note_replaced_by_a_fifo() {    let (_d, root
     if secrets.is_none() {
         unblock(&root.join("pipe.md"));
     }
-    assert_eq!(secrets, Some(vec!["a.md".to_string()]), "secret_notes blocked on a FIFO");
+    assert_eq!(
+        secrets,
+        Some(vec!["a.md".to_string()]),
+        "secret_notes blocked on a FIFO"
+    );
 }
 
 /// F15, the read half: the open note replaced by a FIFO (synced in from

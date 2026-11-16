@@ -2,7 +2,7 @@
  * src/ipc.ts
  * Owner: 02 (MOVED from 06 — CONTRACT.md §6.4, M41).
  * Spec: CONTRACT.md §1.1 (conventions), §1.2 (transport), §1.3 (the twenty-
- * seven commands), §1.4 (the event table), §1.5 (the wire types), §2.3 (the exact
+ * nine commands), §1.4 (the event table), §1.5 (the wire types), §2.3 (the exact
  * `write_note` call), §5.11 (emitGeometryReport).
  *
  * THE ONLY MODULE IN THE APP THAT TALKS TO THE SHELL.  Every other frontend
@@ -18,7 +18,7 @@
  * it and the redirect plugin is gone with it.
  * ============================================================================
  *
- * The command table is CLOSED AT TWENTY-SEVEN.  `list_tree`, `set_expanded`,
+ * The command table is CLOSED AT TWENTY-NINE.  `list_tree`, `set_expanded`,
  * `reveal`, `tree_load`, `fs_*`, `vault_*`, `tree_set_sort` and `scan_vault`
  * DO NOT EXIST.  Adding a command touches `core/napi/src/lib.rs`
  * and `electron-shell/native.mjs` — both owner 07's — and one logic module,
@@ -77,6 +77,7 @@ import type {
 export type {
   CreateResult,
   DeleteResult,
+  EpubBookmark,
   FileGroup,
   NoteRead,
   RecentVault,
@@ -111,12 +112,12 @@ const bridge = (): CairnBridge => {
  * §1.5, UNWRAPPED IN THE PAGE'S OWN WORLD — see this file's header, point 1.
  *
  * The envelope is checked positively (`ok === false`), never by looking for a
- * missing field: eight of the twenty commands legitimately resolve to
+ * missing field: several commands legitimately resolve to
  * `undefined`, and none of them is a failure.
  *
  * Every invoke races a 30 s timeout so one hung main-process command (hung
  * disk, exhausted blocking pool) rejects instead of stalling its caller
- * forever — except the two in `NO_TIMEOUT`.
+ * forever — except the commands in `NO_TIMEOUT`/`LONG_TIMEOUT`.
  *
  * `write_note` IS NOT RACED.  The timeout cannot cancel the write, which keeps
  * running in Rust; rejecting early would only release the editor's and the
@@ -127,15 +128,18 @@ const bridge = (): CairnBridge => {
  */
 const IPC_TIMEOUT_MS = 30_000
 
-/** `pick_vault` is user-paced (the native folder dialog can stay open for
- *  minutes); `write_note` must settle only when the write has. */
-const NO_TIMEOUT: ReadonlySet<string> = new Set(['pick_vault', 'write_note'])
+/** `pick_vault` and `import_epub` are user-paced (a native dialog can stay
+ *  open for minutes); `write_note` must settle only when the write has. */
+const NO_TIMEOUT: ReadonlySet<string> = new Set(['pick_vault', 'import_epub', 'write_note'])
 
-function ipcTimeout(command: string): Promise<never> {
+/** A 256 MiB book on a slow external disk is a read, not a hang. */
+const LONG_TIMEOUT: ReadonlyMap<string, number> = new Map([['read_epub', 120_000]])
+
+function ipcTimeout(command: string, ms = IPC_TIMEOUT_MS): Promise<never> {
   return new Promise<never>((_, reject) => {
     const id = setTimeout(() => {
-      reject({ kind: 'io', message: `ipc timeout: ${command} did not answer within ${IPC_TIMEOUT_MS} ms` })
-    }, IPC_TIMEOUT_MS)
+      reject({ kind: 'io', message: `ipc timeout: ${command} did not answer within ${ms} ms` })
+    }, ms)
     // Do not hold a test runner open for the full window once settled.
     if (typeof (id as unknown as { unref?: () => void }).unref === 'function') {
       ;(id as unknown as { unref: () => void }).unref()
@@ -145,7 +149,12 @@ function ipcTimeout(command: string): Promise<never> {
 
 async function call<T>(command: string, args?: unknown): Promise<T> {
   const pending = bridge().invoke(command, args)
-  const r = NO_TIMEOUT.has(command) ? await pending : await Promise.race([pending, ipcTimeout(command)])
+  const r = NO_TIMEOUT.has(command)
+    ? await pending
+    : await Promise.race([
+        pending,
+        ipcTimeout(command, LONG_TIMEOUT.get(command) ?? IPC_TIMEOUT_MS),
+      ])
   if (r && r.ok === false) throw r.error
   return (r ? r.value : undefined) as T
 }
@@ -159,6 +168,13 @@ async function call<T>(command: string, args?: unknown): Promise<T> {
  *  only asks.  `null` means the user cancelled, not an error. */
 export function pickVault(): Promise<string | null> {
   return call<string | null>('pick_vault')
+}
+
+/** §1.3 command 29 (§0.55 E108).  Open the system file picker and MOVE the
+ *  chosen EPUB into `parent` (`''` = vault root).  `null` means the user
+ *  cancelled; a returned path is the destination after uniquification. */
+export function importEpub(parent: VaultPath): Promise<CreateResult | null> {
+  return call<CreateResult | null>('import_epub', { parent })
 }
 
 /** §1.3 command 2.  Emits `nc://vault-opened` on success, including at startup. */
@@ -230,6 +246,22 @@ export async function readNote(path: VaultPath, claimOpen = true): Promise<NoteR
   return decodeNote(
     await call<ArrayBuffer>('read_note', { path, claim_open: claimOpen })
   ) as NoteRead
+}
+
+/** §1.3 command 28, §0.55 E108.  An EPUB's raw bytes, with no frame: the ZIP
+ *  container is the reader's to interpret.  Opening a book claims the open-note
+ *  slot exactly as `readNote` does, so `lastNote` and the tree's active row
+ *  survive a restart. */
+export async function readEpub(path: VaultPath): Promise<ArrayBuffer> {
+  const buf = await call<ArrayBuffer>('read_epub', { path })
+  if (!(buf instanceof ArrayBuffer)) {
+    throw new Error(
+      'read_epub did not return an ArrayBuffer (got ' +
+        Object.prototype.toString.call(buf) +
+        ') - the IPC transport has degraded'
+    )
+  }
+  return buf
 }
 
 /**
@@ -466,13 +498,18 @@ export function onNoteExternalChange(
 export function onFlushAndClose(h: (p: { deadlineMs: number }) => void): Promise<Unlisten> {
   return on('nc://flush-and-close', h)
 }
+
+/** Dev reload: the shell asks the page to flush before replacing the bundle. */
+export function onFlushForReload(h: () => void): Promise<Unlisten> {
+  return on('nc://flush-for-reload', h)
+}
 export function onWindowState(h: (p: { maximized: boolean }) => void): Promise<Unlisten> {
   return on('nc://window-state', h)
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
- * Harness and window plumbing.  Plain events, never a 21st command — the table
- * is CLOSED AT TWENTY (§1.3).
+ * Harness and window plumbing.  Plain events, never a numbered command — the
+ * table is CLOSED AT TWENTY-NINE (§1.3).
  * ═══════════════════════════════════════════════════════════════════════════ */
 
 /** §5.11.  The shell prints the report as one JSON line and makes `ok` the exit
@@ -485,6 +522,11 @@ export function emitGeometryReport(report: unknown): void {
  *  window, so the renderer never needs a window API of its own (`dl_28`). */
 export function emitFrontendReady(): void {
   bridge().emit('frontend-ready')
+}
+
+/** The answer to `nc://flush-for-reload`; false means the shell must not reload. */
+export function emitReloadReady(ok: boolean, detail = ''): void {
+  bridge().emit('reload-ready', { ok, detail })
 }
 
 /** §0.5 E7.  A three-string union, and the shell IGNORES anything else rather

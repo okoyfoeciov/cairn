@@ -66,10 +66,11 @@
   --bg-secondary:       #252f3a;  /* [C] Oceanic. Was [S] --color-base-20 #282828 */
   --bg-titlebar:        #323e4c;  /* [C] Oceanic. Was [S] --color-base-30 #333333 */
   --bg-modifier-border: #334052;  /* [C] Oceanic. Was [S] --color-base-30 #333333 */
-  /* [S] §0.27 E67 — --background-modifier-border-hover -> --color-base-35, which
-     is #3f3f3f in the dark theme (app.css:2874 + :2977).  It is the MENU's
-     border, and --bg-modifier-border above is the menu's SEPARATOR; Cairn was
-     drawing both with the separator's #333333.  Note this is the same value as
+  /* [S] §0.27 E67 — Obsidian's --background-modifier-border-hover is
+     --color-base-35 #3f3f3f (app.css:2874 + :2977); Oceanic retints it to
+     #43536a.  It is the MENU's border, and --bg-modifier-border above is the
+     menu's SEPARATOR (Obsidian #333333, Oceanic #334052); pre-Oceanic Cairn was
+     drawing both with the separator's value.  Note this is the same value as
      --border-focus below and NOT the same token: that one is
      --background-modifier-border-FOCUS, which is --color-base-40. */
   --bg-modifier-border-hover: #43536a;  /* [C] Oceanic. Was [S] --color-base-35 #3f3f3f */
@@ -145,8 +146,8 @@
      over #222`, i.e. a derived value frozen as a literal against a ground that has
      now moved — the same shape of mistake as the 37px vault bar.  Left as a hex it
      would have to be re-derived by hand every time a ground changes; as the blend
-     it simply follows.  Over the new #282828 this paints #424242; the old #383838
-     over the old #222222 was 12% white read as 10%. */
+     it simply follows.  At the pre-Oceanic #282828 ground this painted #424242;
+     the old #383838 over the old #222222 was 12% white read as 10%. */
   --indent-guide:   rgba(170,205,240,.14);  /* [C] Oceanic. Was [S] 12% white */
   --border-focus:   #43536a;      /* [C] Oceanic. Was [O] #3f3f3f */
   /* [S] 2026-09-15 — Obsidian 1.13.7's REAL --background-modifier-border-focus:
@@ -227,9 +228,10 @@
      styled scrollbar on Linux, which is neither app's rendering of anything.
 
      TRANSLUCENT ON PURPOSE ON LINUX, not a tidied-up literal: one token then
-     reads #383838 over the sidebar's #222222 and #333333 over the editor's
-     #1c1c1c, which is the per-pane difference Obsidian has and an opaque
-     #606060 cannot express.  See `:root[data-os="linux"]` below, which is
+     reads a different shade over the sidebar's ground than over the editor's
+     (the pre-Oceanic pair was #383838 over #222222 and #333333 over #1c1c1c),
+     which is the per-pane difference Obsidian has and an opaque #606060 cannot
+     express.  See `:root[data-os="linux"]` below, which is
      where this value now lives — user ruling, 2026-09-15, OVERTURNING the
      paragraph above FOR macOS ONLY: match what Obsidian's macOS window
      actually shows, an opaque native-style thumb, rather than the styled
@@ -607,9 +609,11 @@
      glyph is `--icon-m` 18px at `--icon-m-stroke-width` 1.75).
      IT WAS `--text-faint`, AND THE USER MEASURED THE DIFFERENCE BEFORE I DID:
      a brightness profile down one column of the `name` row's glyph peaks at
-     151 in Obsidian against 74 in Cairn, over the same ground. #b3b3b3 and
-     #666666 predict exactly 149 and 72.  It read as "Obsidian's icons are
-     bigger"; half of it was that they are twice as bright. */
+     151 in Obsidian against 74 in pre-Oceanic Cairn, over the same ground.
+     Obsidian's #b3b3b3 and #666666 predict exactly 149 and 72; Oceanic's
+     `--text-muted` #a5b1c2 and `--text-faint` #626d7e are now the shipped
+     values.  It read as "Obsidian's icons are bigger"; half of it was that
+     they were twice as bright. */
   --icon-color: var(--text-muted);
 
   --checkbox-size:   var(--fs-text);       /* app.css:2156 -> --font-text-size    */
@@ -656,6 +660,11 @@
      cannot name — `.mod-unknown`, app.css:11479 — which is the row the
      reference screenshot shows for a nested map. */
   --text-warning: #e8a33d;  /* [C] Oceanic amber. Was [S] --color-orange #e9973f */
+
+  /* §0.55 E108 — the EPUB row's ink, deliberately distinct from a secret
+     note's ice-blue (`--text-accent` #8cbfe6) and from warning amber.  Sage
+     green, chosen against the #252f3a sidebar ground. */
+  --text-book: #8fcf9a;     /* [C] Cairn: the book row's sage green          */
 
   /* [S] app.css:2539-2553's `--pill-*`, but ONLY the two that survive
      app.css:11457's override: inside a property value the border width and both
@@ -770,7 +779,8 @@
      it.  Obsidian's own app.css:6642-6651 —
         .workspace-tab-header-container { height: var(--header-height) [40px];
           border-bottom: var(--tab-outline-width) solid var(--tab-outline-color) }
-     — is 40px border-box = 39px of #2f2f2f fill + a 1px rule.  Measured back at
+     — is 40px border-box = 39px of `--bg-titlebar` fill + a 1px
+     `--tab-outline` rule.  Measured back at
      two independent scales off the reference: 39.0 of fill, 40.1 total.
      `.titlebar` therefore carries `border-bottom: 1px` and the fill is STILL 39,
      so nothing inside the strip moves; everything BELOW it moves down 1px,
@@ -860,14 +870,14 @@
   --tab-outline: #334052;  /* [C] Oceanic. Was [S] --color-base-30 #333333 */
   /* [S] 2026-09-15 — Obsidian's `--divider-color` itself: `var(--background-
      modifier-border)` -> `var(--color-base-30)` = #333333 in the dark theme
-     (app.css:2196, 2873, 2976), read from the currently-pinned 1.13.7 asar —
-     the SAME chain `--tab-outline` above resolves through, kept as its own
-     token because Obsidian keeps `--tab-outline-color` and `--divider-color`
-     named separately too, one call site each.  `docs/KNOWN-ISSUES.md` UI-3
-     recorded an EARLIER live sample of this exact border as `#363636`; that
-     reading is superseded by this one, taken directly from the pinned
-     stylesheet's own cascade rather than off a screenshot the border's
-     dpr-1.25 snapping could blend at its edge. */
+     (app.css:2196, 2873, 2976), read from the currently-pinned 1.13.7 asar.
+     Obsidian keeps `--tab-outline-color` and `--divider-color` named separately,
+     one call site each; Oceanic keeps both names at the same shared #334052
+     value, but the names stay because the call sites and roles differ.
+     `docs/KNOWN-ISSUES.md` UI-3 recorded an EARLIER live sample of this exact
+     border as `#363636`; that reading is superseded by this one, taken directly
+     from the pinned stylesheet's own cascade rather than off a screenshot the
+     border's dpr-1.25 snapping could blend at its edge. */
   --divider-color: #334052;  /* [C] Oceanic. Was [S] --color-base-30 #333333 */
   --macos-tl-inset: 88px;         /* [D] §5.6 — traffic-light reserve.  NOT 89: the
                                      discs span content x 21..73, so 89 leaves 16px

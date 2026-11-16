@@ -2,7 +2,7 @@
   "name": "cairn",
   "private": true,
   "version": "1.0.0",
-  "description": "Cairn — a memory-lean markdown vault viewer",
+  "description": "Cairn — a memory-lean markdown and EPUB vault viewer",
   "productName": "Cairn",
   "identifier": "com.cairn.app",
   "category": "Office",

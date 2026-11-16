@@ -44,7 +44,9 @@ pub const ROOT: NodeId = 0;
 pub mod flag {
     /// directory
     pub const DIR: u8 = 1 << 0;
-    // bits 1..7 reserved; keep the field a u8.
+    /// EPUB book (§0.55 E108).  Regular files only; mutually exclusive with DIR.
+    pub const BOOK: u8 = 1 << 1;
+    // bits 2..7 reserved; keep the field a u8.
     // There is deliberately no EXPANDED bit — expansion is frontend-owned
     // (CONTRACT §3.4).
 }
@@ -80,6 +82,13 @@ impl Node {
     #[must_use]
     pub fn is_dir(&self) -> bool {
         self.flags & flag::DIR != 0
+    }
+
+    /// An EPUB book (CONTRACT §0.55 E108): a regular tree file that is not a
+    /// note and not a directory.
+    #[must_use]
+    pub fn is_book(&self) -> bool {
+        self.flags & flag::BOOK != 0
     }
 }
 
@@ -264,7 +273,11 @@ pub struct VaultTree {
     /// mutation.  Emitted in the blob header at offset 24 and used to
     /// invalidate the snapshot cache (§4.2).
     pub epoch: u64,
+    /// Markdown notes only.  Books have their own count so `nNotes` keeps its
+    /// meaning for search's empty state (§0.55 E108).
     pub n_notes: u32,
+    /// EPUB books (§0.55 E108).  Regular files; never directories.
+    pub n_books: u32,
     pub n_dirs: u32,
     /// The 50,000-node cap was hit — header `flags` bit 0, `VaultInfo.truncated`.
     pub truncated_nodes: bool,
@@ -296,6 +309,7 @@ impl VaultTree {
             sort,
             epoch,
             n_notes: 0,
+            n_books: 0,
             n_dirs: 0,
             truncated_nodes: false,
             truncated_depth: false,
@@ -318,7 +332,9 @@ impl VaultTree {
     /// names; only the blob strips the extension, for display (§3.2).
     #[must_use]
     pub fn name(&self, id: NodeId) -> &str {
-        let Some(n) = self.nodes.get(id as usize) else { return "" };
+        let Some(n) = self.nodes.get(id as usize) else {
+            return "";
+        };
         let s = n.name_off as usize;
         let e = s + n.name_len as usize;
         self.names.get(s..e).unwrap_or("")
@@ -354,6 +370,10 @@ impl VaultTree {
         let off = self.kids.len() as u32;
         for (name, is_dir, mtime) in entries.iter() {
             let (name_off, name_len) = self.intern(name);
+            // The scanner admits exactly notes and books as regular files, so
+            // the extension is the whole classification.  Deriving it here
+            // keeps `add_children`'s tuple shape, which the sorter shares.
+            let is_book = !*is_dir && vpath::is_epub(name);
             let id = self.alloc_node(Node {
                 parent,
                 name_off,
@@ -362,11 +382,19 @@ impl VaultTree {
                 mtime: *mtime,
                 name_len,
                 depth,
-                flags: if *is_dir { flag::DIR } else { 0 },
+                flags: if *is_dir {
+                    flag::DIR
+                } else if is_book {
+                    flag::BOOK
+                } else {
+                    0
+                },
             });
             self.kids.push(id);
             if *is_dir {
                 self.n_dirs += 1;
+            } else if is_book {
+                self.n_books += 1;
             } else {
                 self.n_notes += 1;
             }
@@ -386,7 +414,9 @@ impl VaultTree {
     /// The child ids of `id`, in display order.
     #[must_use]
     pub fn children(&self, id: NodeId) -> &[NodeId] {
-        let Some(n) = self.nodes.get(id as usize) else { return &[] };
+        let Some(n) = self.nodes.get(id as usize) else {
+            return &[];
+        };
         let s = n.kids_off as usize;
         let e = s + n.kids_len as usize;
         self.kids.get(s..e).unwrap_or(&[])
@@ -521,10 +551,7 @@ impl VaultTree {
             let e = s + n.kids_len as usize;
             if let Some(run) = self.kids.get_mut(s..e) {
                 run.sort_by(|&a, &b| {
-                    let (na, nb) = (
-                        node_key(&nodes, &names, a),
-                        node_key(&nodes, &names, b),
-                    );
+                    let (na, nb) = (node_key(&nodes, &names, a), node_key(&nodes, &names, b));
                     cmp_key(mode, na, nb)
                 });
             }
@@ -652,7 +679,8 @@ impl VaultTree {
         for &id in &order {
             let k = match self.get(id) {
                 Some(nd) if nd.is_dir() => KIND_DIR,
-                // `names` lost the extension's case; bits 1..2 give it back.
+                // A book lost `.epub`; its high nibble gives the case back.
+                Some(nd) if nd.is_book() => KIND_BOOK | (vpath::epub_ext_case(self.name(id)) << 4),
                 Some(_) => vpath::md_ext_case(self.name(id)) << 1,
                 None => 0,
             };
@@ -683,6 +711,12 @@ impl VaultTree {
                 stack.extend(self.children(id).iter().rev().copied());
                 continue;
             }
+            // The snapshot is the SEARCH index space and search reads note
+            // text.  A book is a ZIP container, not UTF-8 prose, so it stays
+            // out of `files` even though it is a tree node (§0.55 E108).
+            if !vpath::is_md(self.name(id)) {
+                continue;
+            }
             self.rel_path_into(id, &mut buf);
             let (name_start, name_len) = vpath::basename_span(&buf);
             files.push(NoteEntry {
@@ -693,12 +727,18 @@ impl VaultTree {
                 mtime_ms: i64::from(node.mtime) * 1000,
             });
         }
-        VaultSnapshot { root: self.root_path.clone(), files, epoch: self.epoch }
+        VaultSnapshot {
+            root: self.root_path.clone(),
+            files,
+            epoch: self.epoch,
+        }
     }
 }
 
 fn node_key<'a>(nodes: &[Node], names: &'a str, id: NodeId) -> (&'a str, bool, u32) {
-    let Some(n) = nodes.get(id as usize) else { return ("", false, 0) };
+    let Some(n) = nodes.get(id as usize) else {
+        return ("", false, 0);
+    };
     let s = n.name_off as usize;
     let e = s + n.name_len as usize;
     (names.get(s..e).unwrap_or(""), n.is_dir(), n.mtime)
@@ -717,9 +757,13 @@ pub const FLAG_TRUNCATED_DEPTH: u32 = 1 << 1;
 pub const KIND_DIR: u8 = 1 << 0;
 /// `kind` bit 1 — a file whose extension's `m` is `M` on disk.
 pub const KIND_EXT_UPPER_M: u8 = 1 << 1;
-/// `kind` bit 2 — a file whose extension's `d` is `D` on disk.  Bits 3..7 are
-/// reserved and zero; a folder never sets 1..2.
+/// `kind` bit 2 — a file whose extension's `d` is `D` on disk.
 pub const KIND_EXT_UPPER_D: u8 = 1 << 2;
+/// `kind` bit 3 — an EPUB book (§0.55 E108).  A book's `names` entry is its
+/// display stem, `.epub` stripped like a note's `.md`; bits 1..2 are zero for
+/// it.  Bits 4..7 carry the four-letter extension case (`epub_ext_case`), and
+/// are zero for every note and folder.  A folder never sets 1..7.
+pub const KIND_BOOK: u8 = 1 << 3;
 
 /* ── the vault-path seam (§4.2) ───────────────────────────────────────────── */
 
@@ -800,11 +844,15 @@ impl Vault {
     /// savable.  Turning that into a second panic here would be the abort
     /// behaviour the manifest rejected.
     pub fn read(&self) -> RwLockReadGuard<'_, VaultTree> {
-        self.tree.read().unwrap_or_else(std::sync::PoisonError::into_inner)
+        self.tree
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
     pub fn write(&self) -> RwLockWriteGuard<'_, VaultTree> {
-        self.tree.write().unwrap_or_else(std::sync::PoisonError::into_inner)
+        self.tree
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
     #[must_use]
@@ -826,7 +874,10 @@ impl Vault {
     pub fn snapshot(&self) -> Arc<VaultSnapshot> {
         let tree = self.read();
         let epoch = tree.epoch;
-        let mut cache = self.snap_cache.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut cache = self
+            .snap_cache
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         if let Some((built_at, snap)) = cache.as_ref() {
             if *built_at == epoch {
                 return Arc::clone(snap);
@@ -835,6 +886,21 @@ impl Vault {
         let fresh = Arc::new(tree.build_snapshot());
         *cache = Some((epoch, Arc::clone(&fresh)));
         fresh
+    }
+
+    /// Drop one path's cached secret verdict.
+    ///
+    /// THE CACHE KEY IS `Node.mtime` IN WHOLE SECONDS, so a create followed by
+    /// the template write in the same second used to keep the `false` verdict
+    /// the post-create refresh had cached — the row stayed unmarked until some
+    /// later second's refresh or a restart.  The write path calls this after a
+    /// successful note write; the next `secret_notes` re-reads that file's head
+    /// even though its second did not move.
+    pub fn invalidate_secret(&self, rel: &str) {
+        self.secrets_cache
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .remove(rel);
     }
 
     /// The vault-relative rels of every secret note (`cairn-type: secrets`
@@ -914,7 +980,9 @@ fn read_head_is_secret(root: &Path, rel: &str) -> Option<bool> {
 /// takes the vault write lock.
 pub fn take_vault(slot: &RwLock<Option<Arc<Vault>>>) -> Option<Arc<Vault>> {
     let old = {
-        let mut guard = slot.write().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut guard = slot
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         guard.take()
     };
     old

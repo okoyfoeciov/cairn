@@ -37,26 +37,36 @@ export interface FindMatch {
   to: number
 }
 
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
 export function findMatches(
   text: string,
   query: string,
   caseSensitive: boolean,
 ): { matches: FindMatch[]; truncated: boolean } {
   if (query === '') return { matches: [], truncated: false }
-  const hay = caseSensitive ? text : text.toLowerCase()
-  const needle = caseSensitive ? query : query.toLowerCase()
-  // An empty needle after folding (cannot happen for non-empty query in
-  // practice) would make `indexOf('', pos)` succeed everywhere.
-  if (needle === '') return { matches: [], truncated: false }
+  // A case-insensitive regex keeps match indices in the ORIGINAL string.
+  // Lowercasing the haystack changed offsets for length-changing folds (İ),
+  // so a match after one pointed at the wrong characters — and, in the reader,
+  // at the wrong chapter.
+  let re: RegExp
+  try {
+    re = new RegExp(escapeRegExp(query), caseSensitive ? 'g' : 'gi')
+  } catch {
+    return { matches: [], truncated: false }
+  }
   const matches: FindMatch[] = []
-  let pos = 0
   for (;;) {
-    const idx = hay.indexOf(needle, pos)
-    if (idx < 0) return { matches, truncated: false }
+    const m = re.exec(text)
+    if (!m) return { matches, truncated: false }
+    if (m[0].length === 0) {
+      re.lastIndex++
+      continue
+    }
     if (matches.length >= MAX_FIND_MATCHES) return { matches, truncated: true }
-    matches.push({ from: idx, to: idx + needle.length })
-    // Non-overlapping: `aa` in `aaa` is one match at 0, not two.
-    pos = idx + needle.length
+    matches.push({ from: m.index, to: m.index + m[0].length })
   }
 }
 
@@ -117,8 +127,14 @@ export class FindModel {
 }
 
 export interface FindDeps {
-  /** The open note's live text, or null when no note is open (or secret mode). */
+  /** The text the bar searches, or null when there is nothing to search. */
   getText(): string | null
+  /** Field placeholder / accessible name.  Defaults to the note viewer's
+   *  "Find in note"; the EPUB reader passes "Find in book". */
+  placeholder?: string
+  /** Prefill an empty field from the current selection.  Defaults to true
+   *  (the note viewer's behaviour); the EPUB reader opts out. */
+  prefillSelection?: boolean
   /** The current editor selection, for prefill. `''` when none/unsuitable. */
   getSelection(): string
   /** Select [from, to) and scroll it into view. Keeps focus where it is. */
@@ -155,8 +171,9 @@ export class FindPanel {
     const root = d.createElement('div')
     root.className = 'find-bar'
     root.hidden = true
+    const label = deps.placeholder ?? 'Find in note'
     root.setAttribute('role', 'search')
-    root.setAttribute('aria-label', 'Find in note')
+    root.setAttribute('aria-label', label)
 
     const input = d.createElement('input')
     input.className = 'find-input'
@@ -164,8 +181,8 @@ export class FindPanel {
     input.spellcheck = false
     input.autocapitalize = 'off'
     input.setAttribute('autocomplete', 'off')
-    input.setAttribute('aria-label', 'Find in note')
-    input.placeholder = 'Find in note'
+    input.setAttribute('aria-label', label)
+    input.placeholder = label
 
     const count = d.createElement('span')
     count.className = 'find-count'
@@ -234,7 +251,7 @@ export class FindPanel {
       return true
     }
     this.root.hidden = false
-    if (this.input.value === '') {
+    if (this.input.value === '' && (this.deps.prefillSelection ?? true)) {
       const sel = this.deps.getSelection()
       if (sel !== '') this.input.value = sel
     }

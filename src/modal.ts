@@ -174,9 +174,10 @@ const BACKDROP_STYLE =
 
 // Obsidian's `.modal`, transcribed declaration by declaration (2026-09-14,
 // obsidian-1.13.7.asar app.css + live measurement at dpr 1.25): 560 wide,
-// `#1c1c1c`, 12px radius, 1px `#555` border, 16px padding, three-layer
-// shadow.  `position: relative` is load-bearing, not cosmetic: it is the
-// origin the X button positions against.
+// `--bg-primary` (Oceanic #182028; Obsidian's #1c1c1c), 12px radius, 1px
+// `--modal-border-color` (Oceanic #5a6b84; Obsidian's #555555), 16px padding,
+// three-layer shadow.  `position: relative` is load-bearing, not cosmetic: it
+// is the origin the X button positions against.
 // NO max-height and NO overflow — see the header.
 const BOX_STYLE =
   'position:relative;width:var(--dialog-width);max-width:80vw;min-height:100px;' +
@@ -199,7 +200,7 @@ const HEADER_STYLE = 'margin-bottom:0.75em'
 // Obsidian `.modal-title`: 20px/600, tight.  Left-aligned by construction:
 // the header is full width and the text starts where it starts.
 const TITLE_STYLE = 'font-size:var(--font-ui-large);font-weight:600;line-height:1.3;margin:0'
-// Obsidian body copy: 15px `#dadada`, 1.3, and each paragraph carries 15px
+// Obsidian body copy: 15px `--text-normal` (Oceanic #d7dfe9), 1.3, and each paragraph carries 15px
 // above and below (plain UA `p` margins — no collapsing games, because the
 // box is a flex column and the content is an ordinary block inside it).
 const DETAIL_STYLE =
@@ -214,7 +215,7 @@ const ROW_STYLE =
 // The X: Obsidian `.modal-header-button` — absolute, 6px down, 12px in from
 // the right on this machine (`body.styled-scrollbars` rule; the base 6px is
 // what a non-scrollbar body gets), 4px of padding around an 18px lucide-x in
-// `#b3b3b3` (measured 26x26 box, 18x18 glyph).  Cairn's `x` glyph is
+// `--text-muted` (Oceanic #a5b1c2; measured 26x26 box, 18x18 glyph).  Cairn's `x` glyph is
 // registered at 16; the svg is resized to 18 here, which scales cleanly
 // (viewBox) and is verified by pixel A/B, not by the registry.
 const X_STYLE =
@@ -228,7 +229,7 @@ const BUTTON_BASE =
   'padding:var(--sp-2) var(--sp-5);height:30px;border:0;border-radius:var(--button-radius);' +
   'font-size:var(--fs-ui-small);font-weight:400;white-space:nowrap;cursor:pointer;'
 // The safe button both call sites focus by default: Obsidian's plain button
-// over `#333` (`--interactive-normal`, dark), normal ink.
+// over `--bg-modifier-border` (Oceanic #334052; Obsidian's #333333), normal ink.
 const BUTTON_DEFAULT =
   'background:var(--bg-modifier-border);color:var(--text-normal)'
 /** `destructive` without `cta` (the guard's "Delete without saving", the quit
@@ -236,8 +237,8 @@ const BUTTON_DEFAULT =
 const BUTTON_DESTRUCTIVE =
   'background:color-mix(in oklch, var(--text-error) 10%, transparent);color:var(--text-error)'
 /** `destructive` WITH `cta` (the delete confirm's Delete): solid error fill,
- *  white ink.  Measured `#fb464c` — Cairn's `--text-error`, transcribed long
- *  before this dialog needed it. */
+ *  white ink.  `--text-error` is Oceanic #f26d6d (Obsidian's measured #fb464c,
+ *  now the pre-Oceanic value). */
 const BUTTON_DESTRUCTIVE_CTA = 'background:var(--text-error);color:white'
 
 /**

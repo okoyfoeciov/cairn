@@ -82,16 +82,30 @@ fn symlinked_directory_reports_is_symlink_and_not_is_dir() {
     seen.sort();
 
     let get = |n: &str| seen.iter().find(|r| r.0 == n).cloned().unwrap();
-    assert_eq!(get("loop"), ("loop".into(), true, false, false), "a symlink loop");
-    assert_eq!(get("escape"), ("escape".into(), true, false, false), "a symlink out of the vault");
+    assert_eq!(
+        get("loop"),
+        ("loop".into(), true, false, false),
+        "a symlink loop"
+    );
+    assert_eq!(
+        get("escape"),
+        ("escape".into(), true, false, false),
+        "a symlink out of the vault"
+    );
     assert_eq!(get("real"), ("real".into(), false, true, false));
     assert_eq!(get("note.md"), ("note.md".into(), false, false, true));
 
     // And the contrast that makes the choice load-bearing: `metadata()` FOLLOWS,
     // so a walk written with `metadata()` instead of `file_type()` would recurse
     // into /etc and into itself.
-    assert!(fs::metadata(root.join("escape")).unwrap().is_dir(), "metadata() follows the link");
-    assert!(fs::symlink_metadata(root.join("escape")).unwrap().file_type().is_symlink());
+    assert!(
+        fs::metadata(root.join("escape")).unwrap().is_dir(),
+        "metadata() follows the link"
+    );
+    assert!(fs::symlink_metadata(root.join("escape"))
+        .unwrap()
+        .file_type()
+        .is_symlink());
 }
 
 /// §7.3 case 13 and the reason `validate_rel_for_lookup` must reject a leading
@@ -107,18 +121,28 @@ fn joining_a_relative_path_is_not_a_containment_check() {
     let escaped = root.join("../../etc/passwd");
     assert_eq!(escaped, Path::new("/Users/someone/Vault/../../etc/passwd"));
     assert_eq!(
-        escaped.components().filter(|c| matches!(c, std::path::Component::ParentDir)).count(),
+        escaped
+            .components()
+            .filter(|c| matches!(c, std::path::Component::ParentDir))
+            .count(),
         2,
         "`..` survives join; only a component walk or a canonicalize would collapse it"
     );
 
     let absolute = root.join("/etc/passwd");
-    assert_eq!(absolute, Path::new("/etc/passwd"), "an absolute join THROWS THE ROOT AWAY");
+    assert_eq!(
+        absolute,
+        Path::new("/etc/passwd"),
+        "an absolute join THROWS THE ROOT AWAY"
+    );
     assert!(!absolute.starts_with(root));
 
     // starts_with() is not a rescue either: it is textual, so it passes for a
     // path that has not been collapsed.
-    assert!(escaped.starts_with(root), "starts_with() says yes about a path that escapes");
+    assert!(
+        escaped.starts_with(root),
+        "starts_with() says yes about a path that escapes"
+    );
 }
 
 /// §7.3 case 10's premise. Everything the case rules — `same_file(src, dst)`
@@ -150,12 +174,19 @@ fn apfs_case_insensitivity_and_the_dev_ino_test() {
             let tmp_name = root.join(format!(".notes.md.tmp-{}-0", std::process::id()));
             fs::rename(root.join("notes.md"), &tmp_name).unwrap();
             fs::rename(&tmp_name, root.join("Notes.md")).unwrap();
-            assert_eq!(fs::read(root.join("Notes.md")).unwrap(), b"the user's note\n");
+            assert_eq!(
+                fs::read(root.join("Notes.md")).unwrap(),
+                b"the user's note\n"
+            );
             let names: Vec<String> = fs::read_dir(root)
                 .unwrap()
                 .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
                 .collect();
-            assert_eq!(names, vec!["Notes.md".to_string()], "one file, the new casing, content intact");
+            assert_eq!(
+                names,
+                vec!["Notes.md".to_string()],
+                "one file, the new casing, content intact"
+            );
         }
         Err(e) => panic!(
             "the volume under {} is CASE-SENSITIVE ({e}); §7.3 case 10's mechanism is written \
@@ -173,8 +204,15 @@ fn apfs_case_insensitivity_and_the_dev_ino_test() {
 fn a_nul_byte_never_reaches_the_filesystem() {
     let d = tmp();
     let err = fs::write(d.path().join("a\0b.md"), b"x").unwrap_err();
-    assert_eq!(err.kind(), std::io::ErrorKind::InvalidInput, "libstd refuses before the syscall");
-    assert!(fs::read_dir(d.path()).unwrap().next().is_none(), "and nothing was created");
+    assert_eq!(
+        err.kind(),
+        std::io::ErrorKind::InvalidInput,
+        "libstd refuses before the syscall"
+    );
+    assert!(
+        fs::read_dir(d.path()).unwrap().next().is_none(),
+        "and nothing was created"
+    );
 }
 
 /// §7.3 case 11 again: `/` is a separator, never a name. A "name" containing one
@@ -264,9 +302,15 @@ fn the_temp_name_convention_is_invisible_swept_and_pid_bearing() {
     let pid = std::process::id();
     let temp = format!(".Ideas.md.tmp-{pid}-0");
 
-    assert!(temp.starts_with('.'), "leading dot: the scanner and every sync client skip it");
+    assert!(
+        temp.starts_with('.'),
+        "leading dot: the scanner and every sync client skip it"
+    );
     assert!(temp.contains(".tmp-"), "the infix the crash sweep matches");
-    assert!(temp.contains(&pid.to_string()), "the PID the sweep tests with kill(pid, 0)");
+    assert!(
+        temp.contains(&pid.to_string()),
+        "the PID the sweep tests with kill(pid, 0)"
+    );
 
     fs::write(root.join(&temp), b"half-written").unwrap();
     fs::write(root.join("Ideas.md"), b"# Ideas\n").unwrap();
@@ -293,13 +337,18 @@ fn the_temp_name_convention_is_invisible_swept_and_pid_bearing() {
          someone else's, which the sweep must NOT unlink"
     );
     let rc_self = unsafe { libc::kill(pid as libc::pid_t, 0) };
-    assert_eq!(rc_self, 0, "and a LIVE pid must report 0, or the sweep deletes live temps");
+    assert_eq!(
+        rc_self, 0,
+        "and a LIVE pid must report 0, or the sweep deletes live temps"
+    );
 }
 
 /// A process that has exited AND been reaped, so its PID is genuinely gone
 /// rather than a zombie (a zombie still answers `kill(pid, 0)` with 0).
 fn spawn_and_reap() -> u32 {
-    let mut child = std::process::Command::new("/usr/bin/true").spawn().expect("spawn /usr/bin/true");
+    let mut child = std::process::Command::new("/usr/bin/true")
+        .spawn()
+        .expect("spawn /usr/bin/true");
     let pid = child.id();
     child.wait().expect("wait");
     // Give the kernel a moment to release the entry.
@@ -361,7 +410,10 @@ fn unicode_normalisation_is_not_performed_and_that_is_the_recorded_limitation() 
     );
     // And the directory entry keeps the spelling it was created with, so a path
     // read back out of the arena is never silently re-spelled.
-    assert_eq!(entries[0], nfc, "the entry keeps its original normalisation form");
+    assert_eq!(
+        entries[0], nfc,
+        "the entry keeps its original normalisation form"
+    );
 }
 
 /* ===========================================================================
@@ -378,13 +430,18 @@ fn assert_invalid_name(name: &str, why: &str) {
 }
 
 fn assert_valid_name(name: &str) {
-    assert!(matches!(validate_name(name), Ok(())), "validate_name({name:?}) must be Ok");
+    assert!(
+        matches!(validate_name(name), Ok(())),
+        "validate_name({name:?}) must be Ok"
+    );
 }
 
 fn assert_invalid_rel(rel: &str, why: &str) {
     match validate_rel_for_lookup(rel) {
         Err(VaultError::InvalidPath { .. }) => {}
-        other => panic!("validate_rel_for_lookup({rel:?}) must be InvalidPath ({why}); got {other:?}"),
+        other => {
+            panic!("validate_rel_for_lookup({rel:?}) must be InvalidPath ({why}); got {other:?}")
+        }
     }
 }
 
@@ -452,7 +509,13 @@ fn validate_name_accepts_ordinary_names() {
 /// walk admits them and the tree draws them.
 #[test]
 fn the_two_validators_disagree_and_that_is_the_ruling() {
-    for name in ["Archive ", "v1.", "CON.md", "star*name.md", "trailing-dot.md."] {
+    for name in [
+        "Archive ",
+        "v1.",
+        "CON.md",
+        "star*name.md",
+        "trailing-dot.md.",
+    ] {
         assert_invalid_name(name, "creation is strict");
     }
     assert_valid_rel("Archive /note.md");
@@ -475,7 +538,10 @@ fn validate_rel_for_lookup_rejects_only_the_six() {
     assert_invalid_rel("../a.md", "a `..` component");
     assert_invalid_rel("a/../../etc/passwd", "a `..` component");
     assert_invalid_rel("a/..", "a trailing `..` component");
-    let too_deep = std::iter::repeat("a").take(256).collect::<Vec<_>>().join("/");
+    let too_deep = std::iter::repeat("a")
+        .take(256)
+        .collect::<Vec<_>>()
+        .join("/");
     assert_invalid_rel(&too_deep, "more than 255 components");
 }
 
@@ -514,7 +580,10 @@ fn validate_rel_for_lookup_accepts_what_the_walk_can_produce() {
     ] {
         assert_valid_rel(rel);
     }
-    let deep = std::iter::repeat("a").take(255).collect::<Vec<_>>().join("/");
+    let deep = std::iter::repeat("a")
+        .take(255)
+        .collect::<Vec<_>>()
+        .join("/");
     assert_valid_rel(&deep);
 }
 

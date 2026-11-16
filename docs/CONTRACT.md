@@ -92,7 +92,7 @@ Sections are numbered in the order below: §0's passes are §0.1–§0.54, then 
 | M70 | `view.setState()` on vault switch; exactly one `EditorView` per process | §4.3 |
 | X1 | `--row-indent` is the one name for the indent step | §5.2 |
 | X2 | **Struck by E98** — the chevron is an inline `<svg>`, not a `--chev` mask token | §0.50, §5.2 |
-| X3 | `--text-error` is a token (`#fb464c`), never an inline literal | §5.1 |
+| X3 | `--text-error` is a token (`#f26d6d`, Oceanic; Obsidian's `#fb464c`), never an inline literal | §5.1 |
 | X4 | `--lh-code` is the integer `21px` | §5.1, §5.3 |
 | X5 | **Moot** — the nav toolbar is gone | §0.12 E14 |
 | X6 | The sidebar scroller's gutter is 8px, reserved always | §5.2 |
@@ -230,6 +230,7 @@ Sections are numbered in the order below: §0's passes are §0.1–§0.54, then 
 | E105 | The frontend count is 509; the built-page SVG row matches per `url()` | §0.53.6 |
 | E106 | Canonical roots; `forget_vault`'s silent no-op; the scroll driver above 120 Hz | §0.53.7 |
 | E107 | Copy image on a pasted image: one row, command 27, PNG/JPEG as they are, the rest redrawn | §0.54 |
+| E108 | EPUB files are first-class tree entries (OS copy or Import move) with an in-house reader, commands 28/29, and per-vault bookmarks | §0.55 |
 
 ### §0.1 — DELETED (the errata changelog; the X/Y/Z ids it alone defined are folded into §0's index).
 
@@ -248,7 +249,7 @@ flush to the window's right edge, minimize / maximize-restore / close in that or
 are four hand-drawn 12 × 12 SVGs in `icons.ts`'s second table (`W`); `restore` replaces `maximize`
 while maximized. Ink is `--text-normal` at full opacity (the one deliberate divergence from
 Obsidian's focused value); hover is `--bg-modifier-hover`; close-hover is `--bg-close-hover:
-#fb464c` with white ink. `--macos-tl-inset` is **8px on Linux** (88px on macOS, §5.6). `data-os` is
+#f26d6d` (Oceanic; Obsidian's `#fb464c`) with white ink. `--macos-tl-inset` is **8px on Linux** (88px on macOS, §5.6). `data-os` is
 set from the shell-supplied platform before `paintIcons`, and correcting it is what binds Mod to
 Ctrl on Debian rather than to Super, so Ctrl-S no longer falls through to the engine's save panel.
 
@@ -884,8 +885,9 @@ all-or-nothing rule was an inference**, and its hard `flex: 0 0 16px` plus its w
 suppression were two compensating errors; both are gone. E16's row metrics are untouched and were
 right.
 
-**The border and the shadow.** `--menu-border-color` is `--background-modifier-border-hover` →
-`#3f3f3f`; `#333333` is the SEPARATOR's. `--menu-shadow` is `--shadow-s`, three layers, not
+**The border and the shadow.** `--menu-border-color` is `--background-modifier-border-hover`
+(Oceanic `#43536a`; Obsidian's `#3f3f3f`); `--bg-modifier-border` (Oceanic `#334052`; Obsidian's
+`#333333`) is the SEPARATOR's. `--menu-shadow` is `--shadow-s`, three layers, not
 `--shadow-popover`'s single `0 2px 8px` — a second shadow in an app whose §5.1 says there is one.
 `--shadow-popover` itself is NOT changed; `modal.ts` and the delete-failure dialog are its remaining
 consumers (KNOWN-ISSUES UI-4).
@@ -1282,7 +1284,8 @@ under Obsidian's own name with `--heading-space-before` pointing at it.
 
 **The style is measured, not resolved by eye** — a `<table>` rendered under Obsidian's own sheet in
 the pinned engine: `border-collapse: collapse`, line-height 20.8, `margin: 16px 0`, cells `4px 8px` +
-`1px solid rgb(51,51,51)`, `min-width: 6ch`, `vertical-align: top`, `white-space: break-spaces`,
+`1px solid` Obsidian's `rgb(51,51,51)` (Cairn now paints `--bg-modifier-border`, Oceanic
+`rgb(51,64,82)`), `min-width: 6ch`, `vertical-align: top`, `white-space: break-spaces`,
 `text-align: start`, `overflow: hidden`, header weight 600. The engine test asserts the border
 THROUGH Chromium's snapping rather than against it — 1px lays out as `floor(dpr)/dpr` = 0.8 at dpr
 1.25 — and `6ch` with a tolerance, because it is font-relative.
@@ -1442,10 +1445,11 @@ lose.
 **E93 — the caret was WHITE since CM6 was mounted, against an `[M]` token.** `editor.css` declared
 `caret-color: var(--caret-color)` at **(0,1,0)**; CM6's base theme ships
 `"&dark .cm-content": { caretColor: "white" }` → `.cm-editor.cm-dark .cm-content` at **(0,3,0)**, and
-ordering cannot rescue it because StyleModule injects at the TOP of `<head>`. Measured live:
-`--caret-color` resolved to `#dadada` on that very element while `caret-color` computed
-**`rgb(255, 255, 255)`**. Out-specified with the real element chain it computes `#dadada`,
-`--text-normal` — the value Obsidian declares at `.cm-content`. **It is §0.24.5 E53's shape for the
+ordering cannot rescue it because StyleModule injects at the TOP of `<head>`. Measured live
+(pre-Oceanic): `--caret-color` resolved to `#dadada` on that very element while `caret-color`
+computed **`rgb(255, 255, 255)`**. Out-specified with the real element chain it computes
+`--text-normal` — Obsidian's `#dadada`, Oceanic's `#d7dfe9` — the value Obsidian declares at
+`.cm-content`. **It is §0.24.5 E53's shape for the
 fourth time: a rule that is correct, present and OUTRANKED fails in total silence**, so the test
 asserts on `getComputedStyle`, never on the source. `electron-shell/empty-pane.test.mjs` (4 tests)
 covers all three, and the pair also pins that a note open is editable again — taking the caret away
@@ -1572,7 +1576,7 @@ quantity in dispute is 0.2 per level, so no MAGNITUDE row can separate 17 from 1
 gate probes. **That blindness predates this pass** — but leaving it would have been a gate that looks
 green for the wrong reason. Fixed with a BOOLEAN row, which takes no numeric tolerance:
 `step == 16 + a snapped border`. Re-mutated: the flat `17px` now fails **exactly that row**.
-**G9 135/135.**
+**G9 137/137.**
 
 ### §0.50 — LP-10 closed: the 0.8px line was a font-strike race (E98)
 
@@ -1658,7 +1662,7 @@ that was reported. Each mutation is tested against the mutation it exists for: t
 fails all three engine tests and five unit rows; dropping `min-width: var(--list-indent)` fails ONLY
 the widths test — and it is the `minW` token row that catches it, because a tab's own stop at
 `tab-size: 36` happens to land on 36 too; letting the terminating tab escape its group fails ONLY the
-mixed-run row. Since §0.53 E103 the expectations are DERIVED, not Debian literals. **G9 135/135** —
+mixed-run row. Since §0.53 E103 the expectations are DERIVED, not Debian literals. **G9 137/137** —
 an indent is inside the editor's content box and moves no gated edge.
 
 ### §0.52 — The editor pane is a paint containment box (E100)
@@ -1822,6 +1826,66 @@ because a Copy image that cannot act is an inert control (§9 E4).
   write was measured landing in every focus state (`xclip` and `wl-paste`, pixels identical). That a
   real click's Copy image reaches the Wayland desktop is not measured by automation.
 
+### §0.55 — EPUB entries and the reader (E108)
+
+**User ruling (2026-11-15).** An `.epub` file is a fourth entry type beside notes, folders and
+secret files. It arrives in the vault two ways, and both are filesystem moves: a plain OS copy
+(e.g. `~/Downloads/holes.epub` → `~/notes/active/`), or **`Import EPUB`** in a folder's row menu /
+the sidebar's empty-space menu. Import opens the system file picker, then **MOVES** the chosen file
+into the folder the menu was opened on (the vault root for empty space) — it does not copy it, and
+there is no `New EPUB` editor, no blank book, and no renderer-supplied source path. Collisions are
+uniquified (`Holes 1.epub`), never overwritten. The row opens an in-app reader, never an external
+application, and remembers its reading position per vault.
+
+**The v1 reader is deliberately small:** continuous vertical scrolling, Mod-F in-book
+search, and automatic resume.  There is no reader header at all — no title strip, chapter arrows,
+percentage or progress line. **Not in v1:** a Contents strip, a visible Search
+button, publisher CSS/fonts (the book renders in Cairn's reading typography), a cover shelf,
+font-size or column-width controls, highlights/notes, fixed-layout/comic EPUB rendering, and DRM.
+EPUBs are excluded from vault-wide search; in-book search is the reader's own and has no visible
+button — the shortcut is the entry point.
+
+- **Tree.** `path::is_epub` is ASCII case-insensitive (`*.epub`, stem required), the scanner admits
+  it as a regular file, `Node.flag::BOOK` and TreeBlob `kind` bit 3 carry it. A book's blob `name`
+  is its display stem, `.epub` stripped exactly like a note's `.md`; `kind` bits 4..7 carry the
+  four letters' case so `extOf`/`pathOf` rebuild the on-disk filename. `nNotes` stays notes only.
+  §3.6's skip rules are otherwise unchanged.
+- **Read.** Command 28 `read_epub` returns the file's raw bytes. It is NOT the note frame: no
+  UTF-8 validation, no BOM/CRLF normalisation. The cap is **256 MiB** (`MAX_BOOK_BYTES`), and only
+  a `.epub` path resolves.
+- **Import.** Command 29 `import_epub(parent)` is **shell-owned**: the MAIN process opens the
+  picker (the renderer never names a source path), then calls the addon's `importEpub`. The same
+  filesystem is one atomic `rename`; a cross-device source is copied to a dot-temp in the
+  destination folder, fsynced, renamed, and only then unlinked. The 256 MiB cap applies, the source
+  must be a regular `.epub`, and a destination name collision is uniquified.
+- **Reader.** `src/epub.ts` owns the ZIP central directory (`store` + `deflate` via
+  `DecompressionStream`), a lenient XML parser, OPF/spine/EPUB3-nav/EPUB2-NCX, and each chapter's
+  collapsed visible text. `src/reader.ts` owns the surface and an allow-list renderer: scripts, styles,
+  forms, frames, SVG wrappers, remote images and every link scheme except `http(s)`/`mailto` and
+  resolved spine targets are dropped before DOM insertion. No `innerHTML` anywhere. Spine images
+  are preloaded and their intrinsic `width`/`height` reserved from the image header before the
+  first render, so a find jump cannot move when an image arrives after it.
+- **Find.** Mod-F mounts the note viewer's OWN `src/find.ts` bar and `find.css`, with
+  “Find in book” as the label, over the reading surface. Enter/Shift+Enter and Prev/Next step
+  through whole-book matches; each current match is centred in the reading surface. A match is
+  found across inline text-node boundaries (a converted EPUB may split “lizard” into six spans),
+  while block boundaries are kept as separators so a match never spans paragraphs. Esc or outside
+  click closes; a closed bar forgets its query. It is an overlay, not a scroller. The reading
+  band overrides the chrome's `user-select: none`, so book text remains selectable, but a selection
+  does not prefill the field: Ctrl-F always opens empty in the reader.
+- **Scrollers.** Reader mode replaces the note viewer in the same band: the sidebar scroller plus
+  the book scroller is **two rendered scrollers** (§5.12.4); the find bar overlays and adds none.
+- **Progress.** `EpubBookmark { chapter, href, offset, progress }` is stored per vault in
+  `state.json` (§7.6), keyed by the vault-relative EPUB path, capped at 500, sanitised on read and
+  write. Progress never writes into the vault (gate G8). An in-app rename/move re-keys it.
+- **Colour.** `--text-book` (`#8fcf9a`, sage green) is a distinct tree-row ink; secrets keep
+  `--text-accent` (ice-blue). `tree.ts` paints `is-book` from the blob's kind bit.
+- **Known gaps, recorded rather than hidden:** a damaged/DRM book gets the reader's error page;
+  publisher CSS is ignored, so a book whose only emphasis is a stylesheet class may lose it;
+  fixed-layout pages are treated as normal flow; ZIP64 is refused; CRC fields are not verified;
+  non-UTF-8 XML is not transcoded; EXIF orientation is not interpreted; the 500-bookmark cap is
+  lexicographic, not recency-based.
+
 ## 1. The IPC contract
 
 ### 1.1 Conventions (normative)
@@ -1837,7 +1901,7 @@ because a Copy image that cannot act is an inert control (§9 E4).
   §1.5 condition. The binding prefixes the serialised error with `cairn.VaultError:` and the shell
   splits on it.
 - All paths in and out are **vault-relative, `/`-separated, no leading slash, `.md` retained for
-  notes, `""` for the vault root**. Not `NodeId`, ever.
+  notes, `.epub` retained for books, `""` for the vault root**. Not `NodeId`, ever.
 - Timestamps crossing the boundary are `i64` **milliseconds** since the Unix epoch.
 - Every command returns `Result<T, VaultError>` (§1.5). No command returns `String` as its error.
 - **`src/ipc.ts` is the only frontend module that talks to the core.** Owner: 02. The core is
@@ -1868,13 +1932,15 @@ bus; it uses the per-call subscription `searchStart` registers and tears down it
 
 ### 1.3 The command table
 
-**THE TABLE IS CLOSED AT TWENTY-SEVEN.** Seven commands were added after the original twenty —
+**THE TABLE IS CLOSED AT TWENTY-NINE.** Nine commands were added after the original twenty —
 **21 `forget_vault`** (§0.30 E70), **22 `open_external`** (§0.38 E85, shell-implemented),
 **23 `copy_text`** (§0.46 E94, shell-implemented), **24 `move_entry`** (drag-to-move),
 **25 `secret_notes`** (secret files, user ruling), **26 `read_text`**
-(note/memoir context menu, shell-implemented) and **27 `copy_image`** (§0.54 E107,
-shell-implemented). Every *"§1.3 stays closed at twenty"* in this
-document is a dated record of a ruling that added none.
+(note/memoir context menu, shell-implemented), **27 `copy_image`** (§0.54 E107,
+shell-implemented), **28 `read_epub`** (§0.55 E108, addon) and **29 `import_epub`** (§0.55 E108,
+shell-implemented).
+Every *"§1.3 stays closed at twenty"* in this document is a dated record of a ruling that added
+none.
 
 | # | Command | TypeScript signature | Transport |
 |---|---|---|---|
@@ -1905,6 +1971,8 @@ document is a dated record of a ruling that added none.
 | 25 | `secret_notes` | `secretNotes(): Promise<string[]>` | JSON; `[]` with no vault open, never an error |
 | 26 | `read_text` | `readText(): Promise<string>` | **shell** (main-process `clipboard`); the note/memoir context menu's Paste probe — the renderer is never granted `clipboard-read`, so `navigator.clipboard.readText()` rejects there |
 | 27 | `copy_image` | `copyImage(dataUrl: string): Promise<void>` | **shell** (main-process `clipboard.writeImage`); a base64 PNG or JPEG data URL, refused when it does not decode or is over 256 MiB (§0.54 E107) |
+| 28 | `read_epub` | `readEpub(path: VaultPath): Promise<ArrayBuffer>` | **raw out**; an EPUB's bytes, no frame; 256 MiB cap, `.epub` paths only (§0.55 E108) |
+| 29 | `import_epub` | `importEpub(parent: VaultPath): Promise<CreateResult \| null>` | **shell** (main-process file picker, then the addon's `importEpub`); MOVES the chosen EPUB into `parent`, `null` on cancel (§0.55 E108) |
 
 **There are no others.** `list_tree`, `set_expanded`, `reveal`, `tree_load`, `fs_create_note`,
 `fs_create_folder`, `fs_rename`, `fs_delete`, `fs_reveal`, `vault_pick`, `vault_recents`,
@@ -1932,7 +2000,12 @@ containment (a folder into itself or a descendant is `invalidPath`) and the alre
 feature) — for the tree's secret mark and the credentials viewer. Content search skips their bytes
 (§4.1).
 
-Mutating commands (10–13, 24) return `{ path, epoch }`-shaped results and **never** a blob; the
+**Command 28 reads an EPUB whole** and **command 29 imports one** (§0.55 E108). There is
+deliberately no create/write EPUB command and no `New EPUB` row: a book arrives by a filesystem
+copy or the Import picker, and is mutated through command 12 (rename), 24 (move) and 13 (delete)
+like any other file.
+
+Mutating commands (10–13, 24, 29) return `{ path, epoch }`-shaped results and **never** a blob; the
 frontend follows with `tree_snapshot()`, which keeps every binary payload on one code path.
 
 ### 1.4 The event table
@@ -1947,6 +2020,8 @@ One namespace: **`nc://`**. `vault://`, `note://` and `tree:` are STRUCK everywh
 | `nc://watch-degraded` | `{ reason: "watch-limit" \| "watch-error", hint: string }` | at most once per vault | chrome — draws the `.watch-degraded` banner (§0.12 E14) |
 | `nc://note-external-change` | `{ path, mtimeMs, size }` | only for `AppState.open_note` | editor |
 | `nc://flush-and-close` | `{ deadlineMs: 2000 }` | a close/quit was intercepted; the frontend must flush | editor |
+| `nc://flush-for-reload` | `{}` | **dev shell only:** a rebuilt bundle was detected; flush before the window reloads | editor / memoir / state |
+| `reload-ready` | `{ ok: boolean, detail?: string }` | the page's answer to `nc://flush-for-reload` | `electron-shell/app-main.mjs` |
 | `nc://window-state` | `{ maximized: boolean }` | the WM maximizes/unmaximizes, or the app toggles it | chrome (§0.5 E7) |
 | `geometry-report` | the probe result object | `--pixeltest` only | `electron-shell/app-main.mjs` — §5.11 |
 | `bench-mark` | `{ mark: string, epoch_ms: number }` | only under `window.__CAIRN_BENCH__` | **none on this shell** — `src/bench.ts` still emits it and nothing consumes it; the memory harness is retired. Treated as dead code |
@@ -1980,7 +2055,7 @@ export const enum SortMode { NameAsc = 0, NameDesc = 1, MtimeDesc = 2, MtimeAsc 
 export interface VaultInfo {
   root: string;              // absolute, for the vault-switcher button. ALSO the state.json key (§7.6)
   name: string;              // final path component
-  nNotes: number;
+  nNotes: number;            // markdown notes only; EPUBs are tree entries, not search files
   nDirs: number;
   sort: SortMode;            // 0..3
   epoch: number;             // matches the blob header
@@ -1992,6 +2067,9 @@ export interface VaultInfo {
   /** §7.6, Z2. The persisted sidebar scroll offset for THIS vault. Finite and >= 0;
    *  `0` when nothing was persisted. THE READ PATH for what `UiPatch.scrollTop` writes. */
   scrollTop: number;
+  /** §0.55 E108. Per-book reading positions, keyed by the vault-relative `.epub` path.
+   *  Already sanitised by Rust. THE READ PATH for what `UiPatch.bookmarks` writes. */
+  bookmarks: Record<VaultPath, EpubBookmark>;
   watching: boolean;         // false => the watcher-degraded banner is drawn (§0.12 E14)
   truncated: boolean;        // the 50,000-node cap was hit (nodes only; depth is banner-only, §3.3)
   truncatedDepth: boolean;   // the 255-depth cap was hit — drives the second §3.3 banner
@@ -2012,6 +2090,16 @@ export interface CreateResult { path: VaultPath; epoch: number }
 export interface RenameResult { path: VaultPath; epoch: number }
 export interface DeleteResult { epoch: number }
 
+/** §0.55 E108. One book's last position. `chapter` is the 0-based spine index,
+ *  `href` the spine document's path inside the ZIP, `offset` the fraction through
+ *  that chapter, `progress` the whole book's fraction. */
+export interface EpubBookmark {
+  chapter: number;
+  href: string;
+  offset: number;            // 0..1, clamped
+  progress: number;          // 0..1, clamped
+}
+
 export interface UiPatch {
   win?: { w: number; h: number; x: number; y: number; max: boolean };
   /** §0.7 E9. The sidebar width in px, GLOBAL like `win` and not per-vault. Written on release
@@ -2022,6 +2110,8 @@ export interface UiPatch {
   sort?: SortMode;
   expanded?: VaultPath[];    // folders only; capped at 2000, see §7.6
   scrollTop?: number;
+  /** §0.55 E108. The whole per-vault map; last writer wins. `{}` clears it. */
+  bookmarks?: Record<VaultPath, EpubBookmark>;
 }
 
 /* ── search ───────────────────────────────────────────────────────────────── */
@@ -2387,15 +2477,18 @@ off        size        field
  32+4N     i32[N]      parent      index of parent, -1 for a top-level node
  32+8N     u32[N+1]    name_off    byte offsets into `names`; name_off[N] == M
  32+12N+4  u8[N]       depth       0 = top level; hard cap 255
- 32+13N+4  u8[N]       kind        bit0 = is_directory; bits 1..7 reserved, MUST be 0
+ 32+13N+4  u8[N]       kind        bit0 = is_directory; bits 1..2 = note extension case;
+                                  bit3 = an EPUB book; bits 4..7 = book extension case
+                                  (zero for notes and folders)
  32+14N+4  u8[M]       names       concatenated UTF-8 DISPLAY names, no separators
 ```
 
 `total = 36 + 14N + M`. Measured: **191,975 B** at N=5,620, M=113,259.
 
-`names` holds **display** names: a file's trailing `.md` is stripped by Rust. The real filename is
-`display + ".md"` for files and `display` for folders — sound because the tree contains only `.md`
-files and directories.
+`names` holds **display** names: a note's trailing `.md` and a book's trailing `.epub` are
+stripped by Rust; a folder's name is untouched. The real filename is `display` plus the extension
+in its on-disk case for notes and books, and `display` for folders. A note's case is `kind` bits
+1..2; a book's is bits 4..7, one bit per letter of `.epub` (`E/P/U/B`).
 
 **`subtree[i]` is still what `hasKids()` means, but the CHEVRON is not keyed off it: EVERY folder
 draws a chevron, empty or not** (§0.17 E19 — Obsidian's `setCollapsible(true)` is unconditional, and
@@ -2505,14 +2598,17 @@ tree by walk-time mtimes.
 
 ### 3.6 What the tree contains
 
-Directories, and files whose name ends `.md` (ASCII case-insensitive). Excluded by the scanner: any
-name starting `.` (covers `.obsidian`, `.git`, `.trash`, `.DS_Store`, and our own temp files),
-symlinks (not followed, not shown), and every non-`.md` file. Empty folders **are** shown.
+Directories, and regular files whose name ends `.md` or `.epub` (ASCII case-insensitive, stem
+required). Excluded by the scanner: any name starting `.` (covers `.obsidian`, `.git`, `.trash`,
+`.DS_Store`, and our own temp files), symlinks (not followed, not shown), and every other file.
+Empty folders **are** shown.
 
-**Three recorded divergences/additions:** a deliberate divergence from Obsidian (the filter above,
+**Four recorded divergences/additions:** a deliberate divergence from Obsidian (the filter above,
 agreed by the specs); **vault-root `Memoir.md` is hidden from the sidebar** (the fixed Memoir tab's
-note — `notes/Memoir.md` is an ordinary note); and **secret files carry a tree mark** (`is-secret`,
-resolved from the `cairn-type: secrets` frontmatter, command 25).
+note — `notes/Memoir.md` is an ordinary note); **secret files carry a tree mark** (`is-secret`,
+resolved from the `cairn-type: secrets` frontmatter, command 25); and **EPUB books are tree entries**
+with their own `is-book` mark, command 28 read path and reader (§0.55 E108). Books are excluded from
+`VaultSnapshot.files`, so vault-wide search remains markdown-only.
 
 ## 4. The search engine (B4, B20, B5, M47, M48)
 
@@ -2721,6 +2817,7 @@ Obsidian provenance, retained for reference):
 | form field | `--bg-form-field` | `#303a47` |
 | row hover / row active | `--bg-modifier-hover`, `--bg-modifier-active` | `rgba(170,205,240,.08)` — **one value, declared as one** (§0.22 E44) |
 | tree ink | `--text-muted` | `#a5b1c2` |
+| book row ink | `--text-book` | `#8fcf9a` (§0.55 E108; sage green, distinct from the secret row's `--text-accent`) |
 | caret | `--caret-color` | `#d7dfe9` |
 | selection | `--text-selection` | `color-mix(in oklch, var(--accent) 33%, transparent)` |
 | search match | `--text-highlight` | `rgba(255,208,0,.30)` |
@@ -2732,7 +2829,7 @@ Obsidian provenance, retained for reference):
 | sidebar gutter | `--scrollbar-gutter-w` | `8px` |
 | editor gutter | `--scrollbar-w-editor` | `12px` (§0.37 E84) |
 | scrollbar thumb | `--scrollbar-thumb` | `#808080` on macOS, `rgba(255,255,255,.1)` on Linux |
-| close-button hover | `--bg-close-hover` | `#fb464c` |
+| close-button hover | `--bg-close-hover` | `#f26d6d` (Oceanic; Obsidian `#fb464c`) |
 
 **The row hover and active values are the SAME, and that is Obsidian's own rule** (§0.22 E44):
 Obsidian declares `--nav-item-background-active = var(--background-modifier-hover)`. The old `.15`
@@ -3043,7 +3140,8 @@ attributes still present in `src/index.html` are inert metadata and carry no beh
 The bar is **43px border-box**: a 1px `border-top` rule at content **y 921**, 8px padding, a 26px
 content row and 8px padding, so its bottom is flush with 964. **`box-sizing: border-box` is
 normative** — with content-box, `height` plus the border makes the sidebar column sum past the
-window. Ground `--bg-secondary`; the rule is `--bg-modifier-border` `#333333`.
+window. Ground `--bg-secondary` (Oceanic `#252f3a`); the rule is `--bg-modifier-border`
+(Oceanic `#334052`; Obsidian's `#333333`).
 
 The 16px chevron box sits at content x **16..32** (8px bar padding + 8px switcher padding), and the
 label box's left is **40** (8 + 8 + 16 + 8, Obsidian's `--size-4-2` gap). **The measured ink band's
@@ -3098,10 +3196,10 @@ hook is missing or returns `false`, the row FAILS** — it never SKIPs.
 |---|---|
 | `title` | `.nc-title` box top **72**, height **31.0656**, computed `font-size` **25.888px**, weight 700, `margin-bottom` **12.944px**, left edge **444**; `.cm-content`'s first line box top **116.0096** |
 | `heading.marker.hidden` | with the caret in the body: zero `.nc-md-marker` in the viewport, and the heading line's text box left equals a body line's |
-| `heading.marker.shown` | with the caret on that heading line: exactly one `.nc-md-marker`, `color: rgb(102,102,102)` (`--text-faint`), and the line's text box left GREATER than a body line's (the shift is by design; its magnitude is font-dependent and is not asserted) |
+| `heading.marker.shown` | with the caret on that heading line: exactly one `.nc-md-marker`, `color: rgb(98,109,126)` (Oceanic `--text-faint`; Obsidian's was `rgb(102,102,102)`), and the line's text box left GREATER than a body line's (the shift is by design; its magnitude is font-dependent and is not asserted) |
 | `sidebar.gutter` | `.tree-scroller` computed `overflow-y: scroll`; gutter width **8**; scroller border box right edge **409** |
 | `banner.absent` | zero `.cap-banner` elements, **zero `.watch-degraded` elements**, `.tree-scroller` height **881** |
-| `vault.bar` | box `y 921`, height **43**, `border-top: 1px`, rule `rgb(51,51,51)`, chevron box `x 16..32`, label box left **40** |
+| `vault.bar` | box `y 921`, height **43**, `border-top: 1px`, rule `rgb(51,64,82)` (Oceanic `--bg-modifier-border`; Obsidian's was `rgb(51,51,51)`), chevron box `x 16..32`, label box left **40** |
 | `layers.scrollers` | §5.12.4's rendered-box rule: exactly two RENDERED scrollable boxes, and `document.scrollingElement.scrollHeight === clientHeight` |
 
 **`verify()` re-seats `K.hairline`, `K.step` and `K.rowH` from the page's own computed values before
@@ -3317,6 +3415,8 @@ src/tables.ts            03  the table widget
 src/totp.ts              03  the totp block (§0.46)
 src/secrets.ts           03  secret notes
 src/memoir.ts            03  the Memoir tab
+src/epub.ts              02  the EPUB container, OPF/spine/TOC and chapter text
+src/reader.ts            03  the EPUB reader surface and sanitising renderer
 src/menu.ts              01  the one menu primitive
 src/vaultbar.ts          01  the switcher and its recents popover
 src/search.ts            05  the search panel
@@ -3325,6 +3425,7 @@ src/state.ts             02  the frontend's state.json mirror
 src/icons.ts             --  the inline SVG literals; the ONE innerHTML-adjacent sink (§6.1)
 src/styles/tokens.css    01  the only declaration site (§5.1)
 src/styles/tree.css      01  declares the grouped .tree-scroller/.search-scroller rule; search.css consumes it
+src/styles/reader.css    03  the EPUB reader's one-band surface (E108)
 src/styles/*             05  search.css; the rest are 01/03/04 by module
 core/src/*               02  fsops, tree, scan, watcher, search, prefs, note_frame, error, app
 core/napi/src/lib.rs     07  the binding layer — no logic, no wire types (§6.2)
@@ -3734,7 +3835,7 @@ tear down (quit, vault switch, delete).
 
 | Situation | Required behaviour |
 |---|---|
-| no note open | the note tab is **NOT RENDERED**, and the pane is **EMPTY** (§0.45 E91 deleted the `No note open` line; §0.30 E71 deleted the `+`). The Memoir tab shows whenever a vault is open |
+| no document open | the note tab is **NOT RENDERED**, and the pane is **EMPTY** (§0.45 E91 deleted the `No note open` line; §0.30 E71 deleted the `+`). The Memoir tab shows whenever a vault is open |
 | the empty state | **does not exist** — the element is deleted at the user's request. spec-03 §7.2's rejection of the CM6 `placeholder` extension is unaffected and still right: nothing replaces this, a placeholder least of all |
 | the caret, with no note open | **there is none** (§0.45 E92). `open === null` reconfigures to `EditorView.editable.of(false)`, not merely `readOnly`: readOnly is a transaction filter and leaves `contenteditable="true"`, so Chromium kept blinking a caret in a pane with no document. `detached` and `vault-lost` deliberately KEEP theirs — their text stays selectable for `Save as…` |
 | switching | click, or **Mod-1 / Mod-2** for the note / Memoir tab. Exactly one carries `.is-active`; the inactive style is Obsidian's own (transparent, no ring, no curves) with an inset hover pill on `.tab-inner` |
@@ -3779,7 +3880,10 @@ The schema is **per-vault keyed**, because a flat one holds exactly one vault's
       "sort": 0,                                 // u8 0..3
       "expanded": ["Projects", "Projects/2026"], // folders only, max 2000, silently truncated
       "last_note": "Misc.md",
-      "scroll_top": 0
+      "scroll_top": 0,
+      "bookmarks": {                             // §0.55 E108; max 500, sanitised
+        "Books/Holes.epub": { "chapter": 3, "href": "OEBPS/ch4.xhtml", "offset": 0.42, "progress": 0.37 }
+      }
     }
   }
 }
@@ -3797,6 +3901,11 @@ a resize with no vault open still persists. It is an `Option`, and absence means
 so a fresh install serialises no width and the page keeps the 412 default. The core bounds a stored
 value to `[120, 4000]` on both apply and load — a hand-edited file cannot ship a 0px sidebar — and
 deliberately does **not** clamp against the window, which only the page knows the width of.
+
+`bookmarks` is keyed by the vault-relative `.epub` path (§0.55 E108), capped at **500**, and
+omitted when empty so a fresh file keeps its old bytes. Rust clamps `offset`/`progress` to `0..1`,
+drops a malformed entry alone, and never lets a hand-edited file carry a path or href past its
+sanity bound. An in-app rename/move re-keys the frontend's map in the same transaction.
 
 Written with the same atomic routine as note writes (§7.1 rule 2, minus the conflict check),
 debounced 1,000 ms, and flushed unconditionally in the `confirm_close` path **after** the editor

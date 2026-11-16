@@ -14,10 +14,11 @@
  * ======================================================================== */
 
 /* ---- 1. title / tab strip — border box y 0..39, height 40 [M+S, §0.6 E8] --
- * One continuous strip across the WHOLE window: the sidebar's #282828 starts
+ * One continuous strip across the WHOLE window: `--bg-secondary` starts
  * BELOW it, at y = 40.
  *
- * 40, NOT 39.  The strip is 39px of #333333 fill PLUS a 1px rule, border-box,
+ * 40, NOT 39.  The strip is 39px of `--bg-titlebar` fill PLUS the 1px
+ * `--tab-outline` rule, border-box,
  * and the fill run is what the old [M] 39 measured.  Obsidian draws the same
  * two things in the same order (app.css:6642-6651).  The rule is the visible
  * boundary between the strip and both panes below it — and note it is a
@@ -80,7 +81,7 @@
 }
 
 /* The active tab.  One tab is ALWAYS .is-active and the inactive style lives
- * below (the fixed `Memoir` tab, 2026-09-15).  Fill #1c1c1c is IDENTICAL to
+ * below (the fixed `Memoir` tab, 2026-09-15).  `--bg-primary` is IDENTICAL to
  * the editor, so tab and pane read as one surface. */
 .tab {
   position: relative;
@@ -362,26 +363,28 @@
  *     The colour change is instant.
  *
  * ── THE 1px DIVIDER, USER RULING 2026-09-15, OVERTURNING spec-01 §2 ────────
- * spec-01 §2 was `[M]`, "the sidebar/editor boundary is the #282828 ->
- * #1c1c1c colour change ALONE, do not add a border-right", drawn once at the
- * user's request 2026-09-11, and taken back out unruled — `KNOWN-ISSUES.md`
- * UI-3 carried the measurement that ruling rested on.  `border-right` below
- * is now that ruling, reversed: Obsidian paints it on THIS element —
+ * spec-01 §2 was `[M]`, "the sidebar/editor boundary is the `--bg-secondary`
+ * -> `--bg-primary` colour change ALONE, do not add a border-right", drawn
+ * once at the user's request 2026-09-11, and taken back out unruled —
+ * `KNOWN-ISSUES.md` UI-3 carried the measurement that ruling rested on.
+ * `border-right` below is now that ruling, reversed: Obsidian paints it on
+ * THIS element —
  *     .workspace-leaf-resize-handle { border-right: 1px solid var(--divider-color) }
  * (`.workspace-split.mod-left-split > .workspace-leaf-resize-handle`,
- * app.css:6489-6491) — `--divider-color` -> `--background-modifier-border` ->
- * `--color-base-30` = #333333 dark (app.css:2196, 2873, 2976), read from the
- * pinned 1.13.7 asar's own cascade.  UI-3's live sample read #363636; that
- * was a screenshot at the seam's dpr-1.25 snap, which blends its edge pixel,
- * and the cascade read here is the more direct source.  `var(--hairline)`,
- * not a flat 1px, for the same reason the tree's guides use it: a used
- * border snaps to `floor(dpr)/dpr`, and Obsidian's own border does too.  It
- * moves nothing: `box-sizing: border-box` puts it inside the existing 3px
- * handle, on the sidebar's last pixel — the same "one declaration" the
- * withdrawn comment always said it would be.  It lines only the part BELOW
- * the strip, as before: the strip is one continuous #333333 band, so the
- * rule is #333333 on #333333 there and shows nothing, exactly matching
- * Obsidian's own strip (`.workspace-tab-header-container` has no seam either). */
+ * app.css:6489-6491).  In Obsidian `--divider-color` was `--color-base-30`
+ * (#333333, app.css:2196/2873/2976); in Oceanic Cairn it is the shared
+ * `--divider-color` token #334052, the same value as `--bg-modifier-border`
+ * and `--tab-outline`.  UI-3's live sample read #363636; that was a
+ * screenshot at the seam's dpr-1.25 snap, which blends its edge pixel, and
+ * the cascade read here is the more direct source.  `var(--hairline)`, not a
+ * flat 1px, for the same reason the tree's guides use it: a used border snaps
+ * to `floor(dpr)/dpr`, and Obsidian's own border does too.  It moves nothing:
+ * `box-sizing: border-box` puts it inside the existing 3px handle, on the
+ * sidebar's last pixel — the same "one declaration" the withdrawn comment
+ * always said it would be.  It lines only the part BELOW the strip, as
+ * before: the strip is one continuous `--bg-titlebar` band, so the divider is
+ * the same colour there and shows nothing, exactly matching Obsidian's own
+ * strip (`.workspace-tab-header-container` has no seam either). */
 .sidebar-resize {
   position: absolute;
   top: 0;
@@ -406,7 +409,7 @@
 
 .editor {
   flex: 1 1 auto;
-  background: var(--bg-primary);         /* [M] #1c1c1c                        */
+  background: var(--bg-primary);         /* [C] Oceanic #182028 (was #1c1c1c)  */
   position: relative;
   min-width: 0;
   min-height: 0;
@@ -599,7 +602,7 @@
  * the 16px box exists and is measurable before icons.ts has run.
  * `--text-faint`, NOT `--icon-color`: app.css:6364-6370 gives the switcher icon
  * `color: var(--text-faint)` and lifts it to `--text-muted` on hover (6353).
- * Both tokens are character-identical to Obsidian's (#666666 / #b3b3b3). */
+ * Oceanic retuned both tokens (#626d7e / #a5b1c2); the roles are unchanged. */
 .ico { display: block; }
 .ico-vault {                             /* chevrons-up-down, 16px box [M]      */
   width: var(--icon-vault); height: var(--icon-vault);
@@ -715,10 +718,10 @@
   padding: 6px;                          /* [S] --menu-padding = --size-2-3    */
   background: var(--bg-menu);
   /* [S] §0.27 E67 — --menu-border-color is --background-modifier-border-HOVER
-     (#3f3f3f), not --background-modifier-border (#333333).  The #333333 that
-     stood here is the SEPARATOR's colour, which is --background-modifier-border
-     and stays where it is, ten lines down.  Obsidian uses two different greys
-     for the two rules and Cairn was using one for both. */
+     (Oceanic #43536a; Obsidian's #3f3f3f), not --bg-modifier-border.  The
+     SEPARATOR keeps --bg-modifier-border (Oceanic #334052; Obsidian's
+     #333333), ten lines down: Obsidian uses two different rules and Cairn was
+     once using one for both. */
   border: 1px solid var(--menu-border-color);
   border-radius: var(--radius-m);        /* [S] --menu-radius = --radius-m 8px */
   box-shadow: var(--menu-shadow);        /* [S] --menu-shadow = --shadow-s     */
@@ -852,7 +855,7 @@
   font: inherit;
   font-size: var(--fs-ui-small);         /* 13px — the tree row's size */
   color: var(--text-normal);
-  background: var(--bg-form-field);      /* [S] #2e2e2e */
+  background: var(--bg-form-field);      /* [C] Oceanic #303a47 (was #2e2e2e) */
   border: 1px solid var(--border-focus);
   border-radius: var(--radius-s);
   /* base.css sets `user-select: none` on <body> for the chrome; a field the user

@@ -223,8 +223,11 @@ const DROP = 64
  * like every other row state because the rows are pooled and a direct
  * classList write would be overwritten by the next paint. */
 const SECRET = 128
-const CLS: string[] = new Array<string>(256)
-for (let m = 0; m < 256; m++) {
+/* §0.55 E108: an EPUB row's own ink, distinct from a secret note's ice-blue.
+ * Read from the blob's kind bit at paint time — no path set, no restore pass. */
+const BOOK = 256
+const CLS: string[] = new Array<string>(512)
+for (let m = 0; m < 512; m++) {
   CLS[m] =
     'tr' +
     (m & CHEV ? ' d' : '') +
@@ -234,7 +237,8 @@ for (let m = 0; m < 256; m++) {
     (m & SEL ? ' s' : '') +
     (m & DRAG ? ' is-drag' : '') +
     (m & DROP ? ' is-drop' : '') +
-    (m & SECRET ? ' is-secret' : '')
+    (m & SECRET ? ' is-secret' : '') +
+    (m & BOOK ? ' is-book' : '')
 }
 
 /**
@@ -487,9 +491,9 @@ export function createTree(host: TreeHost): TreeController {
    * whatever now holds the index. */
   let secretPaths = new Set<string>()
   const secretNodes = new Set<number>()
-  /** NOTES in the current snapshot (files, not folders). Re-counted in
-   *  `restore()`, so it is current after every snapshot without a second walk.
-   *  User ruling, 2026-09-14 [C]: a vault holding exactly one note draws NO
+  /** FILES in the current snapshot (notes and books, not folders). Re-counted
+   *  in `restore()`, so it is current after every snapshot without a second
+   *  walk.  User ruling, 2026-09-14 [C]: a vault holding exactly one note draws NO
    *  active fill — Obsidian highlights its single row (`is-active` at the hover
    *  value, measured live on 1.13.7), and this deliberately differs. */
   let fileCount = 0
@@ -924,26 +928,16 @@ export function createTree(host: TreeHost): TreeController {
   }
 
   /**
-   * `path` ends with `name + ".md"` at a '/' boundary, the extension in any
-   * ASCII case (`Foo.MD` is a note).  A PREFILTER only: every caller confirms
-   * with `blob.pathOf(i) === path`, which carries the row's exact extension.
-   * One `length` compare and one bounded character scan; no allocation, no
-   * `split`, no `endsWith` on a concatenated string (which would allocate on
-   * every file row).
+   * `path`'s final component is `name` plus a known display extension, where
+   * `name` is the row's DISPLAY stem (notes and books both strip theirs).  A
+   * PREFILTER only: every caller confirms with `blob.pathOf(i) === path`, which
+   * carries the row's exact extension and case.
    */
   function endsWithSeg(path: string, name: string): boolean {
-    const need = name.length + 3 // ".md"
-    const start = path.length - need
-    if (start < 0) return false
-    if (start > 0 && path.charCodeAt(start - 1) !== 47 /* '/' */) return false
-    for (let k = 0; k < name.length; k++) {
-      if (path.charCodeAt(start + k) !== name.charCodeAt(k)) return false
-    }
-    return (
-      path.charCodeAt(start + name.length) === 46 /* '.' */ &&
-      (path.charCodeAt(start + name.length + 1) | 32) === 109 /* 'm' or 'M' */ &&
-      (path.charCodeAt(start + name.length + 2) | 32) === 100 /* 'd' or 'D' */
-    )
+    const at = path.lastIndexOf('/') + 1
+    if (!path.startsWith(name, at)) return false
+    const ext = path.slice(at + name.length).toLowerCase()
+    return ext === '.md' || ext === '.epub'
   }
 
   /* ═══ paint ═════════════════════════════════════════════════════════════ */
@@ -1032,7 +1026,8 @@ export function createTree(host: TreeHost): TreeController {
       (selNodes.has(n) ? SEL : 0) |
       (dragNodes.has(n) ? DRAG : 0) |
       (n === dropNode ? DROP : 0) |
-      (secretNodes.has(n) ? SECRET : 0)
+      (secretNodes.has(n) ? SECRET : 0) |
+      (blob.isBook(n) ? BOOK : 0)
     if (el.__m !== m) {
       el.className = CLS[m]!
       // An empty folder is still a treeitem and still toggles; it simply has
@@ -1870,10 +1865,13 @@ export function createTree(host: TreeHost): TreeController {
     return cut < 0 ? '' : path.slice(0, cut)
   }
 
-  /** Display name for the ghost/action: files strip `.md`, folders do not. */
+  /** Display name for the ghost/action: files strip `.md`/`.epub`, folders do not. */
   function shortNameOf(path: string, isDir: boolean): string {
     const base = path.slice(path.lastIndexOf('/') + 1)
-    if (!isDir && base.toLowerCase().endsWith('.md')) return base.slice(0, -3)
+    if (isDir) return base
+    const lower = base.toLowerCase()
+    if (base.length > 3 && lower.endsWith('.md')) return base.slice(0, -3)
+    if (base.length > 5 && lower.endsWith('.epub')) return base.slice(0, -5)
     return base
   }
 

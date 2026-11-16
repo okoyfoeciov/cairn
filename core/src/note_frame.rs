@@ -95,7 +95,9 @@ pub fn encode_note(mtime_ms: i64, flags: u32, content: &[u8]) -> Vec<u8> {
 /// that number and then shows the magic catching all 200,000.
 pub fn decode_note(buf: &[u8]) -> Result<(i64, u32, &[u8]), VaultError> {
     let bad = |r: &str| VaultError::invalid_path("", r.to_string());
-    let head = buf.get(..NOTE_HEADER).ok_or_else(|| bad("note frame too short"))?;
+    let head = buf
+        .get(..NOTE_HEADER)
+        .ok_or_else(|| bad("note frame too short"))?;
     let g4 = |o: usize| -> u32 {
         let mut b = [0u8; 4];
         b.copy_from_slice(&head[o..o + 4]);
@@ -292,7 +294,10 @@ mod tests {
                 header_is_valid_utf8 += 1;
             }
         }
-        assert_eq!(wrong_offset_caught, N as u32, "a wrong offset was silently accepted");
+        assert_eq!(
+            wrong_offset_caught, N as u32,
+            "a wrong offset was silently accepted"
+        );
 
         // spike B §5a: 7,162 of 200,000 = 3.581%.  Pinned exactly, because if
         // this ever became 0 someone would conclude the magic is redundant.
@@ -312,11 +317,15 @@ mod tests {
         assert!(decode_note(&[]).is_err());
         // Version skew.
         let mut f = encode_note(0, 0, b"hi");
-        f.get_mut(4..8).unwrap().copy_from_slice(&2u32.to_le_bytes());
+        f.get_mut(4..8)
+            .unwrap()
+            .copy_from_slice(&2u32.to_le_bytes());
         assert!(decode_note(&f).is_err());
         // T2.4: `size` disagrees with the body.
         let mut f = encode_note(0, 0, b"hi");
-        f.get_mut(16..20).unwrap().copy_from_slice(&99u32.to_le_bytes());
+        f.get_mut(16..20)
+            .unwrap()
+            .copy_from_slice(&99u32.to_le_bytes());
         assert!(decode_note(&f).is_err());
         let mut f = encode_note(0, 0, b"hi");
         f.push(b'!');
@@ -338,17 +347,29 @@ mod tests {
                 "BOM+CRLF+CJK+emoji",
                 [&BOM[..], format!("{cjk}\r\n{cjk}\r\n").as_bytes()].concat(),
             ),
-            ("200KiB CJK", cjk.repeat(200 * 1024 / cjk.len()).into_bytes()),
-            ("1MiB ASCII", b"the quick brown fox\n".repeat(1024 * 1024 / 20)),
+            (
+                "200KiB CJK",
+                cjk.repeat(200 * 1024 / cjk.len()).into_bytes(),
+            ),
+            (
+                "1MiB ASCII",
+                b"the quick brown fox\n".repeat(1024 * 1024 / 20),
+            ),
         ];
         for (name, raw) in cases {
             let (text, flags) = normalise(raw.clone());
-            assert!(!text.starts_with(&BOM), "{name}: a BOM leaked into the editor text");
+            assert!(
+                !text.starts_with(&BOM),
+                "{name}: a BOM leaked into the editor text"
+            );
             assert!(
                 memchr::memmem::find(&text, b"\r\n").is_none(),
                 "{name}: a CR leaked into the editor text"
             );
-            assert!(std::str::from_utf8(&text).is_ok(), "{name}: not UTF-8 after normalise");
+            assert!(
+                std::str::from_utf8(&text).is_ok(),
+                "{name}: not UTF-8 after normalise"
+            );
             let back = denormalise(&text, flags);
             assert_eq!(back, raw, "{name}: round trip is not byte-identical");
         }
@@ -360,7 +381,10 @@ mod tests {
         assert_eq!(normalise(b"a\nb".to_vec()).1, 0);
         assert_eq!(normalise(b"a\r\nb".to_vec()).1, FLAG_CRLF);
         assert_eq!(normalise([&BOM[..], b"a\nb"].concat()).1, FLAG_BOM);
-        assert_eq!(normalise([&BOM[..], b"a\r\nb"].concat()).1, FLAG_BOM | FLAG_CRLF);
+        assert_eq!(
+            normalise([&BOM[..], b"a\r\nb"].concat()).1,
+            FLAG_BOM | FLAG_CRLF
+        );
         // An empty file, and a BOM-only file, are both legal and must not panic.
         assert_eq!(normalise(Vec::new()), (Vec::new(), 0));
         assert_eq!(normalise(BOM.to_vec()), (Vec::new(), FLAG_BOM));
@@ -393,7 +417,9 @@ mod tests {
         // NOT byte-identical - and at this layer the divergence is one that
         // ADDS a `\r`, never one that deletes the user's bytes (the editor's
         // own line split can: see `normalise` on `\r\r\n`).
-        assert_eq!(denormalise(&text, flags), b"crlf\r\nlf\r\ncrlf\r\n".to_vec());
+        assert_eq!(
+            denormalise(&text, flags),
+            b"crlf\r\nlf\r\ncrlf\r\n".to_vec()
+        );
     }
-
 }

@@ -176,6 +176,50 @@ test('spike Q: the probe\'s K constants still agree with tokens.css', async () =
     assert.equal(num(tok), K[k], `K.${k} (${K[k]}) has drifted from tokens.css --${tok} (${decl(tok)})`)
   }
 
+  /* The colour expectations are hand-copied for the same reason K's numbers are:
+     `rgb()` returns a channel triple, so the probe cannot compare a declaration
+     string directly.  The Oceanic ruling changed eight of them and the gate kept
+     asserting the old palette for weeks.  This reads BOTH sides and fails on any
+     drift, including a new token value with an unchanged expectation. */
+  const rgbOf = (value) => {
+    const s = value.trim()
+    const hex = /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.exec(s)
+    if (hex) {
+      let x = hex[1]
+      if (x.length === 3) x = x[0] + x[0] + x[1] + x[1] + x[2] + x[2]
+      return [0, 2, 4].map((i) => Number.parseInt(x.slice(i, i + 2), 16)).join(',')
+    }
+    const m = s.match(/-?\d+(?:\.\d+)?/g)
+    assert.ok(m && m.length >= 3, `not a colour: ${s}`)
+    return m.slice(0, 3).map(Math.round).join(',')
+  }
+  const alphaOf = (value) => {
+    const m = value.match(/-?(?:\d+\.?\d*|\.\d+)/g)
+    return m && m.length >= 4 ? Number.parseFloat(m[3]) : 1
+  }
+  for (const [token, key] of [
+    ['bg-primary', 'bgPrimary'],
+    ['bg-primary-alt', 'bgPrimaryAlt'],
+    ['bg-secondary', 'bgSecondary'],
+    ['bg-titlebar', 'bgTitlebar'],
+    ['bg-modifier-border', 'border'],
+    ['tab-outline', 'border'],
+    ['divider-color', 'border'],
+    ['text-normal', 'textNormal'],
+    ['text-muted', 'textMuted'],
+    ['text-faint', 'textFaint'],
+  ]) {
+    assert.equal(
+      rgbOf(decl(token)),
+      K.colors[key],
+      `K.colors.${key} (${K.colors[key]}) has drifted from tokens.css --${token} (${decl(token)})`
+    )
+  }
+  assert.equal(rgbOf(decl('indent-guide')), K.colors.indentGuide,
+    `K.colors.indentGuide has drifted from tokens.css --indent-guide (${decl('indent-guide')})`)
+  assert.equal(alphaOf(decl('indent-guide')), K.colors.indentGuideAlpha,
+    `K.colors.indentGuideAlpha has drifted from tokens.css --indent-guide (${decl('indent-guide')})`)
+
   // §0.30 E74 — `--hN-space-after` IS STRUCK, all six, and so is `K.h1Space`.
   // Obsidian's heading declares no `padding-bottom` and its base `.cm-line` is
   // `padding: 0`, so the space BELOW a heading is zero; the 10/9/8/7/6/6 ladder

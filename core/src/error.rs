@@ -25,18 +25,50 @@ use serde::Serialize;
 /// CONTRACT §1.5.  `disk_mtime_ms` serialises as `diskMtimeMs` — that is what
 /// `rename_all_fields` is for, and it is the field the conflict bar reads.
 #[derive(Debug, Clone, Serialize)]
-#[serde(tag = "kind", rename_all = "camelCase", rename_all_fields = "camelCase")]
+#[serde(
+    tag = "kind",
+    rename_all = "camelCase",
+    rename_all_fields = "camelCase"
+)]
 pub enum VaultError {
-    NotFound { path: String },
-    AlreadyExists { path: String },
-    NotADirectory { path: String },
-    NotUtf8 { path: String },
-    TooLarge { path: String, bytes: u64, limit: u64 },
-    InvalidName { name: String, reason: String },
-    InvalidPath { path: String, reason: String },
-    Conflict { path: String, disk_mtime_ms: i64 },
-    TrashUnavailable { path: String, message: String },
-    Io { path: String, code: i32, message: String },
+    NotFound {
+        path: String,
+    },
+    AlreadyExists {
+        path: String,
+    },
+    NotADirectory {
+        path: String,
+    },
+    NotUtf8 {
+        path: String,
+    },
+    TooLarge {
+        path: String,
+        bytes: u64,
+        limit: u64,
+    },
+    InvalidName {
+        name: String,
+        reason: String,
+    },
+    InvalidPath {
+        path: String,
+        reason: String,
+    },
+    Conflict {
+        path: String,
+        disk_mtime_ms: i64,
+    },
+    TrashUnavailable {
+        path: String,
+        message: String,
+    },
+    Io {
+        path: String,
+        code: i32,
+        message: String,
+    },
 }
 
 impl VaultError {
@@ -57,23 +89,39 @@ impl VaultError {
     }
 
     pub fn too_large(path: impl Into<String>, bytes: u64, limit: u64) -> Self {
-        VaultError::TooLarge { path: path.into(), bytes, limit }
+        VaultError::TooLarge {
+            path: path.into(),
+            bytes,
+            limit,
+        }
     }
 
     pub fn invalid_name(name: impl Into<String>, reason: impl Into<String>) -> Self {
-        VaultError::InvalidName { name: name.into(), reason: reason.into() }
+        VaultError::InvalidName {
+            name: name.into(),
+            reason: reason.into(),
+        }
     }
 
     pub fn invalid_path(path: impl Into<String>, reason: impl Into<String>) -> Self {
-        VaultError::InvalidPath { path: path.into(), reason: reason.into() }
+        VaultError::InvalidPath {
+            path: path.into(),
+            reason: reason.into(),
+        }
     }
 
     pub fn conflict(path: impl Into<String>, disk_mtime_ms: i64) -> Self {
-        VaultError::Conflict { path: path.into(), disk_mtime_ms }
+        VaultError::Conflict {
+            path: path.into(),
+            disk_mtime_ms,
+        }
     }
 
     pub fn trash_unavailable(path: impl Into<String>, message: impl Into<String>) -> Self {
-        VaultError::TrashUnavailable { path: path.into(), message: message.into() }
+        VaultError::TrashUnavailable {
+            path: path.into(),
+            message: message.into(),
+        }
     }
 
     /// ALWAYS `Io`, whatever the `ErrorKind`.  Use it where the OS error is
@@ -175,7 +223,11 @@ fn human_bytes(n: u64) -> String {
     if n >= MIB {
         let whole = n / MIB;
         let tenths = (n % MIB) * 10 / MIB;
-        if tenths == 0 { format!("{whole} MB") } else { format!("{whole}.{tenths} MB") }
+        if tenths == 0 {
+            format!("{whole} MB")
+        } else {
+            format!("{whole}.{tenths} MB")
+        }
     } else if n >= KIB {
         format!("{} KB", n / KIB)
     } else {
@@ -192,10 +244,17 @@ mod tests {
     #[test]
     fn wire_shape_is_camel_case() {
         let j = serde_json::to_string(&VaultError::conflict("A/b.md", 1_700_000_000_123)).unwrap();
-        assert_eq!(j, r#"{"kind":"conflict","path":"A/b.md","diskMtimeMs":1700000000123}"#);
+        assert_eq!(
+            j,
+            r#"{"kind":"conflict","path":"A/b.md","diskMtimeMs":1700000000123}"#
+        );
 
-        let j = serde_json::to_string(&VaultError::too_large("big.md", 9_000_000, 8_388_608)).unwrap();
-        assert_eq!(j, r#"{"kind":"tooLarge","path":"big.md","bytes":9000000,"limit":8388608}"#);
+        let j =
+            serde_json::to_string(&VaultError::too_large("big.md", 9_000_000, 8_388_608)).unwrap();
+        assert_eq!(
+            j,
+            r#"{"kind":"tooLarge","path":"big.md","bytes":9000000,"limit":8388608}"#
+        );
 
         let j = serde_json::to_string(&VaultError::NotADirectory { path: "x".into() }).unwrap();
         assert!(j.starts_with(r#"{"kind":"notADirectory""#), "{j}");
@@ -239,7 +298,10 @@ mod tests {
     #[test]
     fn io_mapping_is_spec_02_6_7() {
         use std::io::{Error, ErrorKind};
-        assert_eq!(VaultError::from_io("p", &Error::from(ErrorKind::NotFound)).kind(), "notFound");
+        assert_eq!(
+            VaultError::from_io("p", &Error::from(ErrorKind::NotFound)).kind(),
+            "notFound"
+        );
         assert_eq!(
             VaultError::from_io("p", &Error::from(ErrorKind::AlreadyExists)).kind(),
             "alreadyExists"
@@ -249,7 +311,10 @@ mod tests {
             "io"
         );
         // `io()` never maps, even for the two kinds `from_io` does.
-        assert_eq!(VaultError::io("p", &Error::from(ErrorKind::NotFound)).kind(), "io");
+        assert_eq!(
+            VaultError::io("p", &Error::from(ErrorKind::NotFound)).kind(),
+            "io"
+        );
         match VaultError::io("p", &Error::from_raw_os_error(13)) {
             VaultError::Io { code, .. } => assert_eq!(code, 13),
             other => panic!("{other:?}"),

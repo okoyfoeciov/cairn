@@ -46,7 +46,7 @@
 
 use std::ffi::CString;
 use std::fs::{self, File, Metadata, OpenOptions};
-use std::io::Write;
+use std::io::{Read, Write};
 use std::os::fd::AsRawFd;
 use std::os::unix::ffi::OsStrExt;
 use std::os::unix::fs::{MetadataExt, OpenOptionsExt, PermissionsExt};
@@ -118,7 +118,9 @@ pub fn mtime_ms(md: &Metadata) -> i64 {
     match md.modified() {
         Ok(t) => match t.duration_since(UNIX_EPOCH) {
             Ok(d) => i64::try_from(d.as_millis()).unwrap_or(i64::MAX),
-            Err(e) => i64::try_from(e.duration().as_millis()).map(|v| -v).unwrap_or(i64::MIN),
+            Err(e) => i64::try_from(e.duration().as_millis())
+                .map(|v| -v)
+                .unwrap_or(i64::MIN),
         },
         Err(_) => 0,
     }
@@ -153,8 +155,8 @@ pub fn mtime_ns(md: &Metadata) -> u128 {
 /// directory make the echo-suppression fingerprints and the watcher's root test
 /// silently disagree.  One normalisation at open removes the whole class.
 pub fn canonical_root(root: &Path) -> Result<PathBuf, VaultError> {
-    let abs = fs::canonicalize(root)
-        .map_err(|e| VaultError::from_io(root.to_string_lossy(), &e))?;
+    let abs =
+        fs::canonicalize(root).map_err(|e| VaultError::from_io(root.to_string_lossy(), &e))?;
     if !abs.is_dir() {
         return Err(VaultError::not_a_directory(root.to_string_lossy()));
     }
@@ -288,18 +290,24 @@ const LIVE_PID_GRACE: Duration = Duration::from_secs(3600);
 /// replicated to every other device before it ages out — contradicting G8 and
 /// "byte-identical to a vault Obsidian has never seen".
 pub fn should_sweep(path: &Path, now: SystemTime) -> bool {
-    let Some(name) = path.file_name().and_then(|s| s.to_str()) else { return false };
+    let Some(name) = path.file_name().and_then(|s| s.to_str()) else {
+        return false;
+    };
     // Rename intermediates are NEVER sweep candidates: they hold the sole copy
     // of a note mid-rename and are completed by `recover_rename_tmps` instead.
     if parse_rename_tmp(name).is_some() {
         return false;
     }
-    let Some(pid) = parse_temp_pid(name) else { return false };
+    let Some(pid) = parse_temp_pid(name) else {
+        return false;
+    };
     if !pid_is_live(pid) {
         return true;
     }
     match fs::symlink_metadata(path).and_then(|m| m.modified()) {
-        Ok(mtime) => now.duration_since(mtime).is_ok_and(|age| age >= LIVE_PID_GRACE),
+        Ok(mtime) => now
+            .duration_since(mtime)
+            .is_ok_and(|age| age >= LIVE_PID_GRACE),
         Err(_) => false,
     }
 }
@@ -336,7 +344,10 @@ pub fn recover_rename_tmps(root: &Path) -> usize {
             }
             let p = entry.path();
             // `parse_rename_tmp` refuses an empty or '/'-bearing destination.
-            let dest = p.file_name().and_then(|s| s.to_str()).and_then(parse_rename_tmp);
+            let dest = p
+                .file_name()
+                .and_then(|s| s.to_str())
+                .and_then(parse_rename_tmp);
             if let Some((_pid, dest)) = dest {
                 let dst = dir.join(&dest);
                 // `occupied`, not `exists()`: rename(2) silently replaces a
@@ -423,7 +434,9 @@ static WRITE_LOCK: Mutex<()> = Mutex::new(());
 /// Poison-tolerant: the lock guards no data, so a panic under it leaves
 /// nothing half-updated.
 fn write_lock() -> std::sync::MutexGuard<'static, ()> {
-    WRITE_LOCK.lock().unwrap_or_else(std::sync::PoisonError::into_inner)
+    WRITE_LOCK
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
 /* ── the atomic write (§7.1 rule 2, steps 3-9) ────────────────────────────── */
@@ -443,12 +456,22 @@ enum Expect {
     /// A guarded write: still exactly the file step 1 compared against.  No
     /// ctime: macOS moves it for xattr churn alone.  A rename-over changes
     /// `ino`; an in-place write changes `mtime_ns` or `len`.
-    Unchanged { dev: u64, ino: u64, mtime_ns: u128, len: u64 },
+    Unchanged {
+        dev: u64,
+        ino: u64,
+        mtime_ns: u128,
+        len: u64,
+    },
 }
 
 impl Expect {
     fn unchanged(md: &Metadata) -> Self {
-        Expect::Unchanged { dev: md.dev(), ino: md.ino(), mtime_ns: mtime_ns(md), len: md.len() }
+        Expect::Unchanged {
+            dev: md.dev(),
+            ino: md.ino(),
+            mtime_ns: mtime_ns(md),
+            len: md.len(),
+        }
     }
 
     fn check(self, abs: &Path, rel: &str) -> Result<(), VaultError> {
@@ -557,7 +580,12 @@ fn replace_file(
     let mut opened: Option<(PathBuf, File)> = None;
     for _ in 0..8 {
         let tmp = temp_path(dir, name);
-        match OpenOptions::new().write(true).create_new(true).mode(0o600).open(&tmp) {
+        match OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(&tmp)
+        {
             Ok(f) => {
                 opened = Some((tmp, f));
                 break;
@@ -576,13 +604,15 @@ fn replace_file(
     let mut guard = TempGuard(Some(tmp.clone()));
 
     // Step 5.
-    file.write_all(bytes).map_err(|e| VaultError::io(tmp.to_string_lossy(), &e))?;
+    file.write_all(bytes)
+        .map_err(|e| VaultError::io(tmp.to_string_lossy(), &e))?;
 
     // Step 6.  `sync_data` maps to fsync(2), NOT F_FULLFSYNC: full
     // device-barrier durability costs ~50x more and is not warranted for a notes
     // app.  Measured 5.04 ms / 11 KB on APFS, against an 800 ms autosave
     // debounce — invisible.
-    file.sync_data().map_err(|e| VaultError::io(tmp.to_string_lossy(), &e))?;
+    file.sync_data()
+        .map_err(|e| VaultError::io(tmp.to_string_lossy(), &e))?;
 
     // Step 7, on the TEMP file, before the rename.
     let mode = prior_mode.unwrap_or(0o644);
@@ -654,14 +684,20 @@ const XATTR_VALUE_CAP: usize = 1 << 20;
 /// unsaveable.  Timestamps are NEVER copied — an old mtime on new bytes would
 /// defeat the conflict check and the self-write fingerprint.
 fn carry_xattrs(src: &Path, dst: &File) {
-    let Ok(c_src) = CString::new(src.as_os_str().as_bytes()) else { return };
+    let Ok(c_src) = CString::new(src.as_os_str().as_bytes()) else {
+        return;
+    };
     let fd = dst.as_raw_fd();
-    let Some(names) = read_sized(|buf, len| xattr_sys::list(&c_src, buf, len)) else { return };
+    let Some(names) = read_sized(|buf, len| xattr_sys::list(&c_src, buf, len)) else {
+        return;
+    };
     for name in names.split(|b| *b == 0) {
         if name.is_empty() || !xattr_sys::wanted(name) {
             continue;
         }
-        let Ok(c_name) = CString::new(name) else { continue };
+        let Ok(c_name) = CString::new(name) else {
+            continue;
+        };
         if let Some(value) = read_sized(|buf, len| xattr_sys::get(&c_src, &c_name, buf, len)) {
             xattr_sys::set(fd, &c_name, &value);
         }
@@ -709,7 +745,8 @@ mod xattr_sys {
     }
 
     pub fn set(fd: RawFd, name: &CStr, value: &[u8]) {
-        let _ = unsafe { libc::fsetxattr(fd, name.as_ptr(), value.as_ptr().cast(), value.len(), 0) };
+        let _ =
+            unsafe { libc::fsetxattr(fd, name.as_ptr(), value.as_ptr().cast(), value.len(), 0) };
     }
 
     /// `user.*` and the access ACL.  Not `security.*` (the new inode takes its
@@ -733,14 +770,20 @@ mod xattr_sys {
 
     pub fn get(path: &CStr, name: &CStr, buf: *mut u8, len: usize) -> isize {
         unsafe {
-            libc::getxattr(path.as_ptr(), name.as_ptr(), buf.cast(), len, 0, libc::XATTR_NOFOLLOW)
+            libc::getxattr(
+                path.as_ptr(),
+                name.as_ptr(),
+                buf.cast(),
+                len,
+                0,
+                libc::XATTR_NOFOLLOW,
+            )
         }
     }
 
     pub fn set(fd: RawFd, name: &CStr, value: &[u8]) {
-        let _ = unsafe {
-            libc::fsetxattr(fd, name.as_ptr(), value.as_ptr().cast(), value.len(), 0, 0)
-        };
+        let _ =
+            unsafe { libc::fsetxattr(fd, name.as_ptr(), value.as_ptr().cast(), value.len(), 0, 0) };
     }
 
     /// Everything the list shows.  `com.apple.decmpfs` is not listed without
@@ -781,7 +824,10 @@ pub fn read_note(abs: &Path, rel: &str) -> Result<NoteRead, VaultError> {
     // file is required — a FIFO substituted for an open note would otherwise
     // park this blocking worker until a writer appears, and a read that
     // returned its (empty) bytes would look like a wiped note.
-    let file = OpenOptions::new().read(true).custom_flags(libc::O_NONBLOCK).open(abs);
+    let file = OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NONBLOCK)
+        .open(abs);
     let mut file = file.map_err(|e| VaultError::from_io(rel, &e))?;
     let md = file.metadata().map_err(|e| VaultError::io(rel, &e))?;
 
@@ -819,7 +865,11 @@ pub fn read_note(abs: &Path, rel: &str) -> Result<NoteRead, VaultError> {
         return Err(VaultError::not_utf8(rel));
     }
 
-    Ok(NoteRead { bytes, mtime_ms, flags })
+    Ok(NoteRead {
+        bytes,
+        mtime_ms,
+        flags,
+    })
 }
 
 /// The framed form command 8 returns.  §2's layout lives in `note_frame.rs` and
@@ -827,6 +877,50 @@ pub fn read_note(abs: &Path, rel: &str) -> Result<NoteRead, VaultError> {
 pub fn read_note_framed(abs: &Path, rel: &str) -> Result<Vec<u8>, VaultError> {
     let n = read_note(abs, rel)?;
     Ok(note_frame::encode_note(n.mtime_ms, n.flags, &n.bytes))
+}
+
+/// CONTRACT §0.55 E108.  The largest EPUB the app will load, as a whole-file
+/// footprint guard.  It is NOT `MAX_NOTE_BYTES`: a book carries images and is a
+/// ZIP container, and 8 MiB would refuse ordinary novels.
+pub const MAX_BOOK_BYTES: u64 = 256 * 1024 * 1024;
+
+/// Read an EPUB's raw bytes.  NO FRAME, NO UTF-8 CHECK, NO NORMALISATION: the
+/// renderer's ZIP reader needs exactly the bytes on disk.
+///
+/// The same two guards `read_note` uses apply, for the same reasons: one
+/// `open` plus `metadata()` on the open handle (no TOCTOU size check), and
+/// `O_NONBLOCK` so a FIFO substituted after the scan cannot park a blocking
+/// worker.  A non-EPUB path is refused here as well as at the frontend, because
+/// this is the one command that can return arbitrary vault bytes.
+pub fn read_book(abs: &Path, rel: &str) -> Result<Vec<u8>, VaultError> {
+    if !path::is_epub(rel) {
+        return Err(VaultError::InvalidPath {
+            path: rel.to_string(),
+            reason: "not an EPUB book".to_string(),
+        });
+    }
+    let file = OpenOptions::new()
+        .read(true)
+        .custom_flags(libc::O_NONBLOCK)
+        .open(abs);
+    let mut file = file.map_err(|e| VaultError::from_io(rel, &e))?;
+    let md = file.metadata().map_err(|e| VaultError::io(rel, &e))?;
+    if !md.is_file() {
+        return Err(VaultError::not_found(rel));
+    }
+    if md.len() > MAX_BOOK_BYTES {
+        return Err(VaultError::too_large(rel, md.len(), MAX_BOOK_BYTES));
+    }
+    let capacity = md.len().min(MAX_BOOK_BYTES) as usize;
+    let mut raw = Vec::with_capacity(capacity);
+    // `take`: a file that grows after the fstat cannot allocate without bound.
+    std::io::Read::take(&mut file, MAX_BOOK_BYTES + 1)
+        .read_to_end(&mut raw)
+        .map_err(|e| VaultError::io(rel, &e))?;
+    if raw.len() as u64 > MAX_BOOK_BYTES {
+        return Err(VaultError::too_large(rel, raw.len() as u64, MAX_BOOK_BYTES));
+    }
+    Ok(raw)
 }
 
 /* ── write (§7.1 rule 2, all eleven steps) ────────────────────────────────── */
@@ -894,7 +988,11 @@ pub fn write_note(
     // actually lands on disk.  Without it the app can create a note it will
     // then refuse to open.
     if bytes.len() as u64 > MAX_NOTE_BYTES {
-        return Err(VaultError::too_large(rel, bytes.len() as u64, MAX_NOTE_BYTES));
+        return Err(VaultError::too_large(
+            rel,
+            bytes.len() as u64,
+            MAX_NOTE_BYTES,
+        ));
     }
 
     // Step 7's input (M68): preserve an existing destination's mode, else 0o644.
@@ -924,7 +1022,10 @@ pub fn write_note(
         SelfWrite::existing(abs, mtime_ns(&md), md.len()),
     );
 
-    Ok(WriteReceipt { mtime_ms: mtime_ms(&md), size: md.len() })
+    Ok(WriteReceipt {
+        mtime_ms: mtime_ms(&md),
+        size: md.len(),
+    })
 }
 
 /* ── create (spec-02 §6.3) ────────────────────────────────────────────────── */
@@ -946,12 +1047,16 @@ pub fn reject_path_component(name: &str) -> Result<(), VaultError> {
         return Err(VaultError::invalid_name(name, "it contains a NUL"));
     }
     if name == "." || name == ".." {
-        return Err(VaultError::invalid_name(name, "it is a directory reference"));
+        return Err(VaultError::invalid_name(
+            name,
+            "it is a directory reference",
+        ));
     }
     Ok(())
 }
 
 const MD: &str = ".md";
+const EPUB: &str = ".epub";
 
 /// `path::is_md` is the single declaration site for "what the tree considers a
 /// note" (§3.6); this must not grow a second opinion.
@@ -960,6 +1065,17 @@ fn with_md(name: &str) -> String {
         name.to_string()
     } else {
         format!("{name}{MD}")
+    }
+}
+
+/// The book half of the same rule: a rename of an EPUB keeps it an EPUB, so a
+/// name that does not already end `.epub` gets it appended.  The SOURCE names
+/// the kind, so `notes.txt` cannot turn a book into a note by accident.
+fn with_epub(name: &str) -> String {
+    if path::is_epub(name) {
+        name.to_string()
+    } else {
+        format!("{name}{EPUB}")
     }
 }
 
@@ -1005,8 +1121,11 @@ fn occupied(p: &Path) -> bool {
 /// renaming what somebody typed is how people lose track of notes.
 fn first_free(parent: &Path, stem: &str, suffix: &str) -> Result<(PathBuf, String), VaultError> {
     for n in 0..10_000u32 {
-        let name =
-            if n == 0 { format!("{stem}{suffix}") } else { format!("{stem} {n}{suffix}") };
+        let name = if n == 0 {
+            format!("{stem}{suffix}")
+        } else {
+            format!("{stem} {n}{suffix}")
+        };
         let p = parent.join(&name);
         if !occupied(&p) {
             return Ok((p, name));
@@ -1138,8 +1257,14 @@ fn rename_entry_locked(
     dst_abs: &Path,
     self_writes: &Mutex<SelfWrites>,
 ) -> Result<PathBuf, VaultError> {
-    let src_name = src_abs.file_name().and_then(|s| s.to_str()).unwrap_or_default();
-    let dst_name = dst_abs.file_name().and_then(|s| s.to_str()).unwrap_or_default();
+    let src_name = src_abs
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or_default();
+    let dst_name = dst_abs
+        .file_name()
+        .and_then(|s| s.to_str())
+        .unwrap_or_default();
     reject_path_component(dst_name)?;
 
     let src_md = fs::symlink_metadata(src_abs).map_err(|e| VaultError::from_io(src_name, &e))?;
@@ -1163,7 +1288,9 @@ fn rename_entry_locked(
      * case-only rename), so holding the lock across it and the two records is
      * simpler and leaves no stale entry behind when the rename fails.
      * `classify` blocks on this mutex until the records exist. */
-    let mut sw = self_writes.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+    let mut sw = self_writes
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
 
     if let Ok(dst_md) = fs::symlink_metadata(dst_abs) {
         if !same_file(&src_md, &dst_md) {
@@ -1196,7 +1323,11 @@ fn rename_entry_locked(
     // syscall means a genuine write that lands immediately afterwards cannot
     // be swallowed by a fingerprint read after it.
     sw.record(SelfWrite::removed(src_abs));
-    sw.record(SelfWrite::existing(dst_abs, mtime_ns(&src_md), src_md.len()));
+    sw.record(SelfWrite::existing(
+        dst_abs,
+        mtime_ns(&src_md),
+        src_md.len(),
+    ));
     drop(sw);
     Ok(true_abs(dst_abs))
 }
@@ -1205,23 +1336,37 @@ fn rename_entry_locked(
 ///
 /// For a note, `.md` is ENSURED rather than assumed: a name that does not
 /// already end in `.md` gets it appended, so `notes.txt` becomes
-/// `notes.txt.md`.  This is what Obsidian does, and it makes it structurally
-/// impossible for a rename to hide a note from the tree (§3.6 shows only `.md`).
+/// `notes.txt.md`.  For a book, `.epub` is ensured the same way.  This is what
+/// Obsidian does, and it makes it structurally impossible for a rename to hide
+/// a tree file (§3.6 shows notes and books).
+///
+/// THE KIND COMES FROM THE SOURCE, NOT THE TYPED NAME.  `rename_entry` passes
+/// "regular file" for both notes and books; deriving it here from
+/// `src_abs`'s own spelling means a book renamed to `x.md` becomes `x.md.epub`
+/// and a note renamed to `x.epub` becomes `x.epub.md` — each stays visible
+/// instead of changing type behind the tree's back.
 ///
 /// DIVERGENCE FROM spec-02 §6.4, STATED: that section says "renaming a note to
 /// a different extension is rejected (InvalidName)", and its stated REASON is
-/// "it would vanish from the tree and confuse the user".  Ensuring `.md` serves
-/// that reason exactly — nothing can vanish — while a rejection ALSO refuses
-/// every legitimate name that merely contains a dot: `v1.2 plan`, `2026.Q1
-/// review`, `Fig. 3 notes`.  Those are ordinary note titles, the user would get
-/// `invalidName` on a name they typed deliberately, and §7.3 case 11's whole
-/// point is that over-refusing is its own defect.  The invariant is kept; the
-/// mechanism is the more permissive of the two that keep it.
-pub fn rename_target(src_abs: &Path, new_name: &str, is_note: bool) -> Result<PathBuf, VaultError> {
+/// "it would vanish from the tree and confuse the user".  Ensuring the suffix
+/// serves that reason exactly — nothing can vanish — while a rejection ALSO
+/// refuses every legitimate name that merely contains a dot: `v1.2 plan`,
+/// `2026.Q1 review`, `Fig. 3 notes`.  Those are ordinary note titles, the user
+/// would get `invalidName` on a name they typed deliberately, and §7.3 case 11's
+/// whole point is that over-refusing is its own defect.  The invariant is kept;
+/// the mechanism is the more permissive of the two that keep it.
+pub fn rename_target(src_abs: &Path, new_name: &str, is_file: bool) -> Result<PathBuf, VaultError> {
     let dir = src_abs
         .parent()
         .ok_or_else(|| VaultError::invalid_name(new_name, "the source has no parent directory"))?;
-    let name = if is_note { with_md(new_name) } else { new_name.to_string() };
+    let src_name = src_abs.file_name().and_then(|s| s.to_str()).unwrap_or("");
+    let name = if !is_file {
+        new_name.to_string()
+    } else if path::is_epub(src_name) {
+        with_epub(new_name)
+    } else {
+        with_md(new_name)
+    };
     validate_created_name(new_name, &name)?;
     Ok(dir.join(name))
 }
@@ -1245,10 +1390,7 @@ fn split_stem_suffix(file_name: &str, is_dir: bool) -> (String, String) {
         return (file_name.to_string(), String::new());
     }
     match file_name.rfind('.') {
-        Some(at) if at > 0 => (
-            file_name[..at].to_string(),
-            file_name[at..].to_string(),
-        ),
+        Some(at) if at > 0 => (file_name[..at].to_string(), file_name[at..].to_string()),
         _ => (file_name.to_string(), String::new()),
     }
 }
@@ -1256,7 +1398,11 @@ fn split_stem_suffix(file_name: &str, is_dir: bool) -> (String, String) {
 /// First free name in `dir`: `name`, then `stem 1+suffix`, `stem 2+suffix`, …
 /// — Obsidian's `getAvailablePath`, which appends ` 1`, ` 2`, … Boundedly
 /// (10,000 attempts, like `first_free`); the error names the original.
-fn first_free_for_move(dir: &Path, file_name: &str, is_dir: bool) -> Result<(PathBuf, String), VaultError> {
+fn first_free_for_move(
+    dir: &Path,
+    file_name: &str,
+    is_dir: bool,
+) -> Result<(PathBuf, String), VaultError> {
     let (stem, suffix) = split_stem_suffix(file_name, is_dir);
     for n in 0..10_000u32 {
         let name = if n == 0 {
@@ -1283,7 +1429,9 @@ pub fn move_entry(
     let file_name = src_abs
         .file_name()
         .and_then(|s| s.to_str())
-        .ok_or_else(|| VaultError::invalid_path(src_abs.to_string_lossy(), "the source has no name"))?;
+        .ok_or_else(|| {
+            VaultError::invalid_path(src_abs.to_string_lossy(), "the source has no name")
+        })?;
     // The name came out of the vault, so it is already valid — but the floor
     // holds regardless of caller, exactly as `rename_entry` holds it.
     reject_path_component(file_name)?;
@@ -1307,6 +1455,218 @@ pub fn move_entry(
     // self-write bookkeeping (removed + existing), same case-only dance.
     rename_entry_locked(src_abs, &dst_abs, self_writes)?;
     Ok(dst_abs)
+}
+
+enum PublishError {
+    Exists,
+    Io(std::io::Error),
+}
+
+/// Publish `tmp` under `dst` without replacing anything.  `hard_link` is the
+/// atomic no-replace primitive on ordinary filesystems; the `create_new`
+/// fallback covers filesystems that do not support links, still refusing an
+/// existing destination.  On success the temp name is gone and `dst` is the
+/// only visible name.
+fn publish_no_replace(tmp: &Path, dst: &Path) -> Result<(), PublishError> {
+    match fs::hard_link(tmp, dst) {
+        Ok(()) => {
+            fs::remove_file(tmp).map_err(PublishError::Io)?;
+            Ok(())
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => Err(PublishError::Exists),
+        Err(_) => match OpenOptions::new().write(true).create_new(true).open(dst) {
+            Ok(_) => {
+                fs::rename(tmp, dst).map_err(PublishError::Io)?;
+                Ok(())
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => Err(PublishError::Exists),
+            Err(e) => Err(PublishError::Io(e)),
+        },
+    }
+}
+
+/// §0.55 E108 — import an EPUB by MOVING it into the vault.
+///
+/// The source comes from the shell's file picker, never from the renderer.  A
+/// same-filesystem move is one `rename`; a cross-device move (Downloads and a
+/// vault on different mounts are the common case) is a durable copy into a
+/// temp file in the destination directory, an atomic rename, and only THEN the
+/// source's unlink.  A failure before that unlink leaves the source untouched
+/// and removes the temp; a failure of the unlink leaves both copies, which is
+/// reported rather than hidden.
+///
+/// The destination is uniquified like a drag: `Holes.epub` becomes
+/// `Holes 1.epub` when the folder already holds one.  Nothing is overwritten.
+pub fn import_epub(
+    source_abs: &Path,
+    dst_dir_abs: &Path,
+    self_writes: &Mutex<SelfWrites>,
+) -> Result<PathBuf, VaultError> {
+    let src_label = source_abs.to_string_lossy().into_owned();
+    if !source_abs.is_absolute() {
+        return Err(VaultError::invalid_path(
+            &src_label,
+            "the imported file must be absolute",
+        ));
+    }
+    let src_md =
+        fs::symlink_metadata(source_abs).map_err(|e| VaultError::from_io(&src_label, &e))?;
+    if src_md.file_type().is_symlink() {
+        return Err(VaultError::invalid_path(
+            &src_label,
+            "symlinks are not imported",
+        ));
+    }
+    if !src_md.file_type().is_file() {
+        return Err(VaultError::not_found(&src_label));
+    }
+    if src_md.len() > MAX_BOOK_BYTES {
+        return Err(VaultError::too_large(
+            &src_label,
+            src_md.len(),
+            MAX_BOOK_BYTES,
+        ));
+    }
+    let file_name = source_abs
+        .file_name()
+        .and_then(|s| s.to_str())
+        .ok_or_else(|| {
+            VaultError::invalid_path(&src_label, "the imported file has no usable name")
+        })?;
+    if !path::is_epub(file_name) {
+        return Err(VaultError::invalid_path(
+            &src_label,
+            "only an .epub file can be imported",
+        ));
+    }
+    if file_name.starts_with('.') {
+        return Err(VaultError::invalid_name(
+            file_name,
+            "the scanner would hide a name starting with '.'",
+        ));
+    }
+    reject_path_component(file_name)?;
+    path::validate_name(file_name)?;
+    if !dst_dir_abs.is_dir() {
+        return Err(VaultError::not_a_directory(dst_dir_abs.to_string_lossy()));
+    }
+    if source_abs.parent() == Some(dst_dir_abs) {
+        // Already in the destination folder: importing it there is a no-op.
+        return Ok(source_abs.to_path_buf());
+    }
+
+    let _serial = write_lock();
+    let (dst_abs, _dst_name) = first_free_for_move(dst_dir_abs, file_name, false)?;
+    let dst_dir_md = fs::metadata(dst_dir_abs)
+        .map_err(|e| VaultError::from_io(dst_dir_abs.to_string_lossy(), &e))?;
+    if src_md.dev() == dst_dir_md.dev() {
+        // Same filesystem: the atomic rename path, with its case-only dance and
+        // its own two fingerprints.
+        let published = rename_entry_locked(source_abs, &dst_abs, self_writes)?;
+        return Ok(true_abs(&published));
+    }
+
+    // Cross-device: copy to a dot-temp in the DESTINATION directory (so the
+    // final rename is atomic and the sweep knows the name), fsync, rename, then
+    // unlink the source.  Nothing at the destination is visible until it is
+    // whole, and the source is not touched until the destination is durable.
+    let tmp = temp_path(dst_dir_abs, file_name);
+    let copied_ok = (|| -> Result<(), VaultError> {
+        let mut input = OpenOptions::new()
+            .read(true)
+            .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
+            .open(source_abs)
+            .map_err(|e| VaultError::io(&src_label, &e))?;
+        let opened = input
+            .metadata()
+            .map_err(|e| VaultError::io(&src_label, &e))?;
+        if !opened.is_file() {
+            return Err(VaultError::not_found(&src_label));
+        }
+        if opened.len() > MAX_BOOK_BYTES {
+            return Err(VaultError::too_large(
+                &src_label,
+                opened.len(),
+                MAX_BOOK_BYTES,
+            ));
+        }
+        let mut output = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o644)
+            .open(&tmp)
+            .map_err(|e| VaultError::io(tmp.to_string_lossy(), &e))?;
+        let copied = std::io::copy(
+            &mut std::io::Read::take(&mut input, MAX_BOOK_BYTES + 1),
+            &mut output,
+        )
+        .map_err(|e| VaultError::io(tmp.to_string_lossy(), &e))?;
+        if copied > MAX_BOOK_BYTES {
+            return Err(VaultError::too_large(&src_label, copied, MAX_BOOK_BYTES));
+        }
+        // The source is allowed to be read, not to change underneath us.  The
+        // open handle's final length must equal the length we copied; a file
+        // still being downloaded is rejected rather than truncated and deleted.
+        let after = input
+            .metadata()
+            .map_err(|e| VaultError::io(&src_label, &e))?;
+        if copied != opened.len() || after.len() != opened.len() {
+            return Err(VaultError::io(
+                &src_label,
+                &std::io::Error::other("the source changed during import"),
+            ));
+        }
+        output
+            .set_permissions(opened.permissions())
+            .map_err(|e| VaultError::io(tmp.to_string_lossy(), &e))?;
+        output
+            .sync_all()
+            .map_err(|e| VaultError::io(tmp.to_string_lossy(), &e))?;
+        Ok(())
+    })();
+    if let Err(e) = copied_ok {
+        let _ = fs::remove_file(&tmp);
+        return Err(e);
+    }
+
+    // Publish with a no-replace primitive.  Plain `rename` would silently
+    // replace a file another process (a sync client, another editor) created
+    // after `first_free_for_move` chose this name.
+    let published = loop {
+        let (candidate, _) = first_free_for_move(dst_dir_abs, file_name, false)?;
+        match publish_no_replace(&tmp, &candidate) {
+            Ok(()) => break candidate,
+            Err(PublishError::Exists) => continue,
+            Err(PublishError::Io(e)) => {
+                let _ = fs::remove_file(&tmp);
+                return Err(VaultError::io(candidate.to_string_lossy(), &e));
+            }
+        }
+    };
+    let published = true_abs(&published);
+
+    #[cfg(target_os = "linux")]
+    {
+        if let Ok(d) = File::open(dst_dir_abs) {
+            d.sync_all()
+                .map_err(|e| VaultError::io(dst_dir_abs.to_string_lossy(), &e))?;
+        }
+    }
+    // Verify the destination before deleting the only other copy.
+    let post = fs::symlink_metadata(&published)
+        .map_err(|e| VaultError::from_io(published.to_string_lossy(), &e))?;
+    if let Err(e) = fs::remove_file(source_abs) {
+        return Err(VaultError::io(&src_label, &e));
+    }
+
+    {
+        let mut sw = self_writes
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        sw.record(SelfWrite::removed(source_abs));
+        sw.record(SelfWrite::existing(&published, mtime_ns(&post), post.len()));
+    }
+    Ok(published)
 }
 
 /// F73: the name the directory actually holds. On a normalising filesystem
@@ -1356,7 +1716,11 @@ pub fn delete_entry(
     let md = fs::symlink_metadata(abs).map_err(|e| VaultError::from_io(rel, &e))?;
 
     if permanent {
-        let r = if md.is_dir() { fs::remove_dir_all(abs) } else { fs::remove_file(abs) };
+        let r = if md.is_dir() {
+            fs::remove_dir_all(abs)
+        } else {
+            fs::remove_file(abs)
+        };
         r.map_err(|e| VaultError::from_io(rel, &e))?;
     } else {
         // Two commands were considered and rejected in favour of one command
@@ -1515,7 +1879,12 @@ mod tests {
     }
 
     fn args(rel: &str, flags: u32, base: Option<i64>, create: bool) -> WriteArgs {
-        WriteArgs { rel: rel.into(), flags, base_mtime_ms: base, create }
+        WriteArgs {
+            rel: rel.into(),
+            flags,
+            base_mtime_ms: base,
+            create,
+        }
     }
 
     /* ── the temp-name helper and the sweep (§7.1 r2 s3, §7.3 case 1, M67) ── */
@@ -1528,8 +1897,15 @@ mod tests {
         assert_ne!(a, b, "two temps in the same directory collided");
         for p in [&a, &b] {
             let name = p.file_name().unwrap().to_str().unwrap();
-            assert!(name.starts_with('.'), "{name} is visible to the scanner and to Obsidian");
-            assert_eq!(p.parent().unwrap(), dir, "the temp left the destination's directory");
+            assert!(
+                name.starts_with('.'),
+                "{name} is visible to the scanner and to Obsidian"
+            );
+            assert_eq!(
+                p.parent().unwrap(),
+                dir,
+                "the temp left the destination's directory"
+            );
             assert_eq!(parse_temp_pid(name), Some(std::process::id()), "{name}");
         }
     }
@@ -1561,7 +1937,10 @@ mod tests {
     #[test]
     fn pid_zero_is_never_probed_and_never_live() {
         assert!(!pid_is_live(0));
-        assert!(pid_is_live(std::process::id()), "our own pid must read as live");
+        assert!(
+            pid_is_live(std::process::id()),
+            "our own pid must read as live"
+        );
         // A pid that cannot exist on macOS (pid_max is 99999).
         assert!(!pid_is_live(4_000_000_000));
     }
@@ -1582,12 +1961,18 @@ mod tests {
 
         let now = SystemTime::now();
         assert!(should_sweep(&dead, now), "dead-PID debris survived");
-        assert!(!should_sweep(&live, now), "a live instance's in-flight write was swept");
+        assert!(
+            !should_sweep(&live, now),
+            "a live instance's in-flight write was swept"
+        );
         assert!(!should_sweep(&innocent, now));
         assert!(!should_sweep(&note, now));
 
         // The one-hour rule applies ONLY to a live PID.
-        assert!(should_sweep(&live, now + LIVE_PID_GRACE + Duration::from_secs(1)));
+        assert!(should_sweep(
+            &live,
+            now + LIVE_PID_GRACE + Duration::from_secs(1)
+        ));
 
         assert_eq!(sweep_temps_in(root), 1);
         assert!(!dead.exists());
@@ -1614,7 +1999,11 @@ mod tests {
         let name = p.file_name().unwrap().to_str().unwrap();
         assert!(name.starts_with('.'), "{name} is visible");
         assert_eq!(p.parent().unwrap(), dir);
-        assert_eq!(parse_temp_pid(name), None, "rename-tmp must never match the temp sweep");
+        assert_eq!(
+            parse_temp_pid(name),
+            None,
+            "rename-tmp must never match the temp sweep"
+        );
         let (pid, dest) = parse_rename_tmp(name).expect("rename-tmp did not parse");
         assert_eq!(pid, std::process::id());
         assert_eq!(dest, "notes.md");
@@ -1714,7 +2103,11 @@ mod tests {
             .filter(|n| n != "Misc.md")
             .collect();
         assert!(strays.is_empty(), "step 11 did not run: {strays:?}");
-        assert_eq!(fs::read(&abs).unwrap(), b"old\n", "the old content was damaged");
+        assert_eq!(
+            fs::read(&abs).unwrap(),
+            b"old\n",
+            "the old content was damaged"
+        );
     }
 
     /// M68.  An overwrite preserves the destination's mode; a new file gets a
@@ -1731,11 +2124,17 @@ mod tests {
         let base = mtime_ms(&fs::metadata(&abs).unwrap());
         let s = sw();
         write_note(&abs, &args("Misc.md", 0, Some(base), false), b"new\n", &s).unwrap();
-        assert_eq!(fs::metadata(&abs).unwrap().permissions().mode() & 0o777, 0o640);
+        assert_eq!(
+            fs::metadata(&abs).unwrap().permissions().mode() & 0o777,
+            0o640
+        );
 
         let fresh = dir.path().join("Fresh.md");
         write_note(&fresh, &args("Fresh.md", 0, None, true), b"x\n", &s).unwrap();
-        assert_eq!(fs::metadata(&fresh).unwrap().permissions().mode() & 0o777, 0o644);
+        assert_eq!(
+            fs::metadata(&fresh).unwrap().permissions().mode() & 0o777,
+            0o644
+        );
     }
 
     /// §3.5 step 10: the fingerprint is recorded BEFORE the command returns, so
@@ -1748,7 +2147,10 @@ mod tests {
         let base = mtime_ms(&fs::metadata(&abs).unwrap());
         let s = sw();
         write_note(&abs, &args("Misc.md", 0, Some(base), false), b"new\n", &s).unwrap();
-        assert!(s.lock().unwrap().matches_for(&abs), "no fingerprint was recorded");
+        assert!(
+            s.lock().unwrap().matches_for(&abs),
+            "no fingerprint was recorded"
+        );
     }
 
     /* ── §7.1 rule 1: the create semantics ───────────────────────────────── */
@@ -1766,7 +2168,8 @@ mod tests {
         assert!(!abs.exists(), "an autosave resurrected a deleted note");
         // …and it is still NotFound when a base mtime is present, which is the
         // shape an autosave actually sends.
-        let e = write_note(&abs, &args("Gone.md", 0, Some(123), false), b"typed\n", &s).unwrap_err();
+        let e =
+            write_note(&abs, &args("Gone.md", 0, Some(123), false), b"typed\n", &s).unwrap_err();
         assert_eq!(e.kind(), "notFound");
         assert!(!abs.exists());
     }
@@ -1810,15 +2213,27 @@ mod tests {
         std::thread::sleep(Duration::from_millis(20));
         fs::write(&abs, b"obsidian's version\n").unwrap();
         let disk_mtime = mtime_ms(&fs::metadata(&abs).unwrap());
-        assert_ne!(disk_mtime, base, "the fixture did not actually move the mtime");
+        assert_ne!(
+            disk_mtime, base,
+            "the fixture did not actually move the mtime"
+        );
 
-        let e = write_note(&abs, &args("Misc.md", 0, Some(base), false), b"mine\n", &s).unwrap_err();
+        let e =
+            write_note(&abs, &args("Misc.md", 0, Some(base), false), b"mine\n", &s).unwrap_err();
         match e {
             VaultError::Conflict { disk_mtime_ms, .. } => assert_eq!(disk_mtime_ms, disk_mtime),
             other => panic!("expected conflict, got {other:?}"),
         }
-        assert_eq!(fs::read(&abs).unwrap(), b"obsidian's version\n", "the write went through");
-        assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 1, "a temp was left behind");
+        assert_eq!(
+            fs::read(&abs).unwrap(),
+            b"obsidian's version\n",
+            "the write went through"
+        );
+        assert_eq!(
+            fs::read_dir(dir.path()).unwrap().count(),
+            1,
+            "a temp was left behind"
+        );
     }
 
     /// §7.2's "Keep mine": `x-base-mtime: ""` -> `None` -> force overwrite.
@@ -1876,9 +2291,58 @@ mod tests {
     #[test]
     fn a_missing_note_is_not_found_and_a_directory_is_not_a_note() {
         let dir = tempfile::tempdir().unwrap();
-        assert_eq!(read_note(&dir.path().join("nope.md"), "nope.md").unwrap_err().kind(), "notFound");
+        assert_eq!(
+            read_note(&dir.path().join("nope.md"), "nope.md")
+                .unwrap_err()
+                .kind(),
+            "notFound"
+        );
         fs::create_dir(dir.path().join("Folder")).unwrap();
-        assert_eq!(read_note(&dir.path().join("Folder"), "Folder").unwrap_err().kind(), "notFound");
+        assert_eq!(
+            read_note(&dir.path().join("Folder"), "Folder")
+                .unwrap_err()
+                .kind(),
+            "notFound"
+        );
+    }
+
+    #[test]
+    fn publish_no_replace_refuses_an_existing_destination() {
+        let dir = tempfile::tempdir().unwrap();
+        let tmp = dir.path().join("Book.epub.tmp");
+        let dst = dir.path().join("Book.epub");
+        fs::write(&tmp, b"new").unwrap();
+        fs::write(&dst, b"old").unwrap();
+        match publish_no_replace(&tmp, &dst) {
+            Err(PublishError::Exists) => {}
+            _ => panic!("publish_no_replace replaced an existing destination"),
+        }
+        assert_eq!(fs::read(&dst).unwrap(), b"old");
+        assert!(tmp.exists(), "the temp is untouched when publish refuses");
+    }
+
+    /// §0.55 E108: a book read is RAW bytes, no frame and no UTF-8 validation,
+    /// and the path guard is in this function rather than trusted to the caller.
+    #[test]
+    fn read_book_is_raw_and_refuses_a_non_epub_path() {
+        let dir = tempfile::tempdir().unwrap();
+        let abs = dir.path().join("Book.epub");
+        let raw = b"PK\x03\x04not-utf8-\xff".to_vec();
+        fs::write(&abs, &raw).unwrap();
+        assert_eq!(read_book(&abs, "Book.epub").unwrap(), raw);
+
+        let note = dir.path().join("Note.md");
+        fs::write(&note, b"text").unwrap();
+        assert_eq!(
+            read_book(&note, "Note.md").unwrap_err().kind(),
+            "invalidPath"
+        );
+        assert_eq!(
+            read_book(&dir.path().join("nope.epub"), "nope.epub")
+                .unwrap_err()
+                .kind(),
+            "notFound"
+        );
     }
 
     /* ── create ───────────────────────────────────────────────────────────── */
@@ -1890,11 +2354,19 @@ mod tests {
         let (_, a) = create_note(dir.path(), None, &s).unwrap();
         let (_, b) = create_note(dir.path(), None, &s).unwrap();
         let (_, c) = create_note(dir.path(), None, &s).unwrap();
-        assert_eq!((a.as_str(), b.as_str(), c.as_str()), ("Untitled.md", "Untitled 1.md", "Untitled 2.md"));
+        assert_eq!(
+            (a.as_str(), b.as_str(), c.as_str()),
+            ("Untitled.md", "Untitled 1.md", "Untitled 2.md")
+        );
 
         // A USER-TYPED name is never silently turned into "Ideas 1".
         create_note(dir.path(), Some("Ideas"), &s).unwrap();
-        assert_eq!(create_note(dir.path(), Some("Ideas"), &s).unwrap_err().kind(), "alreadyExists");
+        assert_eq!(
+            create_note(dir.path(), Some("Ideas"), &s)
+                .unwrap_err()
+                .kind(),
+            "alreadyExists"
+        );
         assert!(!dir.path().join("Ideas 1.md").exists());
     }
 
@@ -1902,9 +2374,18 @@ mod tests {
     fn create_note_appends_md_but_only_when_missing() {
         let dir = tempfile::tempdir().unwrap();
         let s = sw();
-        assert_eq!(create_note(dir.path(), Some("Plain"), &s).unwrap().1, "Plain.md");
-        assert_eq!(create_note(dir.path(), Some("Kept.md"), &s).unwrap().1, "Kept.md");
-        assert_eq!(create_note(dir.path(), Some("Upper.MD"), &s).unwrap().1, "Upper.MD");
+        assert_eq!(
+            create_note(dir.path(), Some("Plain"), &s).unwrap().1,
+            "Plain.md"
+        );
+        assert_eq!(
+            create_note(dir.path(), Some("Kept.md"), &s).unwrap().1,
+            "Kept.md"
+        );
+        assert_eq!(
+            create_note(dir.path(), Some("Upper.MD"), &s).unwrap().1,
+            "Upper.MD"
+        );
     }
 
     #[test]
@@ -1923,12 +2404,29 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let s = sw();
         for bad in [
-            "../escape", "a/b", "..", ".", "", "nul\0name",
+            "../escape",
+            "a/b",
+            "..",
+            ".",
+            "",
+            "nul\0name",
             // §7.3 case 11, now enforced through path::validate_name:
-            "CON", "nul", "trailing ", " leading", "trailing.",
-            "a:b", "a*b", "a?b", "a\"b", "a<b", "a>b", "a|b", "a\\b",
+            "CON",
+            "nul",
+            "trailing ",
+            " leading",
+            "trailing.",
+            "a:b",
+            "a*b",
+            "a?b",
+            "a\"b",
+            "a<b",
+            "a>b",
+            "a|b",
+            "a\\b",
             // …and the hidden-name rule, which is this file's:
-            ".secret", ".DS_Store",
+            ".secret",
+            ".DS_Store",
         ] {
             let e = create_note(dir.path(), Some(bad), &s);
             assert!(e.is_err(), "create_note accepted {bad:?}");
@@ -1945,9 +2443,17 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let s = sw();
         // Only the FINAL name is reserved on Windows: "CON" -> "CON.md".
-        assert_eq!(create_note(dir.path(), Some("CON"), &s).unwrap_err().kind(), "invalidName");
+        assert_eq!(
+            create_note(dir.path(), Some("CON"), &s).unwrap_err().kind(),
+            "invalidName"
+        );
         // Only the TYPED name has the trailing space: "Ideas " -> "Ideas .md".
-        assert_eq!(create_note(dir.path(), Some("Ideas "), &s).unwrap_err().kind(), "invalidName");
+        assert_eq!(
+            create_note(dir.path(), Some("Ideas "), &s)
+                .unwrap_err()
+                .kind(),
+            "invalidName"
+        );
         // …and the near-misses are still allowed, because over-refusing is its
         // own bug: `CONTRACT.md` is not `CON`.
         for good in ["CONTRACT", "COMET", "NULL", "LPT10", "Ideas"] {
@@ -1961,13 +2467,25 @@ mod tests {
     #[test]
     fn a_rename_cannot_hide_a_note_or_change_its_extension() {
         let src = Path::new("/v/A/note.md");
-        assert_eq!(rename_target(src, ".hidden", true).unwrap_err().kind(), "invalidName");
+        assert_eq!(
+            rename_target(src, ".hidden", true).unwrap_err().kind(),
+            "invalidName"
+        );
         // A rename can never hide a note behind another extension: `.md` is
         // ensured, not assumed (see `rename_target`).
-        assert_eq!(rename_target(src, "notes.txt", true).unwrap(), Path::new("/v/A/notes.txt.md"));
+        assert_eq!(
+            rename_target(src, "notes.txt", true).unwrap(),
+            Path::new("/v/A/notes.txt.md")
+        );
         // …and an ordinary title containing a dot is NOT refused.
-        assert_eq!(rename_target(src, "v1.2 plan", true).unwrap(), Path::new("/v/A/v1.2 plan.md"));
-        assert_eq!(rename_target(src, "Notes.MD", true).unwrap(), Path::new("/v/A/Notes.MD"));
+        assert_eq!(
+            rename_target(src, "v1.2 plan", true).unwrap(),
+            Path::new("/v/A/v1.2 plan.md")
+        );
+        assert_eq!(
+            rename_target(src, "Notes.MD", true).unwrap(),
+            Path::new("/v/A/Notes.MD")
+        );
         // A folder has no extension rule.
         assert!(rename_target(Path::new("/v/A"), "Renamed", false).is_ok());
     }
@@ -2009,7 +2527,10 @@ mod tests {
         fs::write(&a, b"a\n").unwrap();
         fs::write(&b, b"b\n").unwrap();
         let s = sw();
-        assert_eq!(rename_entry(&a, &b, &s).unwrap_err().kind(), "alreadyExists");
+        assert_eq!(
+            rename_entry(&a, &b, &s).unwrap_err().kind(),
+            "alreadyExists"
+        );
         assert_eq!(fs::read(&a).unwrap(), b"a\n");
         assert_eq!(fs::read(&b).unwrap(), b"b\n");
     }
@@ -2046,7 +2567,10 @@ mod tests {
         let (abs, name) = create_note(dir.path(), Some("caf\u{e9}.md"), &s).unwrap();
         assert_eq!(name, "caf\u{e9}.md");
         let ino = std::fs::metadata(&abs).unwrap().ino();
-        assert_eq!(std::fs::metadata(dir.path().join(&name)).unwrap().ino(), ino);
+        assert_eq!(
+            std::fs::metadata(dir.path().join(&name)).unwrap().ino(),
+            ino
+        );
         let dst = rename_target(&abs, "cr\u{e8}me", true).unwrap();
         let final_abs = rename_entry(&abs, &dst, &s).unwrap();
         assert_eq!(final_abs.file_name().unwrap(), "cr\u{e8}me.md");
@@ -2063,13 +2587,87 @@ mod tests {
     #[test]
     fn rename_target_keeps_the_extension_honest() {
         let src = Path::new("/v/A/note.md");
-        assert_eq!(rename_target(src, "Renamed", true).unwrap(), Path::new("/v/A/Renamed.md"));
-        assert_eq!(rename_target(src, "Renamed.md", true).unwrap(), Path::new("/v/A/Renamed.md"));
+        assert_eq!(
+            rename_target(src, "Renamed", true).unwrap(),
+            Path::new("/v/A/Renamed.md")
+        );
+        assert_eq!(
+            rename_target(src, "Renamed.md", true).unwrap(),
+            Path::new("/v/A/Renamed.md")
+        );
         // A folder keeps exactly what was typed.
-        assert_eq!(rename_target(Path::new("/v/A"), "B", false).unwrap(), Path::new("/v/B"));
+        assert_eq!(
+            rename_target(Path::new("/v/A"), "B", false).unwrap(),
+            Path::new("/v/B")
+        );
+        // A book keeps `.epub`, and a note cannot become one by typing its
+        // suffix (E108: the SOURCE names the kind).
+        let book = Path::new("/v/A/Book.epub");
+        assert_eq!(
+            rename_target(book, "Renamed", true).unwrap(),
+            Path::new("/v/A/Renamed.epub")
+        );
+        assert_eq!(
+            rename_target(book, "Renamed.EPUB", true).unwrap(),
+            Path::new("/v/A/Renamed.EPUB")
+        );
+        assert_eq!(
+            rename_target(book, "Trying.md", true).unwrap(),
+            Path::new("/v/A/Trying.md.epub")
+        );
+        assert_eq!(
+            rename_target(src, "Trying.epub", true).unwrap(),
+            Path::new("/v/A/Trying.epub.md")
+        );
         // Renaming does not move.
         assert!(rename_target(src, "../elsewhere", true).is_err());
         assert!(rename_target(src, "sub/deeper", true).is_err());
+    }
+
+    /// §0.55 E108 — Import MOVES the source, uniquifies at the destination, and
+    /// refuses anything that is not an EPUB before touching either side.
+    #[test]
+    fn import_epub_moves_and_uniquifies_without_touching_the_source_on_refusal() {
+        let dir = tempfile::tempdir().unwrap();
+        let src_dir = dir.path().join("Downloads");
+        let dst_dir = dir.path().join("Vault/Books");
+        fs::create_dir_all(&src_dir).unwrap();
+        fs::create_dir_all(&dst_dir).unwrap();
+        let source = src_dir.join("Holes.epub");
+        fs::write(&source, b"PK\x03\x04book").unwrap();
+        let s = sw();
+
+        let first = import_epub(&source, &dst_dir, &s).unwrap();
+        assert_eq!(first, dst_dir.join("Holes.epub"));
+        assert_eq!(fs::read(&first).unwrap(), b"PK\x03\x04book");
+        assert!(!source.exists(), "import must MOVE, not copy");
+
+        let again = src_dir.join("Holes.epub");
+        fs::write(&again, b"PK\x03\x04second").unwrap();
+        let second = import_epub(&again, &dst_dir, &s).unwrap();
+        assert_eq!(second, dst_dir.join("Holes 1.epub"));
+        assert!(!again.exists());
+
+        let note = src_dir.join("Holes.md");
+        fs::write(&note, b"text").unwrap();
+        assert_eq!(
+            import_epub(&note, &dst_dir, &s).unwrap_err().kind(),
+            "invalidPath"
+        );
+        assert!(
+            note.exists(),
+            "a refused import must leave the source exactly where it was"
+        );
+
+        // The scanner skips dotfiles, so importing one would create an
+        // invisible row.  Refuse before the move.
+        let hidden = src_dir.join(".Hidden.epub");
+        fs::write(&hidden, b"PK\x03\x04").unwrap();
+        assert_eq!(
+            import_epub(&hidden, &dst_dir, &s).unwrap_err().kind(),
+            "invalidName"
+        );
+        assert!(hidden.exists());
     }
 
     #[test]
@@ -2105,7 +2703,9 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let s = sw();
         assert_eq!(
-            delete_entry(&dir.path().join("nope.md"), "nope.md", true, &s).unwrap_err().kind(),
+            delete_entry(&dir.path().join("nope.md"), "nope.md", true, &s)
+                .unwrap_err()
+                .kind(),
             "notFound"
         );
     }
@@ -2183,7 +2783,9 @@ mod tests {
     fn reveal_refuses_a_missing_path_without_spawning() {
         let dir = tempfile::tempdir().unwrap();
         assert_eq!(
-            reveal_in_os(&dir.path().join("nope.md"), "nope.md").unwrap_err().kind(),
+            reveal_in_os(&dir.path().join("nope.md"), "nope.md")
+                .unwrap_err()
+                .kind(),
             "notFound"
         );
     }
@@ -2202,7 +2804,12 @@ mod write_guard_tests {
     }
 
     fn args(rel: &str, base: Option<i64>, create: bool) -> WriteArgs {
-        WriteArgs { rel: rel.into(), flags: 0, base_mtime_ms: base, create }
+        WriteArgs {
+            rel: rel.into(),
+            flags: 0,
+            base_mtime_ms: base,
+            create,
+        }
     }
 
     fn before_recheck(f: impl FnOnce(&Path) + 'static) {
@@ -2214,7 +2821,12 @@ mod write_guard_tests {
     }
 
     fn set_mtime(p: &Path, t: SystemTime) {
-        File::options().write(true).open(p).unwrap().set_modified(t).unwrap();
+        File::options()
+            .write(true)
+            .open(p)
+            .unwrap()
+            .set_modified(t)
+            .unwrap();
     }
 
     fn seed(dir: &Path, name: &str, body: &[u8]) -> (PathBuf, i64) {
@@ -2244,10 +2856,19 @@ mod write_guard_tests {
             fs::write(abs, b"their edit, longer\n").unwrap();
             set_mtime(abs, SystemTime::now() + Duration::from_secs(3600));
         });
-        let e = write_note(&abs, &args("Misc.md", Some(base), false), b"mine\n", &sw()).unwrap_err();
+        let e =
+            write_note(&abs, &args("Misc.md", Some(base), false), b"mine\n", &sw()).unwrap_err();
         assert_eq!(e.kind(), "conflict", "{e:?}");
-        assert_eq!(fs::read(&abs).unwrap(), b"their edit, longer\n", "the outside edit was overwritten");
-        assert!(dot_entries(dir.path()).is_empty(), "{:?}", dot_entries(dir.path()));
+        assert_eq!(
+            fs::read(&abs).unwrap(),
+            b"their edit, longer\n",
+            "the outside edit was overwritten"
+        );
+        assert!(
+            dot_entries(dir.path()).is_empty(),
+            "{:?}",
+            dot_entries(dir.path())
+        );
     }
 
     /// A sync client's temp+rename replace with the SAME length and the SAME
@@ -2263,10 +2884,15 @@ mod write_guard_tests {
             set_mtime(&theirs, old_mtime);
             fs::rename(&theirs, abs).unwrap();
         });
-        let e = write_note(&abs, &args("Misc.md", Some(base), false), b"mine\n", &sw()).unwrap_err();
+        let e =
+            write_note(&abs, &args("Misc.md", Some(base), false), b"mine\n", &sw()).unwrap_err();
         assert_eq!(e.kind(), "conflict", "{e:?}");
         assert_eq!(fs::read(&abs).unwrap(), b"REMOTE!!\n");
-        assert!(dot_entries(dir.path()).is_empty(), "{:?}", dot_entries(dir.path()));
+        assert!(
+            dot_entries(dir.path()).is_empty(),
+            "{:?}",
+            dot_entries(dir.path())
+        );
     }
 
     /// Deleted by another program mid-save: the save must not re-create it,
@@ -2277,10 +2903,18 @@ mod write_guard_tests {
             let dir = tempfile::tempdir().unwrap();
             let (abs, m) = seed(dir.path(), "Misc.md", b"original\n");
             before_recheck(|abs| fs::remove_file(abs).unwrap());
-            let e = write_note(&abs, &args("Misc.md", base.then_some(m), false), b"mine\n", &sw())
-                .unwrap_err();
+            let e = write_note(
+                &abs,
+                &args("Misc.md", base.then_some(m), false),
+                b"mine\n",
+                &sw(),
+            )
+            .unwrap_err();
             assert_eq!(e.kind(), "notFound", "base={base} {e:?}");
-            assert!(!abs.exists(), "base={base}: the save resurrected a deleted note");
+            assert!(
+                !abs.exists(),
+                "base={base}: the save resurrected a deleted note"
+            );
             assert!(dot_entries(dir.path()).is_empty());
         }
     }
@@ -2323,14 +2957,29 @@ mod write_guard_tests {
         let r = write_note(&abs, &args("Misc.md", Some(base), false), b"mine\n", &s).unwrap();
         let theirs = fs::metadata(&abs).unwrap();
         assert_eq!(r.size, 5, "the receipt describes the replacement");
-        assert_ne!(r.mtime_ms, mtime_ms(&theirs), "the receipt describes the replacement");
-        assert!(!s.lock().unwrap().matches_for(&abs), "the replacement is suppressed as our echo");
+        assert_ne!(
+            r.mtime_ms,
+            mtime_ms(&theirs),
+            "the receipt describes the replacement"
+        );
+        assert!(
+            !s.lock().unwrap().matches_for(&abs),
+            "the replacement is suppressed as our echo"
+        );
 
         // The editor's next autosave uses the receipt as its base: refused.
-        let e = write_note(&abs, &args("Misc.md", Some(r.mtime_ms), false), b"mine 2\n", &s)
-            .unwrap_err();
+        let e = write_note(
+            &abs,
+            &args("Misc.md", Some(r.mtime_ms), false),
+            b"mine 2\n",
+            &s,
+        )
+        .unwrap_err();
         assert_eq!(e.kind(), "conflict", "{e:?}");
-        assert_eq!(fs::read(&abs).unwrap(), b"REMOTE EDIT, a different length\n");
+        assert_eq!(
+            fs::read(&abs).unwrap(),
+            b"REMOTE EDIT, a different length\n"
+        );
     }
 
     /* ── Cairn's own mutations do not interleave with a write ── */
@@ -2352,10 +3001,19 @@ mod write_guard_tests {
             std::thread::sleep(Duration::from_millis(200));
             *handle2.lock().unwrap() = Some((h.is_finished(), h));
         });
-        write_note(&abs, &args("Untitled.md", Some(base), false), b"newest\n", &s).unwrap();
+        write_note(
+            &abs,
+            &args("Untitled.md", Some(base), false),
+            b"newest\n",
+            &s,
+        )
+        .unwrap();
         let (ran_early, h) = handle.lock().unwrap().take().unwrap();
         h.join().unwrap().unwrap();
-        assert!(!ran_early, "the rename ran between the save's check and its rename");
+        assert!(
+            !ran_early,
+            "the rename ran between the save's check and its rename"
+        );
         assert!(!abs.exists(), "the save re-created the old name");
         assert_eq!(fs::read(&renamed).unwrap(), b"newest\n");
     }
@@ -2377,7 +3035,10 @@ mod write_guard_tests {
         write_note(&abs, &args("Misc.md", Some(base), false), b"new\n", &s).unwrap();
         let (ran_early, h) = handle.lock().unwrap().take().unwrap();
         h.join().unwrap().unwrap();
-        assert!(!ran_early, "the delete ran between the save's check and its rename");
+        assert!(
+            !ran_early,
+            "the delete ran between the save's check and its rename"
+        );
         assert!(!abs.exists(), "the save resurrected a deleted note");
         assert!(dot_entries(dir.path()).is_empty());
     }
@@ -2386,7 +3047,10 @@ mod write_guard_tests {
 
     #[test]
     fn a_255_byte_note_name_saves_and_leaves_no_temp() {
-        for name in [format!("{}.md", "a".repeat(252)), format!("{}.md", "日".repeat(84))] {
+        for name in [
+            format!("{}.md", "a".repeat(252)),
+            format!("{}.md", "日".repeat(84)),
+        ] {
             assert_eq!(name.len(), 255);
             path::validate_name(&name).unwrap();
             let dir = tempfile::tempdir().unwrap();
@@ -2405,7 +3069,11 @@ mod write_guard_tests {
             assert!(tname.len() <= NAME_MAX, "{} bytes", tname.len());
             assert!(tname.starts_with('.'));
             assert_eq!(parse_temp_pid(tname), Some(std::process::id()));
-            assert!(dot_entries(dir.path()).is_empty(), "{:?}", dot_entries(dir.path()));
+            assert!(
+                dot_entries(dir.path()).is_empty(),
+                "{:?}",
+                dot_entries(dir.path())
+            );
         }
     }
 
@@ -2463,10 +3131,26 @@ mod write_guard_tests {
     fn set_xattr(p: &Path, name: &str, value: &[u8]) -> std::io::Result<()> {
         let (p, n) = (cstr(p.as_os_str().as_bytes()), cstr(name.as_bytes()));
         #[cfg(target_os = "linux")]
-        let rc = unsafe { libc::setxattr(p.as_ptr(), n.as_ptr(), value.as_ptr().cast(), value.len(), 0) };
+        let rc = unsafe {
+            libc::setxattr(
+                p.as_ptr(),
+                n.as_ptr(),
+                value.as_ptr().cast(),
+                value.len(),
+                0,
+            )
+        };
         #[cfg(target_os = "macos")]
-        let rc =
-            unsafe { libc::setxattr(p.as_ptr(), n.as_ptr(), value.as_ptr().cast(), value.len(), 0, 0) };
+        let rc = unsafe {
+            libc::setxattr(
+                p.as_ptr(),
+                n.as_ptr(),
+                value.as_ptr().cast(),
+                value.len(),
+                0,
+                0,
+            )
+        };
         if rc == 0 {
             Ok(())
         } else {
@@ -2478,10 +3162,18 @@ mod write_guard_tests {
         let (p, n) = (cstr(p.as_os_str().as_bytes()), cstr(name.as_bytes()));
         let mut buf = vec![0u8; 4096];
         #[cfg(target_os = "linux")]
-        let got = unsafe { libc::getxattr(p.as_ptr(), n.as_ptr(), buf.as_mut_ptr().cast(), buf.len()) };
+        let got =
+            unsafe { libc::getxattr(p.as_ptr(), n.as_ptr(), buf.as_mut_ptr().cast(), buf.len()) };
         #[cfg(target_os = "macos")]
         let got = unsafe {
-            libc::getxattr(p.as_ptr(), n.as_ptr(), buf.as_mut_ptr().cast(), buf.len(), 0, 0)
+            libc::getxattr(
+                p.as_ptr(),
+                n.as_ptr(),
+                buf.as_mut_ptr().cast(),
+                buf.len(),
+                0,
+                0,
+            )
         };
         let got = usize::try_from(got).ok()?;
         buf.truncate(got);
@@ -2498,7 +3190,13 @@ mod write_guard_tests {
             eprintln!("SKIP: this filesystem refuses user xattrs: {e}");
             return;
         }
-        let r = write_note(&abs, &args("Tagged.md", Some(base), false), b"edited\n", &sw()).unwrap();
+        let r = write_note(
+            &abs,
+            &args("Tagged.md", Some(base), false),
+            b"edited\n",
+            &sw(),
+        )
+        .unwrap();
         assert_eq!(fs::read(&abs).unwrap(), b"edited\n");
         assert_eq!(
             get_xattr(&abs, "user.cairn.tag").as_deref(),
@@ -2538,12 +3236,21 @@ mod write_guard_tests {
         }
         let before_acl = get_xattr(&abs, "system.posix_acl_access").unwrap();
         let before_mode = fs::metadata(&abs).unwrap().permissions().mode() & 0o7777;
-        write_note(&abs, &args("Shared.md", Some(base), false), b"edited\n", &sw()).unwrap();
+        write_note(
+            &abs,
+            &args("Shared.md", Some(base), false),
+            b"edited\n",
+            &sw(),
+        )
+        .unwrap();
         assert_eq!(
             get_xattr(&abs, "system.posix_acl_access").as_deref(),
             Some(&before_acl[..]),
             "the ACL was dropped"
         );
-        assert_eq!(fs::metadata(&abs).unwrap().permissions().mode() & 0o7777, before_mode);
+        assert_eq!(
+            fs::metadata(&abs).unwrap().permissions().mode() & 0o7777,
+            before_mode
+        );
     }
 }

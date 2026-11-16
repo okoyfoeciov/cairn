@@ -136,8 +136,9 @@
 <div class="app">
 
   <!-- content x 0..411, y 39..957.  FIXED at 412px: it does not scale and there
-       is no splitter (§5.5, M60).  NO border-right — the #222222 -> #1c1c1c
-       colour change alone separates the panes (spec-01 §2). -->
+       is no splitter (§5.5, M60).  NO border-right on this element — the
+       `--bg-secondary` -> `--bg-primary` colour change alone separates the
+       panes (spec-01 §2; the divider lives on `.sidebar-resize`, §0.7 E9). -->
   <aside class="sidebar">
 
     <!-- §0.12 E14, A USER DECISION: the five-slot nav toolbar that stood here —

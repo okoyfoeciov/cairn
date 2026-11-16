@@ -63,7 +63,10 @@ fn throw(e: &VaultError) -> napi::Error {
     // be an `unwrap`: a serialisation failure inside an error path would
     // otherwise take the process down while reporting a `notFound`.
     let body = serde_json::to_string(e).unwrap_or_else(|_| {
-        format!(r#"{{"kind":"io","path":"","code":0,"message":{:?}}}"#, e.to_string())
+        format!(
+            r#"{{"kind":"io","path":"","code":0,"message":{:?}}}"#,
+            e.to_string()
+        )
     });
     napi::Error::new(Status::GenericFailure, format!("{CAIRN_VAULT_ERROR}{body}"))
 }
@@ -94,7 +97,10 @@ fn v<T>(r: Result<T, VaultError>) -> napi::Result<T> {
 /// the one `cargo test` already covers.
 fn json<T: serde::Serialize>(value: &T) -> napi::Result<Value> {
     serde_json::to_value(value).map_err(|e| {
-        napi::Error::new(Status::GenericFailure, format!("cairn: could not serialise a result: {e}"))
+        napi::Error::new(
+            Status::GenericFailure,
+            format!("cairn: could not serialise a result: {e}"),
+        )
     })
 }
 
@@ -134,9 +140,10 @@ impl AppCtx for ElectronCtx {
         // coalescing thread, where a panic would take the watcher with it.
         match serde_json::to_value(payload) {
             Ok(v) => {
-                let _ = self
-                    .events
-                    .call(EventArgs::from((event.to_string(), v)), ThreadsafeFunctionCallMode::NonBlocking);
+                let _ = self.events.call(
+                    EventArgs::from((event.to_string(), v)),
+                    ThreadsafeFunctionCallMode::NonBlocking,
+                );
             }
             Err(e) => eprintln!("cairn: could not serialise the payload of {event}: {e}"),
         }
@@ -147,7 +154,9 @@ impl AppCtx for ElectronCtx {
     }
 
     fn quit(&self, code: i32) {
-        let _ = self.on_quit.call(code, ThreadsafeFunctionCallMode::NonBlocking);
+        let _ = self
+            .on_quit
+            .call(code, ThreadsafeFunctionCallMode::NonBlocking);
     }
 }
 
@@ -224,15 +233,25 @@ pub fn start(
     on_quit: Function<'_, i32, Undefined>,
     prefs_path: Option<String>,
 ) -> napi::Result<()> {
-    let events = on_event.build_threadsafe_function::<EventArgs>().weak::<true>().build()?;
-    let quit = on_quit.build_threadsafe_function::<i32>().weak::<true>().build()?;
+    let events = on_event
+        .build_threadsafe_function::<EventArgs>()
+        .weak::<true>()
+        .build()?;
+    let quit = on_quit
+        .build_threadsafe_function::<i32>()
+        .weak::<true>()
+        .build()?;
 
     let state = Arc::new(AppState::new());
     if let Some(p) = prefs_path {
         state.init_prefs(std::path::PathBuf::from(p));
     }
 
-    let ctx = ElectronCtx { state, events: Arc::new(events), on_quit: Arc::new(quit) };
+    let ctx = ElectronCtx {
+        state,
+        events: Arc::new(events),
+        on_quit: Arc::new(quit),
+    };
     if CTX.set(ctx).is_err() {
         return Err(napi::Error::new(
             Status::GenericFailure,
@@ -263,7 +282,12 @@ pub async fn startup_open() -> napi::Result<()> {
     let ctx = ctx()?.clone();
     cairn_lib::spawn_blocking(move || app::spawn_startup_open(&ctx))
         .await
-        .map_err(|e| napi::Error::new(Status::GenericFailure, format!("cairn: startup_open panicked: {e}")))
+        .map_err(|e| {
+            napi::Error::new(
+                Status::GenericFailure,
+                format!("cairn: startup_open panicked: {e}"),
+            )
+        })
 }
 
 /* ── 2-5: the vault ───────────────────────────────────────────────────────── */
@@ -276,11 +300,15 @@ pub async fn startup_open() -> napi::Result<()> {
 #[napi]
 pub async fn open_vault(path: String) -> napi::Result<Value> {
     let ctx = ctx()?.clone();
-    let info = cairn_lib::spawn_blocking(move || {
-        app::open_vault_blocking(&ctx, ctx.app_state(), &path)
-    })
-    .await
-    .map_err(|e| napi::Error::new(Status::GenericFailure, format!("cairn: the vault walker panicked: {e}")))?;
+    let info =
+        cairn_lib::spawn_blocking(move || app::open_vault_blocking(&ctx, ctx.app_state(), &path))
+            .await
+            .map_err(|e| {
+                napi::Error::new(
+                    Status::GenericFailure,
+                    format!("cairn: the vault walker panicked: {e}"),
+                )
+            })?;
     json(&v(info)?)
 }
 
@@ -298,7 +326,12 @@ pub async fn recent_vaults() -> napi::Result<Value> {
     let ctx = ctx()?.clone();
     let rows = cairn_lib::spawn_blocking(move || app::recent_vaults(ctx.app_state()))
         .await
-        .map_err(|e| napi::Error::new(Status::GenericFailure, format!("cairn: recent_vaults panicked: {e}")))?;
+        .map_err(|e| {
+            napi::Error::new(
+                Status::GenericFailure,
+                format!("cairn: recent_vaults panicked: {e}"),
+            )
+        })?;
     json(&rows)
 }
 
@@ -328,7 +361,12 @@ pub async fn tree_snapshot() -> napi::Result<Buffer> {
     let ctx = ctx()?.clone();
     let blob = cairn_lib::spawn_blocking(move || app::tree_blob(ctx.app_state()))
         .await
-        .map_err(|e| napi::Error::new(Status::GenericFailure, format!("cairn: tree_snapshot panicked: {e}")))?;
+        .map_err(|e| {
+            napi::Error::new(
+                Status::GenericFailure,
+                format!("cairn: tree_snapshot panicked: {e}"),
+            )
+        })?;
     Ok(Buffer::from(v(blob)?))
 }
 
@@ -344,7 +382,12 @@ pub async fn set_sort(sort: u8) -> napi::Result<i64> {
     let ctx = ctx()?.clone();
     let epoch = cairn_lib::spawn_blocking(move || app::set_sort(&ctx, ctx.app_state(), sort))
         .await
-        .map_err(|e| napi::Error::new(Status::GenericFailure, format!("cairn: set_sort panicked: {e}")))?;
+        .map_err(|e| {
+            napi::Error::new(
+                Status::GenericFailure,
+                format!("cairn: set_sort panicked: {e}"),
+            )
+        })?;
     let epoch = v(epoch)?;
     i64::try_from(epoch)
         .map_err(|_| napi::Error::new(Status::GenericFailure, "cairn: the epoch overflowed i64"))
@@ -358,7 +401,12 @@ pub async fn secret_notes() -> napi::Result<Value> {
     let ctx = ctx()?.clone();
     let rels = cairn_lib::spawn_blocking(move || app::secret_notes(ctx.app_state()))
         .await
-        .map_err(|e| napi::Error::new(Status::GenericFailure, format!("cairn: secret_notes panicked: {e}")))?;
+        .map_err(|e| {
+            napi::Error::new(
+                Status::GenericFailure,
+                format!("cairn: secret_notes panicked: {e}"),
+            )
+        })?;
     json(&rels)
 }
 
@@ -379,8 +427,30 @@ pub async fn read_note(path: String, claim_open: Option<bool>) -> napi::Result<B
         app::read_note_with_claim(ctx.app_state(), &path, claim_open)
     })
     .await
-    .map_err(|e| napi::Error::new(Status::GenericFailure, format!("cairn: read_note panicked: {e}")))?;
+    .map_err(|e| {
+        napi::Error::new(
+            Status::GenericFailure,
+            format!("cairn: read_note panicked: {e}"),
+        )
+    })?;
     Ok(Buffer::from(v(framed)?))
+}
+
+/// Command 28 (§0.55 E108).  RAW OUT: an EPUB's bytes, exactly as they sit on
+/// disk.  No frame and no UTF-8 validation — it is a ZIP container, and the
+/// renderer's own reader is what interprets it.
+#[napi]
+pub async fn read_epub(path: String) -> napi::Result<Buffer> {
+    let ctx = ctx()?.clone();
+    let bytes = cairn_lib::spawn_blocking(move || app::read_book(ctx.app_state(), &path))
+        .await
+        .map_err(|e| {
+            napi::Error::new(
+                Status::GenericFailure,
+                format!("cairn: read_epub panicked: {e}"),
+            )
+        })?;
+    Ok(Buffer::from(v(bytes)?))
 }
 
 /// Command 9.  RAW IN plus the four write arguments.
@@ -407,7 +477,12 @@ pub async fn write_note(
         napi::Either::A(ms) => Some(as_millis(ms)?),
         napi::Either::B(_) => None,
     };
-    let args = WriteArgs { rel: path, flags, base_mtime_ms: base, create };
+    let args = WriteArgs {
+        rel: path,
+        flags,
+        base_mtime_ms: base,
+        create,
+    };
     // COPIED OUT OF THE JS HEAP BEFORE THE AWAIT, deliberately.  A `Uint8Array`
     // is a live reference into V8's heap; carrying one across an await and
     // reading it from a blocking worker means Rust holds a pointer the JS
@@ -417,11 +492,15 @@ pub async fn write_note(
     // costs (`tree_snapshot`'s is the first, and outbound).
     let body = body.to_vec();
     let ctx = ctx()?.clone();
-    let receipt = cairn_lib::spawn_blocking(move || {
-        app::write_note(&ctx, ctx.app_state(), &args, &body)
-    })
-    .await
-    .map_err(|e| napi::Error::new(Status::GenericFailure, format!("cairn: write_note panicked: {e}")))?;
+    let receipt =
+        cairn_lib::spawn_blocking(move || app::write_note(&ctx, ctx.app_state(), &args, &body))
+            .await
+            .map_err(|e| {
+                napi::Error::new(
+                    Status::GenericFailure,
+                    format!("cairn: write_note panicked: {e}"),
+                )
+            })?;
     json(&v(receipt)?)
 }
 
@@ -438,7 +517,32 @@ pub async fn create_note(parent: String, name: Option<String>) -> napi::Result<V
         app::create_note(&ctx, ctx.app_state(), &parent, name.as_deref())
     })
     .await
-    .map_err(|e| napi::Error::new(Status::GenericFailure, format!("cairn: create_note panicked: {e}")))?;
+    .map_err(|e| {
+        napi::Error::new(
+            Status::GenericFailure,
+            format!("cairn: create_note panicked: {e}"),
+        )
+    })?;
+    json(&v(out)?)
+}
+
+/// Command 29 (§0.55 E108).  Move the shell-picked EPUB into `parent`.
+///
+/// NOT in `native.mjs`'s renderer-facing command map: the source path is the
+/// system dialog's answer and only the MAIN process calls this binding.
+#[napi]
+pub async fn import_epub(source: String, parent: String) -> napi::Result<Value> {
+    let ctx = ctx()?.clone();
+    let out = cairn_lib::spawn_blocking(move || {
+        app::import_epub(&ctx, ctx.app_state(), &source, &parent)
+    })
+    .await
+    .map_err(|e| {
+        napi::Error::new(
+            Status::GenericFailure,
+            format!("cairn: import_epub panicked: {e}"),
+        )
+    })?;
     json(&v(out)?)
 }
 
@@ -449,7 +553,12 @@ pub async fn create_folder(parent: String, name: Option<String>) -> napi::Result
         app::create_folder(&ctx, ctx.app_state(), &parent, name.as_deref())
     })
     .await
-    .map_err(|e| napi::Error::new(Status::GenericFailure, format!("cairn: create_folder panicked: {e}")))?;
+    .map_err(|e| {
+        napi::Error::new(
+            Status::GenericFailure,
+            format!("cairn: create_folder panicked: {e}"),
+        )
+    })?;
     json(&v(out)?)
 }
 
@@ -457,9 +566,16 @@ pub async fn create_folder(parent: String, name: Option<String>) -> napi::Result
 #[napi]
 pub async fn rename_entry(path: String, new_name: String) -> napi::Result<Value> {
     let ctx = ctx()?.clone();
-    let out = cairn_lib::spawn_blocking(move || app::rename_entry(&ctx, ctx.app_state(), &path, &new_name))
-        .await
-        .map_err(|e| napi::Error::new(Status::GenericFailure, format!("cairn: rename_entry panicked: {e}")))?;
+    let out = cairn_lib::spawn_blocking(move || {
+        app::rename_entry(&ctx, ctx.app_state(), &path, &new_name)
+    })
+    .await
+    .map_err(|e| {
+        napi::Error::new(
+            Status::GenericFailure,
+            format!("cairn: rename_entry panicked: {e}"),
+        )
+    })?;
     json(&v(out)?)
 }
 
@@ -467,9 +583,16 @@ pub async fn rename_entry(path: String, new_name: String) -> napi::Result<Value>
 #[napi]
 pub async fn delete_entry(path: String, permanent: bool) -> napi::Result<Value> {
     let ctx = ctx()?.clone();
-    let out = cairn_lib::spawn_blocking(move || app::delete_entry(&ctx, ctx.app_state(), &path, permanent))
-        .await
-        .map_err(|e| napi::Error::new(Status::GenericFailure, format!("cairn: delete_entry panicked: {e}")))?;
+    let out = cairn_lib::spawn_blocking(move || {
+        app::delete_entry(&ctx, ctx.app_state(), &path, permanent)
+    })
+    .await
+    .map_err(|e| {
+        napi::Error::new(
+            Status::GenericFailure,
+            format!("cairn: delete_entry panicked: {e}"),
+        )
+    })?;
     json(&v(out)?)
 }
 
@@ -479,9 +602,16 @@ pub async fn delete_entry(path: String, permanent: bool) -> napi::Result<Value> 
 #[napi]
 pub async fn move_entry(path: String, dest_parent: String) -> napi::Result<Value> {
     let ctx = ctx()?.clone();
-    let out = cairn_lib::spawn_blocking(move || app::move_entry(&ctx, ctx.app_state(), &path, &dest_parent))
-        .await
-        .map_err(|e| napi::Error::new(Status::GenericFailure, format!("cairn: move_entry panicked: {e}")))?;
+    let out = cairn_lib::spawn_blocking(move || {
+        app::move_entry(&ctx, ctx.app_state(), &path, &dest_parent)
+    })
+    .await
+    .map_err(|e| {
+        napi::Error::new(
+            Status::GenericFailure,
+            format!("cairn: move_entry panicked: {e}"),
+        )
+    })?;
     json(&v(out)?)
 }
 
@@ -498,9 +628,15 @@ pub async fn move_entry(path: String, dest_parent: String) -> napi::Result<Value
 pub async fn search_start(query: String, generation: i64, channel: String) -> napi::Result<()> {
     let ctx = ctx()?.clone();
     let gen = u64::try_from(generation).map_err(|_| {
-        napi::Error::new(Status::InvalidArg, "cairn: the search generation must not be negative")
+        napi::Error::new(
+            Status::InvalidArg,
+            "cairn: the search generation must not be negative",
+        )
     })?;
-    let sink = SearchSink { ctx: ctx.clone(), channel };
+    let sink = SearchSink {
+        ctx: ctx.clone(),
+        channel,
+    };
     v(app::search_start(ctx.app_state(), query, gen, sink).await)
 }
 
@@ -512,7 +648,12 @@ pub async fn search_expand(query: String, rel: String) -> napi::Result<Value> {
     let ctx = ctx()?.clone();
     let out = cairn_lib::spawn_blocking(move || app::search_expand(ctx.app_state(), &query, &rel))
         .await
-        .map_err(|e| napi::Error::new(Status::GenericFailure, format!("cairn: search_expand panicked: {e}")))?;
+        .map_err(|e| {
+            napi::Error::new(
+                Status::GenericFailure,
+                format!("cairn: search_expand panicked: {e}"),
+            )
+        })?;
     json(&v(out)?)
 }
 
@@ -521,7 +662,10 @@ pub async fn search_expand(query: String, rel: String) -> napi::Result<Value> {
 #[napi]
 pub fn search_cancel(generation: i64) -> napi::Result<()> {
     let gen = u64::try_from(generation).map_err(|_| {
-        napi::Error::new(Status::InvalidArg, "cairn: the search generation must not be negative")
+        napi::Error::new(
+            Status::InvalidArg,
+            "cairn: the search generation must not be negative",
+        )
     })?;
     app::search_cancel(ctx()?.app_state(), gen);
     Ok(())
@@ -538,7 +682,10 @@ pub fn search_cancel(generation: i64) -> napi::Result<()> {
 #[napi]
 pub fn save_ui_state(patch: Value) -> napi::Result<()> {
     let patch: UiPatch = serde_json::from_value(patch).map_err(|e| {
-        napi::Error::new(Status::InvalidArg, format!("cairn: malformed UI patch: {e}"))
+        napi::Error::new(
+            Status::InvalidArg,
+            format!("cairn: malformed UI patch: {e}"),
+        )
     })?;
     app::save_ui_state(ctx()?.app_state(), &patch);
     Ok(())

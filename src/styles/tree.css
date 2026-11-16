@@ -283,7 +283,7 @@
   left: calc(var(--cx0) + var(--d) * var(--row-indent));          /* 16 + 17d */
   width: var(--chev-w); height: var(--chev-w);
   fill: none;
-  stroke: var(--text-faint);             /* #666666 — NOT spec-04's #8a8a8a    */
+  stroke: var(--text-faint);             /* Oceanic #626d7e — NOT spec-04's #8a8a8a */
   pointer-events: none;
   transform-origin: 50% 50%;                                       /* 8px 13.5px in row coordinates */
 }
@@ -484,7 +484,7 @@
 .tree-scroller.is-overflowing .tr {
   padding-right: calc(17px - var(--scrollbar-gutter-w) + var(--nav-scrollbar-w));
 }
-.tr:hover::before { background-color: var(--bg-modifier-hover); }   /* -> #363636 */
+.tr:hover::before { background-color: var(--bg-modifier-hover); }   /* Oceanic rgba(170,205,240,.08) */
 .tr.a::before     { background-color: var(--bg-modifier-active); }
 .tr.a             { color: var(--text-normal); }
 /* The shift-selection fill (2026-09-14): Obsidian's own
@@ -509,6 +509,12 @@
  * ground; now `var(--text-accent)` (#8cbfe6) so it follows the color system
  * instead of freezing a pre-Oceanic hue against it. */
 .tr.is-secret     { color: var(--text-accent); }
+/* §0.55 E108 — an EPUB row's mark.  Same colour-only contract and the same
+ * after-`.tr.s` placement as the secret row, so opening or selecting a book
+ * does not make it stop reading as a book.  The token is deliberately not
+ * `--text-warning`: amber means "something is wrong" everywhere else, and this
+ * row is sage green. */
+.tr.is-book       { color: var(--text-book); }
 /* ---- drag-to-move (Obsidian's file-explorer drop, transcribed) --------------
  * app.css + app.js, 1.13.7, measured 2026-09-16 (`/tmp/obsidian-app.*`):
  *
@@ -612,8 +618,10 @@ body.is-grabbing .tr.is-drag:hover { color: var(--text-on-accent); }
  *
  * WHAT.  `body:not(.is-phone) .workspace-leaf.mod-active .tree-item-self
  * .has-focus { box-shadow: 0 0 0 2px var(--background-modifier-border-focus) }`
- * (app.css:10454) — an OUTSET 2px #555555 around the ROUNDED FILL, so its
- * corners follow the fill's radius.  It was an inset 1px #3f3f3f square on
+ * (app.css:10454) — an OUTSET 2px ring around the ROUNDED FILL, so its
+ * corners follow the fill's radius.  Oceanic retints it to
+ * `--bg-modifier-border-focus` #5a6b84 (Obsidian's was #555555).  It was an
+ * inset 1px #3f3f3f square on
  * the whole 401x27 row from x 0, which is what the screenshot shows.  It goes
  * on `::before` because that is the fill's box; the pseudo is `z-index: -1`,
  * and nothing it paints under — label, chevron — reaches the ring's 2px.

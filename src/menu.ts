@@ -73,8 +73,8 @@
  * (a 1px rule with 6px of margin either side), not 9:
  *
  *     recents popover   9 x 24.9 + 13 + 12 = 249.1px   (was 269)
- *     a FOLDER menu     6 x 24.9 + 26 + 12 = 187.4px   (was 162.5: the secret
- *                                                       file row arrived)
+ *     a FOLDER menu     7 x 24.9 + 26 + 12 = 212.3px   (the secret-file and
+ *                                                       Import EPUB rows arrived)
  *     a FILE menu       4 x 24.9 + 13 + 12 = 124.6px   (§0.16 E18 removed the
  *                                                       two creates; Copy file
  *                                                       content added one back)
@@ -549,6 +549,8 @@ export interface RowMenuActions {
   /** A secret file (user feature, 2026-09-16): a note with the
    *  `cairn-type: secrets` marker, rendered as a credentials manager. */
   newSecret(): void
+  /** §0.55 E108: open the system picker and MOVE one EPUB into this folder. */
+  importEpub(): void
   rename(): void
   copyPath(): void
   /** A user feature (2026-11-15): copy the file's name and body, in that order.
@@ -567,10 +569,10 @@ export type EntryActions = Pick<RowMenuActions, 'rename' | 'copyPath' | 'remove'
  *  copy of content it does not have. */
 export type FileActions = EntryActions & Pick<RowMenuActions, 'copyContent'>
 
-/** A FOLDER owns the shared entry rows plus the three creates that land INSIDE
- *  it.  `copyContent` is deliberately absent. */
+/** A FOLDER owns the shared entry rows plus the three creates and Import EPUB
+ *  that land INSIDE it.  `copyContent` is deliberately absent. */
 export type FolderActions = EntryActions &
-  Pick<RowMenuActions, 'newNote' | 'newFolder' | 'newSecret'>
+  Pick<RowMenuActions, 'newNote' | 'newFolder' | 'newSecret' | 'importEpub'>
 
 /**
  * §0.16 E18 — THE FILE ROW OFFERS NO CREATE ROWS.  A user decision, and it is
@@ -620,10 +622,18 @@ export type FolderActions = EntryActions &
  * no counterpart), so E17's grep-audit does not apply — and recalling a key
  * glyph from memory is the `refresh-cw` residual all over again.  The lock is
  * transcribed byte for byte from `lucide-static@0.469.0` (see icons.ts), at
- * the row menus' 16/2.
+ * the row menus' 16/2.  `Import EPUB` is Cairn-only too and reuses `file`,
+ * already in the table, rather than adding a second book glyph.
  */
 export function fileRowMenu(a: FileActions): MenuEntry[] {
   return entryRows(a, [{ label: 'Copy file content', onSelect: a.copyContent, icon: 'file' }])
+}
+
+/** §0.55 E108 — an EPUB is a file row, but it has no text body to copy: its
+ *  bytes are a ZIP container.  Offering `Copy file content` would read it
+ *  through the note frame and fail with `notUtf8` every time. */
+export function bookRowMenu(a: EntryActions): MenuEntry[] {
+  return entryRows(a)
 }
 
 /** The rows a file and a folder share, with an optional file-only row before
@@ -639,7 +649,8 @@ function entryRows(a: EntryActions, extra: MenuAction[] = []): MenuEntry[] {
 }
 
 /**
- * The folder menu: the shared three rows, plus the three creates ABOVE them.
+ * The folder menu: the shared three rows, plus the three creates and Import
+ * EPUB ABOVE them.
  * It is no longer `= fileRowMenu` — §0.16 E18 is exactly the change that made
  * the two differ, and the destination is no longer the caller's to disambiguate
  * because there is only one meaning left: INSIDE this folder.  `Copy file
@@ -651,6 +662,7 @@ export function folderRowMenu(a: FolderActions): MenuEntry[] {
     { label: 'New note', onSelect: a.newNote, icon: 'edit' },
     { label: 'New folder', onSelect: a.newFolder, icon: 'folder-open' },
     { label: 'New secret file', onSelect: a.newSecret, icon: 'lock' },
+    { label: 'Import EPUB', onSelect: a.importEpub, icon: 'file' },
     { separator: true },
     ...entryRows(a),
   ]
@@ -668,12 +680,13 @@ export function folderRowMenu(a: FolderActions): MenuEntry[] {
  *  row.  `main.ts` passes `''`, which `absolutePath` resolves to the root
  *  without a trailing slash.  File and folder rows keep their own path. */
 export function emptySpaceMenu(
-  a: Pick<RowMenuActions, 'newNote' | 'newFolder' | 'newSecret' | 'copyPath'>,
+  a: Pick<RowMenuActions, 'newNote' | 'newFolder' | 'newSecret' | 'importEpub' | 'copyPath'>,
 ): MenuEntry[] {
   return [
     { label: 'New note', onSelect: a.newNote, icon: 'edit' },
     { label: 'New folder', onSelect: a.newFolder, icon: 'folder-open' },
     { label: 'New secret file', onSelect: a.newSecret, icon: 'lock' },
+    { label: 'Import EPUB', onSelect: a.importEpub, icon: 'file' },
     { separator: true },
     { label: 'Copy absolute path', onSelect: a.copyPath, icon: 'clipboard' },
   ]

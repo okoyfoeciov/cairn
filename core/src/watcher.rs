@@ -73,7 +73,12 @@ impl SelfWrite {
     /// metadata.  `write_note`, `create_note`, `create_folder` and the second
     /// half of `rename_entry` all use this.
     pub fn existing(abs: impl Into<PathBuf>, mtime_ns: u128, len: u64) -> Self {
-        Self { abs: abs.into(), mtime_ns, len, deadline: Instant::now() + SELF_WRITE_TTL }
+        Self {
+            abs: abs.into(),
+            mtime_ns,
+            len,
+            deadline: Instant::now() + SELF_WRITE_TTL,
+        }
     }
 
     /// CONTRACT §3.5's delete rule: `(abs, 0, 0)`, which matches only when the
@@ -106,7 +111,9 @@ pub struct SelfWrites {
 
 impl SelfWrites {
     pub fn new() -> Self {
-        Self { entries: Vec::with_capacity(SELF_WRITE_CAP) }
+        Self {
+            entries: Vec::with_capacity(SELF_WRITE_CAP),
+        }
     }
 
     /// Records one fingerprint, dropping the OLDEST if the cap is reached.
@@ -117,7 +124,8 @@ impl SelfWrites {
     /// spending a second slot (`fsops` records each write twice).
     pub fn record(&mut self, sw: SelfWrite) {
         let now = Instant::now();
-        self.entries.retain(|e| (e.deadline > now || e.still_on_disk()) && !e.same_write(&sw));
+        self.entries
+            .retain(|e| (e.deadline > now || e.still_on_disk()) && !e.same_write(&sw));
         while self.entries.len() >= SELF_WRITE_CAP {
             self.entries.remove(0);
         }
@@ -159,7 +167,9 @@ impl SelfWrites {
     /// halves.
     /// ===================================================================
     pub fn matches(&mut self, abs: &Path, mtime_ns: u128, len: u64) -> bool {
-        self.entries.iter().any(|e| e.abs == abs && e.mtime_ns == mtime_ns && e.len == len)
+        self.entries
+            .iter()
+            .any(|e| e.abs == abs && e.mtime_ns == mtime_ns && e.len == len)
     }
 
     /// Stats the path and matches whichever rule applies: an existing path by
@@ -365,7 +375,9 @@ impl VaultWatcher {
         // the stream is being established must be treated as live, and an epoch
         // taken afterwards would call it history.
         let epoch = Epoch::now();
-        watcher.watch(root, RecursiveMode::Recursive).map_err(|e| degrade_reason(&e))?;
+        watcher
+            .watch(root, RecursiveMode::Recursive)
+            .map_err(|e| degrade_reason(&e))?;
         let watcher = Arc::new(Mutex::new(watcher));
 
         let thread = {
@@ -426,7 +438,9 @@ impl Drop for VaultWatcher {
 /// watched directories keep their watch.  A watcher that has been dropped
 /// is left alone.
 fn rewatch(watcher: &Weak<Mutex<notify::RecommendedWatcher>>, root: &Path) -> notify::Result<()> {
-    let Some(w) = watcher.upgrade() else { return Ok(()) };
+    let Some(w) = watcher.upgrade() else {
+        return Ok(());
+    };
     let mut g = w.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
     g.watch(root, RecursiveMode::Recursive)
 }
@@ -445,7 +459,10 @@ impl RootId {
     fn of(root: &Path) -> Option<Self> {
         use std::os::unix::fs::MetadataExt;
         let md = std::fs::symlink_metadata(root).ok()?;
-        md.is_dir().then(|| Self { dev: md.dev(), ino: md.ino() })
+        md.is_dir().then(|| Self {
+            dev: md.dev(),
+            ino: md.ino(),
+        })
     }
 
     /// True only when `root` is definitely no longer this directory: missing,
@@ -574,7 +591,10 @@ fn coalesce(
         if !*degraded {
             *degraded = true;
             let reason = degrade_reason(e);
-            sink(WatchEvent::Degraded { reason, hint: degrade_hint(reason) });
+            sink(WatchEvent::Degraded {
+                reason,
+                hint: degrade_hint(reason),
+            });
         }
     };
     let flush = |batch: &mut Flush, rearm: &mut bool, degraded: &mut bool| {
@@ -591,7 +611,9 @@ fn coalesce(
             Ok(Ok(ev)) => {
                 rearm |= wants_rewatch(&ev);
                 if classify(root, &ev, self_writes, &mut batch, epoch) {
-                    sink(WatchEvent::VaultLost { path: root.to_path_buf() });
+                    sink(WatchEvent::VaultLost {
+                        path: root.to_path_buf(),
+                    });
                     return;
                 }
                 if !batch.is_empty() {
@@ -625,7 +647,9 @@ fn coalesce(
         if checked.elapsed() >= ROOT_CHECK {
             checked = Instant::now();
             if id.gone_from(root) {
-                sink(WatchEvent::VaultLost { path: root.to_path_buf() });
+                sink(WatchEvent::VaultLost {
+                    path: root.to_path_buf(),
+                });
                 return;
             }
         }
@@ -767,7 +791,9 @@ fn classify(
 /// OWN components are not examined: a vault that legitimately lives inside
 /// `~/.config` or a `/private/var/folders/...` temp directory must still work.
 fn hidden_under(root: &Path, path: &Path) -> bool {
-    let Ok(rel) = path.strip_prefix(root) else { return false };
+    let Ok(rel) = path.strip_prefix(root) else {
+        return false;
+    };
     rel.components().any(|c| {
         matches!(c, std::path::Component::Normal(n)
             if n.to_str().is_some_and(|s| s.starts_with('.')))
@@ -775,7 +801,9 @@ fn hidden_under(root: &Path, path: &Path) -> bool {
 }
 
 fn is_md(p: &Path) -> bool {
-    p.extension().and_then(|e| e.to_str()).is_some_and(|e| e.eq_ignore_ascii_case("md"))
+    p.extension()
+        .and_then(|e| e.to_str())
+        .is_some_and(|e| e.eq_ignore_ascii_case("md"))
 }
 
 /// Deduplicated by linear scan: `dirs` is almost always <= 5 entries, and a
@@ -863,7 +891,10 @@ mod tests {
 
         assert!(!s.matches(p, 42, 8), "a different length must NOT match");
         assert!(!s.matches(p, 43, 7), "a different mtime must NOT match");
-        assert!(!s.matches(Path::new("/v/b.md"), 42, 7), "a different path must NOT match");
+        assert!(
+            !s.matches(Path::new("/v/b.md"), 42, 7),
+            "a different path must NOT match"
+        );
         assert!(s.matches(p, 42, 7));
     }
 
@@ -876,7 +907,10 @@ mod tests {
         let p = Path::new("/v/a.md");
         s.record(SelfWrite::existing(p, 42, 7));
         for i in 0..4 {
-            assert!(s.matches(p, 42, 7), "event {i} of the burst was not suppressed");
+            assert!(
+                s.matches(p, 42, 7),
+                "event {i} of the burst was not suppressed"
+            );
         }
     }
 
@@ -929,7 +963,10 @@ mod tests {
         // GC evicts it, which is `deadline`'s ONLY job; what must never happen
         // is a fresh entry being dropped because a clock said so.
         s.record(SelfWrite::existing("/v/b.md", 2, 2));
-        assert!(s.matches(Path::new("/v/b.md"), 2, 2), "a live entry stopped matching");
+        assert!(
+            s.matches(Path::new("/v/b.md"), 2, 2),
+            "a live entry stopped matching"
+        );
     }
 
     #[test]
@@ -949,7 +986,11 @@ mod tests {
     /* ── classification ───────────────────────────────────────────────────── */
 
     fn ev(kind: EventKind, paths: &[&Path]) -> Event {
-        Event { kind, paths: paths.iter().map(|p| p.to_path_buf()).collect(), attrs: <_>::default() }
+        Event {
+            kind,
+            paths: paths.iter().map(|p| p.to_path_buf()).collect(),
+            attrs: <_>::default(),
+        }
     }
 
     #[test]
@@ -976,7 +1017,13 @@ mod tests {
         let sw = Mutex::new(SelfWrites::new());
         for kind in [EventKind::Any, EventKind::Other] {
             let mut b = Flush::default();
-            classify(Path::new("/v"), &ev(kind, &[Path::new("/v/a.md")]), &sw, &mut b, Epoch::TEST);
+            classify(
+                Path::new("/v"),
+                &ev(kind, &[Path::new("/v/a.md")]),
+                &sw,
+                &mut b,
+                Epoch::TEST,
+            );
             assert!(b.full_rescan, "{kind:?}");
         }
     }
@@ -987,7 +1034,10 @@ mod tests {
         let mut b = Flush::default();
         classify(
             Path::new("/v"),
-            &ev(EventKind::Create(notify::event::CreateKind::File), &[Path::new("/elsewhere/a.md")]),
+            &ev(
+                EventKind::Create(notify::event::CreateKind::File),
+                &[Path::new("/elsewhere/a.md")],
+            ),
             &sw,
             &mut b,
             Epoch::TEST,
@@ -1025,7 +1075,10 @@ mod tests {
             push_dir(&mut b, format!("/v/d{i}").into());
         }
         assert!(b.full_rescan);
-        assert!(b.dirs.is_empty(), "a full rescan does not also carry a directory list");
+        assert!(
+            b.dirs.is_empty(),
+            "a full rescan does not also carry a directory list"
+        );
     }
 
     /// CONTENT HITS ARE NOT THROWN AWAY BY OVERFLOW, and the asymmetry with
@@ -1045,14 +1098,24 @@ mod tests {
         };
         // Last write wins for a path, and that is not affected by any of this.
         push_hit(&mut b, hit(0));
-        push_hit(&mut b, ContentHit { abs: "/v/n0.md".into(), mtime_ms: 9_999, len: 7 });
+        push_hit(
+            &mut b,
+            ContentHit {
+                abs: "/v/n0.md".into(),
+                mtime_ms: 9_999,
+                len: 7,
+            },
+        );
         assert_eq!(b.content_hits.len(), 1);
         assert_eq!(b.content_hits[0].mtime_ms, 9_999);
 
         for i in 1..MAX_DIRTY + 5 {
             push_hit(&mut b, hit(i));
         }
-        assert!(b.full_rescan, "overflow must still force a rescan — M69's mtimes need it");
+        assert!(
+            b.full_rescan,
+            "overflow must still force a rescan — M69's mtimes need it"
+        );
         assert_eq!(
             b.content_hits.len(),
             MAX_DIRTY,
@@ -1204,7 +1267,12 @@ mod tests {
         std::fs::write(&note, b"restored from a backup, with the old mtime\n").unwrap();
         let f = std::fs::OpenOptions::new().write(true).open(&note).unwrap();
         let old = std::time::UNIX_EPOCH + Duration::from_secs(1_000_000_000);
-        f.set_times(std::fs::FileTimes::new().set_accessed(old).set_modified(old)).unwrap();
+        f.set_times(
+            std::fs::FileTimes::new()
+                .set_accessed(old)
+                .set_modified(old),
+        )
+        .unwrap();
         drop(f);
 
         let flushes = drain_flush(&rx, Duration::from_millis(2500));
@@ -1277,6 +1345,34 @@ mod tests {
         assert!(dirs.iter().any(|d| d.ends_with("Sub")), "got {dirs:?}");
     }
 
+    /// §0.55 E108 — an EPUB arrives by FILESYSTEM COPY, never from an app
+    /// create gesture.  The watcher's existing non-note rule must therefore
+    /// mark the containing directory dirty so the next snapshot shows the row.
+    #[test]
+    fn an_external_epub_copy_marks_the_directory() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = crate::fsops::canonical_root(dir.path()).unwrap();
+        std::fs::create_dir(root.join("Books")).unwrap();
+
+        let sw = Arc::new(Mutex::new(SelfWrites::new()));
+        let (tx, rx) = channel();
+        let _w = VaultWatcher::start(&root, Arc::clone(&sw), sink_to(tx)).unwrap();
+        std::thread::sleep(Duration::from_millis(300));
+
+        std::fs::write(root.join("Books/Holes.epub"), b"PK\x03\x04").unwrap();
+
+        let mut dirs: Vec<PathBuf> = Vec::new();
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while dirs.is_empty() && Instant::now() < deadline {
+            match rx.recv_timeout(Duration::from_secs(2)) {
+                Ok(WatchEvent::Flush(f)) => dirs.extend(f.dirs),
+                Ok(_) => {}
+                Err(_) => break,
+            }
+        }
+        assert!(dirs.iter().any(|d| d.ends_with("Books")), "got {dirs:?}");
+    }
+
     /// CONTRACT §7.3 case 16, the mandated test, using the mandated
     /// `#[cfg(test)]`-only injection point.  The real trigger is an inotify
     /// limit; Linux is out of v1, so this is the only way it can be exercised.
@@ -1309,14 +1405,15 @@ mod tests {
     #[test]
     fn vault_root_removed_reports_vault_lost() {
         let outer = tempfile::tempdir().unwrap();
-        let root = crate::fsops::canonical_root(outer.path()).unwrap().join("vault");
+        let root = crate::fsops::canonical_root(outer.path())
+            .unwrap()
+            .join("vault");
         std::fs::create_dir(&root).unwrap();
         std::fs::write(root.join("a.md"), b"x").unwrap();
 
         let (tx, rx) = channel();
-        let _w =
-            VaultWatcher::start(&root, Arc::new(Mutex::new(SelfWrites::new())), sink_to(tx))
-                .unwrap();
+        let _w = VaultWatcher::start(&root, Arc::new(Mutex::new(SelfWrites::new())), sink_to(tx))
+            .unwrap();
         std::thread::sleep(Duration::from_millis(300));
 
         std::fs::remove_dir_all(&root).unwrap();
@@ -1333,7 +1430,10 @@ mod tests {
                 Err(_) => break,
             }
         }
-        assert!(lost, "the vault root vanished and nothing told the frontend");
+        assert!(
+            lost,
+            "the vault root vanished and nothing told the frontend"
+        );
     }
 
     /// THE REQUIREMENT `VaultWatcher::start` STATES, PINNED AS A TEST, because a
@@ -1365,7 +1465,10 @@ mod tests {
 
         let picked = link.clone(); // the uncanonicalised spelling, as the user picked it
         let canonical = crate::fsops::canonical_root(&picked).unwrap();
-        assert_ne!(picked, canonical, "the premise broke: the link resolved to itself");
+        assert_ne!(
+            picked, canonical,
+            "the premise broke: the link resolved to itself"
+        );
 
         let sw = Arc::new(Mutex::new(SelfWrites::new()));
         let (tx, rx) = channel();
@@ -1403,12 +1506,19 @@ mod tests {
     fn drop_joins_the_thread_promptly() {
         let dir = tempfile::tempdir().unwrap();
         let (tx, _rx) = channel();
-        let w =
-            VaultWatcher::start(dir.path(), Arc::new(Mutex::new(SelfWrites::new())), sink_to(tx))
-                .unwrap();
+        let w = VaultWatcher::start(
+            dir.path(),
+            Arc::new(Mutex::new(SelfWrites::new())),
+            sink_to(tx),
+        )
+        .unwrap();
         let t0 = Instant::now();
         drop(w);
-        assert!(t0.elapsed() < Duration::from_secs(2), "Drop took {:?}", t0.elapsed());
+        assert!(
+            t0.elapsed() < Duration::from_secs(2),
+            "Drop took {:?}",
+            t0.elapsed()
+        );
     }
 
     /// The debounce envelope, measured at the seam rather than asserted in a
@@ -1418,9 +1528,8 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let root = crate::fsops::canonical_root(dir.path()).unwrap();
         let (tx, rx) = channel();
-        let _w =
-            VaultWatcher::start(&root, Arc::new(Mutex::new(SelfWrites::new())), sink_to(tx))
-                .unwrap();
+        let _w = VaultWatcher::start(&root, Arc::new(Mutex::new(SelfWrites::new())), sink_to(tx))
+            .unwrap();
         std::thread::sleep(Duration::from_millis(300));
 
         for i in 0..40 {
@@ -1429,7 +1538,11 @@ mod tests {
 
         let flushes = drain_flush(&rx, Duration::from_millis(2000));
         assert!(!flushes.is_empty(), "40 creates produced no flush at all");
-        assert!(flushes.len() < 40, "40 creates produced {} flushes", flushes.len());
+        assert!(
+            flushes.len() < 40,
+            "40 creates produced {} flushes",
+            flushes.len()
+        );
     }
 
     #[test]
@@ -1454,7 +1567,10 @@ mod tests {
     }
 
     fn hits_for(rx: &Receiver<WatchEvent>, dur: Duration) -> Vec<ContentHit> {
-        drain_flush(rx, dur).into_iter().flat_map(|f| f.content_hits).collect()
+        drain_flush(rx, dur)
+            .into_iter()
+            .flat_map(|f| f.content_hits)
+            .collect()
     }
 
     /// §7.3 case 8 when nothing happens to the root's own inode: renaming a
@@ -1469,9 +1585,8 @@ mod tests {
         std::fs::write(root.join("a.md"), b"x").unwrap();
 
         let (tx, rx) = channel();
-        let _w =
-            VaultWatcher::start(&root, Arc::new(Mutex::new(SelfWrites::new())), sink_to(tx))
-                .unwrap();
+        let _w = VaultWatcher::start(&root, Arc::new(Mutex::new(SelfWrites::new())), sink_to(tx))
+            .unwrap();
         std::thread::sleep(Duration::from_millis(300));
 
         std::fs::rename(base.join("Sync"), base.join("Syncthing")).unwrap();
@@ -1496,9 +1611,8 @@ mod tests {
         std::fs::create_dir(&root).unwrap();
 
         let (tx, rx) = channel();
-        let _w =
-            VaultWatcher::start(&root, Arc::new(Mutex::new(SelfWrites::new())), sink_to(tx))
-                .unwrap();
+        let _w = VaultWatcher::start(&root, Arc::new(Mutex::new(SelfWrites::new())), sink_to(tx))
+            .unwrap();
         std::thread::sleep(Duration::from_millis(300));
 
         std::fs::rename(&root, base.join("vault-away")).unwrap();
@@ -1553,7 +1667,13 @@ mod tests {
 
         for mode in [RenameMode::To, RenameMode::Any] {
             let mut b = Flush::default();
-            classify(&root, &ev(EventKind::Modify(ModifyKind::Name(mode)), &[&note]), &sw, &mut b, Epoch::TEST);
+            classify(
+                &root,
+                &ev(EventKind::Modify(ModifyKind::Name(mode)), &[&note]),
+                &sw,
+                &mut b,
+                Epoch::TEST,
+            );
             assert_eq!(b.content_hits.len(), 1, "{mode:?}");
             assert_eq!(b.content_hits[0].len, 5);
             assert_eq!(b.dirs, vec![root.clone()], "{mode:?}");
@@ -1561,15 +1681,33 @@ mod tests {
         let mut b = Flush::default();
         classify(
             &root,
-            &ev(EventKind::Modify(ModifyKind::Name(RenameMode::Both)), &[&gone, &note]),
+            &ev(
+                EventKind::Modify(ModifyKind::Name(RenameMode::Both)),
+                &[&gone, &note],
+            ),
             &sw,
             &mut b,
             Epoch::TEST,
         );
-        assert_eq!(b.content_hits.iter().map(|h| h.abs.clone()).collect::<Vec<_>>(), vec![note.clone()]);
+        assert_eq!(
+            b.content_hits
+                .iter()
+                .map(|h| h.abs.clone())
+                .collect::<Vec<_>>(),
+            vec![note.clone()]
+        );
 
         let mut b = Flush::default();
-        classify(&root, &ev(EventKind::Modify(ModifyKind::Name(RenameMode::From)), &[&gone]), &sw, &mut b, Epoch::TEST);
+        classify(
+            &root,
+            &ev(
+                EventKind::Modify(ModifyKind::Name(RenameMode::From)),
+                &[&gone],
+            ),
+            &sw,
+            &mut b,
+            Epoch::TEST,
+        );
         assert!(b.content_hits.is_empty());
         assert_eq!(b.dirs, vec![root.clone()]);
     }
@@ -1590,9 +1728,8 @@ mod tests {
         std::os::unix::fs::symlink(&target, root.join("Projects")).unwrap();
 
         let (tx, rx) = channel();
-        let _w =
-            VaultWatcher::start(&root, Arc::new(Mutex::new(SelfWrites::new())), sink_to(tx))
-                .unwrap();
+        let _w = VaultWatcher::start(&root, Arc::new(Mutex::new(SelfWrites::new())), sink_to(tx))
+            .unwrap();
         std::thread::sleep(Duration::from_millis(300));
 
         for i in 0..10 {
@@ -1600,10 +1737,16 @@ mod tests {
             std::fs::write(target.join(format!("build/obj/{i}.md")), b"md").unwrap();
         }
         let flushes = drain_flush(&rx, Duration::from_millis(1500));
-        assert!(flushes.is_empty(), "the watcher followed a symlink the scanner refuses: {flushes:?}");
+        assert!(
+            flushes.is_empty(),
+            "the watcher followed a symlink the scanner refuses: {flushes:?}"
+        );
 
         let walked = crate::scan::walk_vault(&root, crate::tree::SortMode::default(), 1).unwrap();
-        assert!(walked.tree.resolve("Projects").is_none(), "premise: the scanner refuses the link");
+        assert!(
+            walked.tree.resolve("Projects").is_none(),
+            "premise: the scanner refuses the link"
+        );
     }
 
     /// Echo suppression outlives SELF_WRITE_TTL while the file still carries
@@ -1623,17 +1766,33 @@ mod tests {
         for e in &mut sw.lock().unwrap().entries {
             e.deadline = Instant::now() - Duration::from_secs(60);
         }
-        assert!(sw.lock().unwrap().matches_for(&note), "matching must not read the deadline");
+        assert!(
+            sw.lock().unwrap().matches_for(&note),
+            "matching must not read the deadline"
+        );
 
         // Another record collects expired entries, but not one the disk still carries.
         let md = std::fs::metadata(&other).unwrap();
-        record_self_write(&sw, SelfWrite::existing(&other, crate::fsops::mtime_ns(&md), md.len()));
-        assert!(sw.lock().unwrap().matches_for(&note), "GC dropped a fingerprint still on disk");
+        record_self_write(
+            &sw,
+            SelfWrite::existing(&other, crate::fsops::mtime_ns(&md), md.len()),
+        );
+        assert!(
+            sw.lock().unwrap().matches_for(&note),
+            "GC dropped a fingerprint still on disk"
+        );
 
         // Once the file moves on, the expired entry is dead and is collected.
         std::fs::write(&note, b"somebody else\n").unwrap();
-        record_self_write(&sw, SelfWrite::existing(&other, crate::fsops::mtime_ns(&md), md.len()));
-        assert_eq!(sw.lock().unwrap().len(), 1, "a dead, expired entry survived GC");
+        record_self_write(
+            &sw,
+            SelfWrite::existing(&other, crate::fsops::mtime_ns(&md), md.len()),
+        );
+        assert_eq!(
+            sw.lock().unwrap().len(),
+            1,
+            "a dead, expired entry survived GC"
+        );
     }
 
     /// The identity rule on its own: the same directory is still here; a
@@ -1652,7 +1811,10 @@ mod tests {
         std::fs::rename(&root, base.join("away")).unwrap();
         assert!(id.gone_from(&root), "missing");
         std::fs::create_dir(&root).unwrap();
-        assert!(id.gone_from(&root), "a different directory at the same path");
+        assert!(
+            id.gone_from(&root),
+            "a different directory at the same path"
+        );
         std::fs::remove_dir(&root).unwrap();
         std::fs::write(&root, b"").unwrap();
         assert!(id.gone_from(&root), "a file at the same path");
@@ -1736,7 +1898,13 @@ mod tests {
             let got = run(vec![vec![overflow(), overflow()], vec![overflow()]], true);
             assert_eq!(
                 got,
-                vec!["rewatch", "degraded watch-limit", "flush full=true", "rewatch", "flush full=true"]
+                vec![
+                    "rewatch",
+                    "degraded watch-limit",
+                    "flush full=true",
+                    "rewatch",
+                    "flush full=true"
+                ]
             );
         }
 
@@ -1745,7 +1913,11 @@ mod tests {
             &[root.join("n.md").as_path()],
         );
         let got = run(vec![vec![plain]], false);
-        assert_eq!(got, vec!["flush full=false"], "an ordinary event re-armed the watcher");
+        assert_eq!(
+            got,
+            vec!["flush full=false"],
+            "an ordinary event re-armed the watcher"
+        );
     }
 
     /// The re-arm itself, against the real kernel: a directory whose inotify
@@ -1765,9 +1937,15 @@ mod tests {
             .unwrap();
         std::thread::sleep(Duration::from_millis(300));
 
-        assert!(drop_inotify_watch(&root.join("sub")), "premise: sub/ was watched");
+        assert!(
+            drop_inotify_watch(&root.join("sub")),
+            "premise: sub/ was watched"
+        );
         std::fs::write(root.join("sub/x.md"), b"x").unwrap();
-        assert!(drain_flush(&rx, Duration::from_millis(800)).is_empty(), "premise: sub/ is unwatched");
+        assert!(
+            drain_flush(&rx, Duration::from_millis(800)).is_empty(),
+            "premise: sub/ is unwatched"
+        );
 
         let weak = Arc::downgrade(w.watcher.as_ref().unwrap());
         rewatch(&weak, &root).unwrap();
@@ -1775,9 +1953,14 @@ mod tests {
 
         for d in ["sub", "kept"] {
             std::fs::write(root.join(d).join("y.md"), b"y").unwrap();
-            let dirs: Vec<PathBuf> =
-                drain_flush(&rx, Duration::from_millis(1500)).into_iter().flat_map(|f| f.dirs).collect();
-            assert!(dirs.contains(&root.join(d)), "{d}/ is not watched after the re-arm: {dirs:?}");
+            let dirs: Vec<PathBuf> = drain_flush(&rx, Duration::from_millis(1500))
+                .into_iter()
+                .flat_map(|f| f.dirs)
+                .collect();
+            assert!(
+                dirs.contains(&root.join(d)),
+                "{d}/ is not watched after the re-arm: {dirs:?}"
+            );
         }
     }
 
@@ -1797,7 +1980,8 @@ mod tests {
             let Some(n) = fd.file_name().to_str().and_then(|s| s.parse::<i32>().ok()) else {
                 continue;
             };
-            let info = std::fs::read_to_string(format!("/proc/self/fdinfo/{n}")).unwrap_or_default();
+            let info =
+                std::fs::read_to_string(format!("/proc/self/fdinfo/{n}")).unwrap_or_default();
             for line in info.lines().filter(|l| l.starts_with("inotify wd:")) {
                 let field = |k: &str| {
                     line.split_whitespace()
@@ -1842,7 +2026,10 @@ mod tests {
         std::thread::sleep(Duration::from_millis(300));
 
         atomic_self_write(&root, &note, b"after\n", &sw);
-        assert!(drain_flush(&rx, Duration::from_millis(800)).is_empty(), "premise: no echo");
+        assert!(
+            drain_flush(&rx, Duration::from_millis(800)).is_empty(),
+            "premise: no echo"
+        );
 
         for e in &mut sw.lock().unwrap().entries {
             e.deadline = Instant::now() - Duration::from_secs(60);

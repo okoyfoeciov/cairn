@@ -153,6 +153,9 @@ test('path helpers agree with §1.1 (vault-relative, "" is the root) and §3.6 (
   assert.equal(M.displayName('Projects'), 'Projects')  // a folder keeps its name
   assert.equal(M.displayName('.md'), '.md')            // not a 0-length note name
   assert.equal(M.displayName('a.md.md'), 'a.md')
+  assert.equal(M.displayName('a/b/Book.epub'), 'Book')   // E108: same strip as a note
+  assert.equal(M.displayName('a/b/Book.EPUB'), 'Book')
+  assert.equal(M.displayName('.epub'), '.epub')
 })
 
 test('§0.12 E14 — absolutePath joins the vault root to a vault-relative path', () => {
@@ -220,6 +223,7 @@ test('§0.16 E18 — a FILE row offers no create rows; a FOLDER row does', () =>
   const rec = (k) => () => calls.push(k)
   const acts = {
     newNote: rec('newNote'), newFolder: rec('newFolder'), newSecret: rec('newSecret'),
+    importEpub: rec('importEpub'),
     rename: rec('rename'), copyPath: rec('copyPath'), copyContent: rec('copyContent'),
     remove: rec('remove'),
   }
@@ -233,7 +237,7 @@ test('§0.16 E18 — a FILE row offers no create rows; a FOLDER row does', () =>
   assert.deepEqual(labels(file),
     ['Rename…', 'Copy absolute path', 'Copy file content', 'Delete'])
   assert.deepEqual(labels(folder),
-    ['New note', 'New folder', 'New secret file', 'Rename…', 'Copy absolute path', 'Delete'])
+    ['New note', 'New folder', 'New secret file', 'Import EPUB', 'Rename…', 'Copy absolute path', 'Delete'])
 
   // THE TWO MENUS MUST DIFFER. `folderRowMenu` was `= fileRowMenu` for eighteen
   // errata passes, and this assertion is what stops a tidy-up from collapsing
@@ -246,7 +250,7 @@ test('§0.16 E18 — a FILE row offers no create rows; a FOLDER row does', () =>
   // `Copy file content` is FILE-ONLY (user feature, 2026-11-15): a folder has
   // no body to copy. The folder keeps the shared row order under its creates.
   assert.equal(labels(folder).includes('Copy file content'), false)
-  assert.deepEqual(labels(folder).slice(3), labels(file).filter((l) => l !== 'Copy file content'))
+  assert.deepEqual(labels(folder).slice(4), labels(file).filter((l) => l !== 'Copy file content'))
 
   // §0.12 E14: "Reveal in Finder" is GONE and `Copy absolute path` stands where
   // it stood. X11 restored the reveal row in errata 1 and these menus were its
@@ -256,7 +260,7 @@ test('§0.16 E18 — a FILE row offers no create rows; a FOLDER row does', () =>
   // Every row is wired to its OWN action. A menu returning five rows that all
   // call `remove` would satisfy a labels-only test.
   for (const e of folder.filter((x) => !x.separator)) e.onSelect()
-  assert.deepEqual(calls, ['newNote', 'newFolder', 'newSecret', 'rename', 'copyPath', 'remove'])
+  assert.deepEqual(calls, ['newNote', 'newFolder', 'newSecret', 'importEpub', 'rename', 'copyPath', 'remove'])
   calls.length = 0
   for (const e of file.filter((x) => !x.separator)) e.onSelect()
   assert.deepEqual(calls, ['rename', 'copyPath', 'copyContent', 'remove'])
@@ -278,14 +282,15 @@ test('§0.16 E18 — a FILE row offers no create rows; a FOLDER row does', () =>
   // the creates and, since user ruling 2026-10-23, `Copy absolute path` for the
   // vault root — its subject is the vault when no row is under the cursor.
   const empty = M.emptySpaceMenu(acts)
-  assert.deepEqual(labels(empty), ['New note', 'New folder', 'New secret file', 'Copy absolute path'])
+  assert.deepEqual(labels(empty),
+    ['New note', 'New folder', 'New secret file', 'Import EPUB', 'Copy absolute path'])
   assert.equal(empty.some((e) => e.disabled), false)
   assert.equal(empty.filter((e) => e.separator).length, 1)
 
   // Every row is wired to its own action, including the root copy.
   calls.length = 0
   for (const e of empty.filter((x) => !x.separator)) e.onSelect()
-  assert.deepEqual(calls, ['newNote', 'newFolder', 'newSecret', 'copyPath'])
+  assert.deepEqual(calls, ['newNote', 'newFolder', 'newSecret', 'importEpub', 'copyPath'])
 })
 
 test('note/memoir context menu — Copy on selection, Paste on clipboard text, both at once', () => {
@@ -453,6 +458,22 @@ test('§5.1 — chrome.css declares no custom property and holds no struck liter
     assert.equal(/\b224\s*,\s*82\s*,\s*82\b/.test(css), false,
       `${file} carries the struck #e05252 as a DECIMAL rgb triple`)
   }
+  // The decimal guard must follow the LIVE token, not one historical value.
+  // `search.css`'s error fill and border are the only decimal forms; derive
+  // their expected channels from tokens.css so a token change cannot leave
+  // them behind again.
+  const errorHex = /(?:^|;)\s*--text-error\s*:\s*#([0-9a-fA-F]{6})\s*;/m.exec(
+    read('src/styles/tokens.css')
+  )
+  assert.ok(errorHex, 'tokens.css no longer declares --text-error as a hex')
+  const errorRgb = [0, 2, 4]
+    .map((i) => Number.parseInt(errorHex[1].slice(i, i + 2), 16))
+    .join(',')
+  assert.match(
+    read('src/styles/search.css'),
+    new RegExp(`rgba\\(${errorRgb},`),
+    `search.css's sr-error rgba() does not carry --text-error ${errorRgb}`
+  )
   assert.match(chromeCss, /var\(--text-error\)/)
 })
 
@@ -638,7 +659,8 @@ test('every ground is the Oceanic value (user ruling 2026-09-30, no longer Obsid
 
   // The three inks are Oceanic's and must not drift.
   for (const [name, want] of [['--text-normal', '#d7dfe9'], ['--text-muted', '#a5b1c2'],
-                              ['--text-faint', '#626d7e'], ['--text-error', '#f26d6d']]) {
+                              ['--text-faint', '#626d7e'], ['--text-error', '#f26d6d'],
+                              ['--text-book', '#8fcf9a']]) {
     const m = new RegExp(`${name}:\\s*(#[0-9a-fA-F]{6})`).exec(tokens)
     assert.equal(m[1].toLowerCase(), want, `${name} must be ${want}`)
   }
@@ -732,7 +754,9 @@ test('the vault name is --text-normal at 500 and the chevron is --text-faint', (
   // and 6357-6362 sets only size and weight on the name, so the colour falls
   // through; 6364-6370 give the icon `--text-faint` and 6353 lifts it to
   // `--text-muted` on hover.  Cairn had the name at --text-muted and the icon at
-  // --icon-color, i.e. both at #b3b3b3 and neither at Obsidian's value.
+  // --icon-color, i.e. both at one token and neither at Obsidian's role split;
+  // Oceanic's values are --text-normal #d7dfe9, --text-muted #a5b1c2 and
+  // --text-faint #626d7e.
   const sw = chromeCss.slice(chromeCss.indexOf('.vault-switch {'),
                              chromeCss.indexOf('.vault-switch:hover'))
   assert.match(sw, /color:\s*var\(--text-normal\)/)
@@ -1333,17 +1357,17 @@ const labelsOf = (el) => el.querySelectorAll('.ctx-item').map((r) => r.textConte
 test('§5.1 — openMenu renders the row menu as ONE box, Delete last and in --text-error', () => {
   const { doc } = installDom()
   const noop = () => {}
-  const acts = { newNote: noop, newFolder: noop, newSecret: noop, rename: noop, copyPath: noop, remove: noop }
+  const acts = { newNote: noop, newFolder: noop, newSecret: noop, importEpub: noop, rename: noop, copyPath: noop, remove: noop }
   const h = C.openMenu(C.folderRowMenu(acts), { x: 100, y: 100, label: 'Folder' })
 
   assert.equal(h.element.className, 'ctx-menu')
   assert.equal(doc.body.children.length, 1, 'the menu is not a persistent layer')
   assert.deepEqual(labelsOf(h.element),
-    ['New note', 'New folder', 'New secret file', 'Rename…', 'Copy absolute path', 'Delete'])
+    ['New note', 'New folder', 'New secret file', 'Import EPUB', 'Rename…', 'Copy absolute path', 'Delete'])
   const del = h.element.querySelectorAll('.ctx-item').pop()
   assert.equal(del.classList.contains('is-danger'), true)
   // The FOLDER menu is the tall one, and it is the one menu.ts's §5.12.4.3
-  // arithmetic sizes: 6 rows + 2 separators = 187.4px, against the 249.1px
+  // arithmetic sizes: 7 rows + 2 separators = 212.3px, against the 249.1px
   // recents popover that sets the worst case.
   assert.equal(h.element.querySelectorAll('.ctx-sep').length, 2)
   assert.equal(labelsOf(h.element).includes('Reveal in Finder'), false)
@@ -1355,7 +1379,7 @@ test('§5.1 — openMenu renders the row menu as ONE box, Delete last and in --t
 test('the viewer Copy/Paste menu carries its width-floor class; row menus carry none', () => {
   const { doc } = installDom()
   const noop = () => {}
-  const acts = { newNote: noop, newFolder: noop, newSecret: noop, rename: noop, copyPath: noop, remove: noop }
+  const acts = { newNote: noop, newFolder: noop, newSecret: noop, importEpub: noop, rename: noop, copyPath: noop, remove: noop }
   const plain = C.openMenu(C.folderRowMenu(acts), { x: 100, y: 100, label: 'Folder' })
   assert.equal(plain.element.classList.contains('ctx-clip'), false,
     'the row menus keep Obsidian\'s content-sized box')
@@ -1372,7 +1396,7 @@ test('the viewer Copy/Paste menu carries its width-floor class; row menus carry 
 test('§0.14 E16 — every row carries Obsidian\'s own glyph, painted through icons.ts', () => {
   const { doc } = installDom()
   const noop = () => {}
-  const acts = { newNote: noop, newFolder: noop, newSecret: noop, rename: noop, copyPath: noop, remove: noop }
+  const acts = { newNote: noop, newFolder: noop, newSecret: noop, importEpub: noop, rename: noop, copyPath: noop, remove: noop }
   const h = C.openMenu(C.folderRowMenu(acts), { x: 100, y: 100, label: 'Folder' })
 
   // One slot per ROW — including, in an icon-bearing menu, any row that has no
@@ -1391,7 +1415,9 @@ test('§0.14 E16 — every row carries Obsidian\'s own glyph, painted through ic
   // eye: grep `menuOptNewNote`, `menuOptNewFolder`, `menuOptRename`,
   // `menuOptDelete` and `copyPath()`.
   assert.deepEqual(icons.map((i) => i.getAttribute('data-icon')),
-    ['edit', 'folder-open', 'lock', 'edit-3', 'clipboard', 'trash-2'])
+    // §0.55 E108 adds `Import EPUB` with `file`; every other name is still
+    // Obsidian's own.
+    ['edit', 'folder-open', 'lock', 'file', 'edit-3', 'clipboard', 'trash-2'])
 
   // …and §6.1's pass actually RAN. A `data-icon` nobody paints is an empty box,
   // and the failure mode is invisible: the menu still opens, correctly sized,
