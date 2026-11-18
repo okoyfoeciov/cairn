@@ -406,25 +406,37 @@ such feature under the block is already offset, so deleting one *lowers* the cou
 
 ### X-1 · `base.css`'s blanket `transition: none !important` is a rule whose reason was deleted
 
-`src/styles/base.css:154`. §5.1 rule 5 is in force and was **not** unilaterally repealed, but its
+`src/styles/base.css:164`. §5.1 rule 5 is in force and was **not** unilaterally repealed, but its
 stated rationale is §5.12.6's main-thread scroll path, which was WebKitGTK with async scrolling off —
-an engine this repo deleted (§0.20.6 E35), whose successor sustains 105 fps (spike P). **THREE**
-exemptions now exist, all carrying Obsidian's own numbers:
+an engine this repo deleted (§0.20.6 E35), whose successor sustains 105 fps (spike P). **FIVE**
+exemptions now exist (CONTRACT §5.1 lists them):
 
-- two inside the Properties block, written as inline `!important` because **a stylesheet
-  `!important` outranks a normal inline style** (§0.24.5 E53);
+- two inside the Properties block, Obsidian's own numbers: the fold slide as an inline
+  `!important`, because **a stylesheet `!important` outranks a normal inline style**, and the fold
+  arrow as a stylesheet `!important` (§0.24.5 E53);
 - `tree.css`'s `.tr.d::before`, the folder chevron's `transform 100ms ease-in-out` (§0.44 E90),
-  written as a **stylesheet** `!important` — which wins because between two author `!important`
-  declarations the cascade falls back to **specificity**, and `.tr.d::before` (0,2,1) outranks
-  `*::before` (0,0,1). Its duration is `var(--chev-ms, 0ms)` and not a literal, because the tree's
-  rows are POOLED: a blanket transition animates a slot that merely changed which node it draws.
+  Obsidian's number, written as a **stylesheet** `!important` — which wins because between two
+  author `!important` declarations the cascade falls back to **specificity**, and `.tr.d::before`
+  (0,2,1) outranks `*::before` (0,0,1). Its duration is `var(--chev-ms, 0ms)` and not a literal,
+  because the tree's rows are POOLED: a blanket transition animates a slot that merely changed which
+  node it draws;
+- `memoir.css`'s checking animation (ink ring, ink dot, shimmer lines), scoped to `#memoir` by the
+  same specificity mechanism, after the user reported it frozen. Its numbers are Memoir's own;
+- `explain.css`'s badge fade and thinking dots (§0.56 E109), comart's numbers, scoped to
+  `.ep-explain`. Their staggered dots needed `!important` delays too, because the blanket shorthand
+  resets `animation-delay`.
 
-So there are now two *different* ways round this rule and a third case (§0.24.5's dead checkbox
+So there are two *different* ways round this rule and one dead declaration (§0.24.5's checkbox
 `box-shadow`) that nobody has bothered to rescue. **And the same failure mode is not confined to this
 rule**: §0.45 E93 found `caret-color` had been silently outranked by CM6's own base theme since the
-editor was first mounted, so the caret rendered white against a token marked `[M]`. Four occurrences
-now, three mechanisms (a blanket `!important`, an inline style losing to one, and a base-theme
-selector at higher specificity). **When a declaration looks right and the pixels disagree, read the
+editor was first mounted, so the caret rendered white against a token marked `[M]`; Memoir's
+reduced-motion override lost to its own exemption on source order (UI-14); and Memoir's 9px
+scrollbar rules were switched off by an inherited `scrollbar-color` (UI-15); and Memoir's shimmer
+lines lost their stagger, because both `animation` shorthands (the ban's and the exemption's) reset
+`animation-delay` to 0s, so all three pulsed together. All three Memoir cases are fixed, and
+`electron-shell/memoir.test.mjs` measures each in the engine. Eight occurrences, five mechanisms (a blanket `!important`, an inline style losing to one, a base-theme selector at
+higher specificity, source order between two equal `!important`s, and one property disabling
+another's pseudo-elements). **When a declaration looks right and the pixels disagree, read the
 computed style before re-reading the source.** Anything else that needs to animate will hit the
 same wall silently, and the list grows each time.
 
@@ -595,9 +607,9 @@ place to take it: its Obsidian runs Cairn's own pinned Chrome 142 (§0.52 E100).
 
 ### UI-9 · No ruling omits Obsidian's status bar or its view header 🟡
 
-**Opened 2026-09-13.** Cairn draws neither, and **no ruling says it should not.** CONTRACT §0.22.5
-E43 notes only that Obsidian's status bar *"has no counterpart"*; it describes the absence and does
-not decide it. Any future comparison must account for both — Obsidian's view header off via its own
+**Opened 2026-09-13.** Cairn draws neither, and **no ruling says it should not.** The contract
+mentions neither (E43, the only place that described the status bar's absence, is removed). Any
+future comparison must account for both — Obsidian's view header off via its own
 `showViewHeader` setting, its status bar present — with a region boundary, never a CSS mask standing
 in for an omission nobody ruled on.
 
@@ -654,6 +666,39 @@ find. Each remaining absence is a decision by construction, not an accidental om
 
 *Closed by:* a user ruling on each remaining absence, or the feature.
 
+### X-14 · The Memoir tab has three rendered scrollers — MEASUREMENT CONTRADICTS CONTRACT §5.12.4.3 🔴
+
+**Measured, and a conflict with CONTRACT §5.12.4.3**, which allows a third rendered scroller only
+where §5.12.4's table rules one. On the Memoir tab the rendered-box test counts three:
+the sidebar's scroller, `textarea#mm-editor` (`overflow-y: auto`, `memoir.css:133`) and the check
+drawer's `.mm-scroll` (`overflow-y: auto`, `memoir.css:216`). The drawer counts **open or closed**,
+because closed is `transform: translateX(100%)` (`memoir.css:176`), not `display: none`: the box is
+clipped by `.editor`'s paint containment but still has client rects. G9 never opens Memoir, so no
+gate sees it. §5.12.4's table now records the count as measured and unruled. The reader's
+explanation band, by contrast, has a ruled third scroller (§0.56 E109), a ruled fourth only while
+it is split or previews the split (§0.57 E110), and is `display: none` when closed.
+
+*Closed by:* a ruling that allows the Memoir scrollers, or a drawer that is `display: none` when
+closed (which brings the closed state back to two).
+
+### X-15 · CLOSED — The Lora files kept the Reserved Font Name "Lora" as a Modified Version
+
+**Closed by replacing the files** (the user left the decision to the lead). Cairn shipped comart's two
+Lora files, which are byte-identical to Google Fonts' Latin subsets: a Modified Version (OFL-FAQ 2.6,
+and SIL's "Webfonts and Reserved Font Names") still named "Lora". `src/styles/fonts/` now holds
+Cyreal's unchanged Original Version, `Lora[wght].ttf` and `Lora-Italic[wght].ttf`, from
+cyrealtype/Lora-Cyrillic@403b1a66 (the same bytes as google/fonts `ofl/lora/`). An Original Version
+may keep its name (OFL-FAQ 1.21 and 5.9; option 1 of the paper). `build-app.mjs` inlines the bytes
+unchanged as `data:font/ttf` URLs. Each face's `unicode-range` is exactly the subsets' 226 code
+points, so the badge still matches comart: 0 differing pixels in all eleven states at dpr 1, 1.25,
+1.5 and 2 (`explain-badge.test.mjs`). Without the range, ə, ā, ō, ē, U+0307 and ≈ draw from Lora and
+the test fails (measured: the `real` badge is 102.141px wide against comart's 100.766px).
+`THIRD-PARTY-NOTICES.md` records the URLs, hashes, name records and the reason, and
+`tools/package-electron.mjs` copies it, with the OFL text, into both packages. The badge test's
+reference still loads comart's subsets, read from a comart checkout at run time (`COMART_DIR`,
+default `~/comart`); the repository carries no copy of them, and without them the rendering rows
+skip and say so.
+
 ### UI-11 · Mod-N with the cursor on a folder creates the note in the folder's PARENT
 
 **Reported, not changed** — the source says so at `main.ts`'s `newNote`. `destinationFor(_, false)`
@@ -683,6 +728,31 @@ marks paints into its neighbours while it is the keyboard row. Both need a layou
 clip box for the text) rather than a token.
 
 *Closed by:* the inner text box, or rulings that neither matters.
+
+### UI-14 · CLOSED — Memoir's reduced-motion override now comes after its exemption
+
+**Closed by moving `memoir.css`'s `@media (prefers-reduced-motion: reduce)` block below the fourth
+exemption.** The entry reported that the block sat *before* the exemption it overrides. Same
+selectors, same specificity, both `!important`: the exemption won on source order, and the checking
+animation kept running for a user who asked for reduced motion (measured
+`{"normal":"mm-spin","reduced":"mm-spin"}`). `tests/frontend/memoir-css.test.mjs` pins the source
+order, and `electron-shell/memoir.test.mjs` reads the computed `animation-name` of the ink ring, ink
+dot and shimmer lines under CDP-emulated reduced motion (`none`) and without it (`mm-spin`,
+`mm-pulse`, `mm-shimmer`).
+
+### UI-15 · CLOSED — Memoir's two scrollers draw the 9px bar the sheet asks for
+
+**Closed by dropping `scrollbar-width`/`scrollbar-color` from `#memoir`.** The entry reported that
+`textarea#mm-editor` and the drawer's `.mm-scroll` both reserved Chromium's default 15px bar:
+`#memoir`'s `scrollbar-color` inherited down to them, and Chromium ignores `::-webkit-scrollbar` on
+an element whose `scrollbar-color` is not `auto`. The thumb's inset was also painted
+`--bg-primary`, the wrong colour on the drawer's `--bg-secondary`; it is now a transparent border
+with `background-clip: content-box`, the reader's and the explanation band's pattern.
+`electron-shell/memoir.test.mjs` measures 9 CSS px reserved on both scrollers (±1: the bar is
+floor(9 × dpr) device px, so the drawer, whose box is fractional there, reads 8 at dpr 1.5 and 1.75;
+Chromium's own bar reads 15 at every dpr) and photographs both thumbs' insets against their own
+grounds, the drawer's `--bg-secondary` and the journal's `--bg-primary`;
+`tests/frontend/memoir-css.test.mjs` pins the sheet.
 
 ## 4. What is verified, and what only looks it
 
@@ -794,6 +864,100 @@ consequence worth knowing before filing it:
   (`reader.lost`) and suppresses further saves; a hidden book can keep its
   in-memory text until the next open.
 
+### Click-to-explain (E109)
+
+**Opened 2026-11-17 with CONTRACT §0.56 E109.** The rulings themselves (the bottom band, no title and
+no ×, unselectable book text, the badge's blend over Cairn's ground, the fifth exemption, the
+band's scroller, and §0.57 E110's full-width answer and split with its fourth scroller) are settled
+and are not gaps. These are:
+
+- **The real band in a real `#reader` is only the real-engine suite's to show.** The unit suites run
+  on the minidom with a fake ai-service. Live SSE through the app window, the grip's pointer
+  capture, MW playback, the reveal scroll, code words, the find-bar click and Esc after a badge
+  click are `electron-shell/explain.test.mjs`'s subject. Its latest run, with E110 and its review
+  fixes, gives 61 of 61 against a fake ai-service (wide leg at dpr 1.25, 1700×900 CSS px; build
+  hash `afeda6bf5f5f0334`). Quote a fresh run before calling any of them verified.
+- **The badge's pixel match is per machine.** `electron-shell/explain-badge.test.mjs` measures 0
+  differing pixels on Debian at dpr 1, 1.25, 1.5 and 2, where the glyphs outside the faces'
+  `unicode-range` (comart's subsets' 226 code points) fall back to Liberation Serif. On macOS the
+  same stack may draw `ˈ`/`ə` from Georgia or a later face. Unmeasured. The test needs comart's two
+  Lora files (`COMART_DIR`, default `~/comart`) and skips its rendering rows without them. The test compares a static, fully rasterised badge; in a long, scrolling answer an
+  arc's anti-aliasing can move by one level, in comart's own panel too. Its render child now exits
+  only after its ~146 KB result line is written; before that, 3 of 8 runs died mid-line (SIGTRAP)
+  and failed. Since the fix: 8 of 8 runs in a row in the repository (build hash
+  `afeda6bf5f5f0334`, screen on throughout) and 8 of 8 in a review copy of the tree give 21 of 21,
+  with the E110 fixture. If the test reading it is gone, the render child exits quietly; an
+  unhandled `EPIPE` there raised Electron's main-process error dialog on the user's screen.
+  Runs taken while the GNOME screensaver is on measure nothing: every render child times out
+  after 120 s with empty output.
+- **CJK is not segmented.** A run of CJK text with no spaces is one "word", as in comart, and
+  `。！？` do not end a sentence, so the ±5-sentence window counts whole paragraphs there.
+- **`Mr.` ends a sentence.** There is no abbreviation list (comart has none either). It only
+  narrows the window.
+- **Picked words are not NFC-normalized.** A decomposed `café` is sent decomposed, and the
+  Merriam-Webster lookup may miss it. NFC would make the word differ from the passage by code
+  points. `U+2010`/`U+2011` hyphens and ZWJ/ZWNJ still split a word, as in comart.
+- **A middle click on a book's external link does nothing.** The shell's navigation guard denies
+  the new window it would open. A left click opens the link in the system browser, as before.
+- **A phrase cannot run through an external or chapter link.** A drag stops there, because the
+  link's own words are never picked and the phrase would have a hole in it.
+- **`Untitled book` is matched as a literal** in `reader.ts`, a copy of `epub.ts`'s fallback title.
+  If one changes without the other, the placeholder reaches the model as the book's title.
+- **Every placed pick is a new billed request.** Nothing is cached on Cairn's side, so picking the
+  same word twice asks twice, as in comart. A pick on a band that holds an answer is staged and
+  costs nothing until it is placed (E110, below).
+- **The Lora Reserved Font Name**: closed (X-15). Cairn ships Cyreal's unchanged Lora files.
+
+### The band's two halves (E110)
+
+**Opened 2026-11-17 with CONTRACT §0.57 E110.** comart behaviours kept on purpose, and gaps:
+
+- **While a pick is staged, a click anywhere in the band below the grip places it, and that is a
+  billed request.** This includes a click aimed at an answer word, a badge, a link or a column's
+  scrollbar: the transparent overlay covers all of them (comart's behaviour, `explain.ts`'s
+  half-click handler). Only the wheel scrolls the answers while a pick waits. Esc, or a click
+  outside the band, gets out without spending anything (the outside click also closes the band).
+- **Staging is invisible until hover or focus.** The overlay has no text and no label on screen.
+  The only cues are the book mark on the staged word and a pointer cursor over the band, so a user
+  may not notice that a pick is waiting (comart is the same).
+- **No control goes back to one panel.** Closing the band does, and so does a split whose two
+  halves have both ended empty: the next pick, or D6 at the click, starts one panel. There is no
+  control that closes one half. The split is a fixed 50/50, with no draggable divider and no
+  minimum width per half, so a narrow pane squeezes both halves.
+- **Enter places the FOCUSED half, whatever the preview shows.** Tab to the left half, then hover
+  the right one: the preview shows the split, and Enter replaces the whole panel (comart is the
+  same).
+- **A window resize can stop a half following its stream.** D2 re-pins a following half only
+  around the width changes the band makes itself (the right preview, its removal, a committed
+  split). `relayout()` does not re-pin, because the band cannot tell whether a half was following
+  before the resize. E109's single panel has the same flaw.
+- **Replacing a half does not stop its clip.** A badge clip that is playing goes on after its half
+  is replaced and its badge is gone (comart is the same). Closing the band stops it.
+- **Not measured in the real engine** (CONTRACT §0.57 Tests lists what is): Ctrl+wheel over a
+  staged pick, and line or page wheel deltas (the engine steps send pixel deltas: 40px of wheel
+  scrolls the answer under the overlay by 40); Space as a commit key (Enter is measured); D2 after
+  a window resize (the gap above, read from the code); focus staying on the book after an Esc
+  pressed there (the engine step starts with focus on `.ep-scroller`, then asserts the stage, the
+  mark and the answer, not focus). These are covered by unit tests only: a split whose halves both
+  ended empty going back to one panel, at the next pick or at D6's click; a start dropping an older
+  stage; and the outside-click rule's keyboard click (`detail` 0), its untrusted press, a press in
+  a context menu slid off over the book, and a band press whose click was already judged.
+- **Closed in review: the press that keeps the band open.** It was recorded on `mousedown`, so a
+  band gesture with no document click after it (a right or middle press, or a drill-down, whose
+  click the band swallows) left it set, and a click whose `mousedown` a handler suppresses (the
+  sidebar's resize grip) inherited it and did not close the band. It is now recorded on
+  `pointerdown`, left button only, and a press in a layer (the find bar, a menu, the modal) counts
+  like one in the band, so a drag-select in the find field released over the book no longer
+  closes the band (CONTRACT §0.57, Esc, the outside click and focus). The real-engine step for
+  this fails on the old rule in all three of its legs (right press, drill-down, find field) and
+  passes now. A press on a file-tree
+  context-menu row released over the book now keeps the band too (unit test only). The menu stays
+  open after that gesture, as it did before: that is the menu's own rule, not the band's.
+- **Two quirks that are not defects.** `explain()` on a destroyed band does nothing and returns
+  `'started'`, because the seam needs a value; the reader never calls it after destroy. `find.ts`'s
+  own Esc handler, on the find field, has no repeat check; after its first press closes the bar,
+  the repeats reach `#reader`'s handler, which ignores them.
+
 ## 6. Traps that cost real time here — read before measuring
 
 Not defects. Recorded because each one produced a **confident wrong answer** before it was found, and
@@ -806,7 +970,7 @@ each will do it again.
 | A **skip is a third kind of green**: no summary line separates "16 skipped" from "16 that cannot fail here" | CONTRACT §0.22.2 E40 |
 | **A test that reads the wrong file cannot fail**, and neither can a feature nobody has executed | CONTRACT §0.20.6.1 E36 |
 | **A relaunch while Cairn is open keeps the OLD renderer**: the single-instance lock hands the new process back to the existing window, and a `file://` script can be cached across launches. `npm run electron:app` then builds new files that nobody executes — every screenshot still shows the old bug | Dev shell: `app-main.mjs` reloads when the bundle stamp changes; `build-app.mjs` hashes the `app.js` URL |
-| Screenshot colour is **framebuffer bytes, not colour**, without `--force-color-profile=srgb` | CONTRACT §0.22.5 |
+| Screenshot colour is **framebuffer bytes, not colour**, without `--force-color-profile=srgb` | CONTRACT §0.22.8 |
 | A **relative unit declared twice down one chain is applied twice** — `0.875em` on both the cell and its child is 12.25px | CONTRACT §0.24.9 E58 |
 | **A settle scroll is not neutral.** Scrolling the document twice before reading a line height re-creates every line's DOM, and the re-created lines take whatever strikes are cached — which is why four passes of the 0.8px-line investigation read 24.0 in instances that would have read 24.8. Read the first render, then settle | CONTRACT §0.50.5 E98 |
 | **A font strike remembers the device scale it was born under.** Blink's strike scale is a process-wide static that ANY view's `LayoutRoot` rewrites, and an SVG loaded as a CSS image is a view of its own at scale 1.0. A probe that lays out to measure cannot see it — the layout rewrites the static first; only a style-time population (`min-width: 6ch`) observes the transient | CONTRACT §0.50.2–3 E98 |

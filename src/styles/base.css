@@ -2,7 +2,8 @@
  * src/styles/base.css
  * Owner: 01.  Spec: CONTRACT.md §5.12.5 (the main frame must never scroll),
  * §5.1 rule 5 (no transitions, no animations anywhere), §6.1 (no innerHTML
- * outside icons.ts), spec-01 §1 / §4 (font strategy: no font files shipped).
+ * outside icons.ts), §0.18 E23 (font strategy: Obsidian's system stacks; the
+ * only font files shipped are the explain badge's Lora, §0.56 E109).
  *
  * Reset, font stacks, and the no-layer discipline.  DECLARES NO CUSTOM
  * PROPERTY — tokens.css is the only declaration site (CONTRACT §5.1).
@@ -122,20 +123,25 @@ body [contenteditable=""] {
  *     rule outranks it, and nothing in `editor.css` ever sets `box-shadow` on
  *     that element for it to animate.  The hover it belongs to changes
  *     `border-color`, which is not in the transition.
- * THERE ARE FOUR EXEMPTIONS AND NOTHING ELSE.  All four exist because the user
- * reported the difference.
+ * THERE ARE FIVE EXEMPTIONS AND NOTHING ELSE.  Each is a user ruling.
  *   · the two above, inside the Properties block — "Obsidian - smooth. Cairn:
  *     just show/hide abruptly."
  *   · §0.44 E90, `tree.css`'s `.tr.d::before` — the folder chevron's
  *     `transform 100ms ease-in-out`, Obsidian's app.css:7893.  "Please reverse
  *     engineer the open folder animation … both the animation of the arrow and
  *     the animation of the notes appearing."
-  *   · the Memoir page's ink ring/dot and shimmer lines
-  *     (`memoir.css`) — "the animation didn't run. It was frozen."  Scoped to
-  *     three selectors inside `#memoir`, by the same specificity mechanism as
-  *     the chevron.  Drawer slides and button transitions stay banned.
+ *   · the Memoir page's ink ring/dot and shimmer lines
+ *     (`memoir.css`) — "the animation didn't run. It was frozen."  Scoped to
+ *     three selectors inside `#memoir`, by the same specificity mechanism as
+ *     the chevron, with a `prefers-reduced-motion` override.  Drawer slides
+ *     and button transitions stay banned.
+ *   · §0.56 E109, `explain.css` — the reader's explanation band: the
+ *     Merriam-Webster badge's 0.15s background/colour fade and the thinking
+ *     dots' pulse, both comart's.  Scoped to `.ep-explain`, same mechanism,
+ *     and each has a `prefers-reduced-motion` override.  Drill-down words and
+ *     the resize grip stay banned.
  *
- * THE THIRD ONE IS WHY THIS PARAGRAPH IS WORTH READING BEFORE ADDING A FIFTH.
+ * THE THIRD ONE IS WHY THIS PARAGRAPH IS WORTH READING BEFORE ADDING A SIXTH.
  * It is declared `!important` in `tree.css` and it WINS, where a normal
  * declaration would have been silently dead: between two AUTHOR `!important`
  * declarations the cascade falls back to SPECIFICITY, and `.tr.d::before`
@@ -144,12 +150,16 @@ body [contenteditable=""] {
  * tree's rows are POOLED and a blanket transition would animate a row that
  * merely changed which node it draws.  Neither trick is decoration; see the
  * block on `.tr.d::before` in `tree.css` for the whole argument.  The fourth
- * (the Memoir checking animation) won the same way, scoped to `#memoir`.
+ * and fifth won the same way, scoped to `#memoir` and `.ep-explain`.  The
+ * shorthand here resets every longhand, `animation-delay` included, so an
+ * exemption that staggers needs its own `!important` delays too.  And an
+ * exemption's reduced-motion override must come AFTER it: same selector,
+ * same specificity, both `!important`, so source order decides.
  *
- * The FIFTH one, whenever it comes, should note that this rule's own rationale
- * names an engine that no longer exists (see the warning above) and that
- * whether a blanket ban still earns its keep is a user ruling nobody has
- * taken. */
+ * Five exemptions in, note what the warning above says: this rule's own
+ * rationale names an engine that no longer exists, and whether a blanket ban
+ * still earns its keep is a user ruling nobody has taken.  Until it is taken,
+ * the ban stands and each new motion is its own ruling. */
 *, *::before, *::after {
   transition: none !important;
   animation: none !important;
@@ -188,11 +198,11 @@ body [contenteditable=""] {
 img, svg { max-width: 100%; }
 svg { display: block; }
 
-/* CONTRACT §5.12.4.3 — NO THIRD SCROLLER, EVER.  Any new box with
- * `overflow: auto | scroll | overlay` whose content overflows earns its own
- * compositing surface, and a viewport-sized one costs ~23.5 MB at 2x.  Menus,
- * popovers, the tab strip, the vault bar and both §3.3 cap banners must fit or
- * clip — single line with `text-overflow: ellipsis`.  This class is the shared
+/* CONTRACT §5.12.4.3 — CHROME FITS OR CLIPS; IT NEVER SCROLLS.  Note mode has
+ * exactly two rendered scrollers and G9's `layers.scrollers` row fails on a
+ * third; the other modes' counts are in §5.12.4's table.  Menus,
+ * popovers, the tab strip, the vault bar and the banners must fit or clip —
+ * single line with `text-overflow: ellipsis`.  This class is the shared
  * primitive for that, and it is why nothing in chrome.css says `overflow:auto`. */
 .clipline {
   white-space: nowrap;

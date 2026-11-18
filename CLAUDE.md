@@ -38,9 +38,10 @@ trash, move), `src/prefs.rs` (`state.json`), `src/note_frame.rs` (§2 encoder), 
 **Frontend** (`src/`) — `ipc.ts` is the ONLY shell seam. `main.ts` is entry: boot, wiring,
 cross-module flows, owns nothing else. `editor.ts`, `livepreview.ts`, `properties.ts`, `tables.ts`,
 `totp.ts`, `secrets.ts`, `memoir.ts` are the editor surface; `epub.ts` is the EPUB container and
-`reader.ts` its surface. `tree.ts` / `treeblob.ts`,
-`search.ts`, `chrome.ts`, `tabstrip.ts`, `vaultbar.ts`, `menu.ts`, `modal.ts`, `inline-edit.ts`,
-`icons.ts`, `state.ts`, `note_frame.js` (the §2 decoder).
+`reader.ts` its surface; `explain.ts` is the reader's click-to-explain band, with `explain-thread.ts`
+(one half of the band), `explain-render.ts` (its DOM) and `bookpick.ts` (the word and the passage).
+`tree.ts` / `treeblob.ts`, `search.ts`, `chrome.ts`, `tabstrip.ts`, `vaultbar.ts`, `menu.ts`,
+`modal.ts`, `inline-edit.ts`, `icons.ts`, `state.ts`, `note_frame.js` (the §2 decoder).
 
 `src/styles/tokens.css` is the only file that declares custom properties. `src/icons.ts` is the
 only innerHTML sink. `src/main.ts` boots; if you are adding behaviour there, it probably belongs
@@ -104,7 +105,7 @@ emulation is not a rasterisation scale.
 | IPC table closed at 29 | The six shell-owned commands are `pick_vault`, `open_external`, `copy_text`, `read_text`, `copy_image`, `import_epub`. `open_external`'s http/https/mailto allowlist is enforced in the MAIN process and is a ruling, not an accident. |
 | No inert controls | §9 E4. The one recorded exception: `Show in Finder` on Linux errors by ruling, because the fix was cancelled. |
 | Deliberate behaviours | Fixed non-closable tabs (Mod-1/Mod-2); maximized launch except under `--pixeltest`/headless; global transition ban with named exemptions; collapse-all removed; a network vault has no refresh (never draw its banner while `watching` is true); a clicked bare url does not navigate; a wikilink to a missing note does nothing. |
-| User features that are NOT Obsidian's | The `totp` block, secret files (`cairn-type: secrets`), the Memoir journal page over the local ai-service at `127.0.0.1:8770`, and EPUB entries with the in-house reader / Import EPUB move (`docs/CONTRACT.md §0.55 E108`). These are design, not transcription. |
+| User features that are NOT Obsidian's | The `totp` block, secret files (`cairn-type: secrets`), the Memoir journal page over the local ai-service at `127.0.0.1:8770`, EPUB entries with the in-house reader / Import EPUB move (`docs/CONTRACT.md §0.55 E108`), and the reader's click-to-explain band over the same ai-service, whose pronunciation badge is comart's, pixel for pixel (`§0.56 E109`). These are design, not transcription. |
 
 ---
 
@@ -140,7 +141,7 @@ cd core && cargo clippy -p cairn-napi -- -D warnings
 cd core && cargo clippy --all-targets -- -D warnings   # clean; quote this one
 npm test                             # pretest (fixtures + bench self-test) + frontend glob
 node --test tests/frontend/*.test.mjs   # THE GLOB, never the directory: node 24 breaks it
-node --test electron-shell/<suite>.test.mjs   # real-engine (needs a display; README lists them)
+node --test electron-shell/<suite>.test.mjs   # real-engine (needs a display; ls electron-shell/*.test.mjs lists them)
 npm run selftest:geometry            # 50 identities
 ./tools/run-g9-electron.sh           # gate G9 (box edges) at 1920x964 — OPENS A WINDOW
 node tools/scroll-bench.mjs --self-test

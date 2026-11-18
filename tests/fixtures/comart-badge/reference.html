@@ -1,0 +1,68 @@
+<!doctype html>
+<!--
+  tests/fixtures/comart-badge/reference.html -- the badge as COMART draws it.
+  Owner: electron-shell/explain-badge.test.mjs.
+
+  The frozen comart sheet (panel-badge.css) and nothing of Cairn's.  Each
+  cell is comart's `.explain-content`, the badge's parent there
+  (panel.css:355-365): its scroller, its 20px 16px padding, 15.5px / 1.65
+  (the badge's `font: inherit; font-size: .9em` resolves against it), its
+  ink --text #F1EAD8 (:84), and body's antialiasing (:117).  The family is
+  --serif (:102) without Literata, which is not shipped: the freeze block
+  pins the badge's own family, so this one only sets the words beside it.
+  The pron-only row's layout (:686-695) is copied too, because it makes a
+  row badge a flex item.  Cells are tall enough that nothing scrolls (the
+  test asserts it).  The badges fall where they naturally fall; the Cairn
+  page is moved onto them.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="panel-badge.css">
+<style>
+  html, body { height: 100%; overflow: hidden; }
+  .explain-content {
+    position: absolute;
+    left: 0;
+    width: 640px;
+    height: 112px;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 20px 16px;
+    font-family: Georgia, "Iowan Old Style", "Times New Roman", serif;
+    font-size: 15.5px;
+    line-height: 1.65;
+    color: #F1EAD8;
+    -webkit-font-smoothing: antialiased;
+  }
+  /* comart's pron-only row (panel.css:686-695), under the class names the
+     port's builder gives it: it makes each row badge a flex item, as there. */
+  .ex-pron-only { display: flex; flex-wrap: wrap; gap: 7px 14px; margin-bottom: 14px; padding-bottom: 14px; }
+  .ex-pron-only-row { display: inline-flex; align-items: center; gap: 6px; }
+  .ex-pron-only-row strong { font-weight: 600; }
+  /* comart's bold in an answer (panel.css:538): a badge inside it inherits it. */
+  .explain-content strong { font-weight: 600; }
+</style>
+</head>
+<body>
+<script>
+  'use strict'
+  window.mountCell = (spec, k) => {
+    const box = document.createElement('div')
+    box.className = 'explain-content'
+    box.style.top = (k * 112) + 'px'
+    const block = document.createElement('div')
+    block.className = 'round-block'
+    const round = document.createElement('div')
+    round.className = 'round'
+    block.append(round)
+    box.append(block)
+    document.body.append(box)
+    return { box, shift: box, scroller: box, inline: round, row: block }
+  }
+</script>
+<script src="explain-render.js"></script>
+<script src="states.js"></script>
+<script src="harness.js"></script>
+</body>
+</html>

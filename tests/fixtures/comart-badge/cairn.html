@@ -1,0 +1,56 @@
+<!doctype html>
+<!--
+  tests/fixtures/comart-badge/cairn.html -- the badge as CAIRN draws it.
+  Owner: electron-shell/explain-badge.test.mjs.
+
+  Cairn's real stylesheet (build-app.mjs's bundleCss(), the pass that fills
+  index.html, inlined where the placeholder below is) and the band's real
+  ancestry from CONTRACT §0.57 E110's DOM: main.editor.is-reader (its paint
+  containment included) > section#reader.ep-reader > div.ep-explain >
+  .ex-slots[data-layout=single] > .ex-thread[data-slot=0] > .ex-scroll >
+  .ex-content > .ex-round-block > (.ex-pron-only | .ex-round > p): the left
+  half of a band that is one panel, which is where every first answer lands.
+  One 112px band per cell, stacked in #reader's flex column, tall enough that
+  nothing scrolls (the test asserts it).  Each band is moved through its own
+  `position: relative` offset (explain.css) onto the reference's badge, so
+  the pane's paint origin stays at 0,0, on the device grid.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<!--CAIRN-CSS-->
+</head>
+<body>
+<main class="editor is-reader" style="height: 100%">
+  <section id="reader" class="ep-reader"></section>
+</main>
+<script>
+  'use strict'
+  window.mountCell = (spec, k) => {
+    const el = (cls) => { const e = document.createElement('div'); e.className = cls; return e }
+    const box = el('ep-explain')
+    box.style.height = '112px'
+    const slots = el('ex-slots')
+    slots.setAttribute('data-layout', 'single')
+    const thread = el('ex-thread')
+    thread.setAttribute('data-slot', '0')
+    const scroll = el('ex-scroll')
+    const content = el('ex-content')
+    const block = el('ex-round-block')
+    const round = el('ex-round')
+    block.append(round)
+    content.append(block)
+    scroll.append(content)
+    thread.append(scroll)
+    slots.append(thread)
+    box.append(slots)
+    document.getElementById('reader').append(box)
+    // The row goes where explain.ts puts it: first in the round block.
+    return { box, shift: box, scroller: scroll, inline: round, row: { append: (n) => block.prepend(n) } }
+  }
+</script>
+<script src="explain-render.js"></script>
+<script src="states.js"></script>
+<script src="harness.js"></script>
+</body>
+</html>

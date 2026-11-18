@@ -41,4 +41,17 @@ interface Window {
    *  live `innerWidth`, so a width saved on a wide monitor cannot squeeze the
    *  editor to nothing on a narrow one. */
   __CAIRN_SIDEBAR_W__?: number
+  /** §0.56 E109.  The persisted height of the reader's explanation panel in CSS
+   *  px, handed over by the main process exactly like `__CAIRN_SIDEBAR_W__`
+   *  (read from `state.json`'s `explain_h`).  Absent on a first run: the panel
+   *  then opens at its 320px default.  Clamped again against the live reader
+   *  height before use. */
+  __CAIRN_EXPLAIN_H__?: number
+  /** §0.56 E109.  An alternative ai-service origin (loopback http only),
+   *  passed by the main process from `CAIRN_AI_BASE`.  Exists for the
+   *  real-engine suites, which serve a fake ai-service on a free port; absent
+   *  in normal use, where the panel talks to `http://127.0.0.1:8770`.  A
+   *  refused `CAIRN_AI_BASE` arrives as `http://127.0.0.1:9`, which the engine
+   *  will not fetch: it fails closed, never to the billed default. */
+  __CAIRN_AI_BASE__?: string
   }

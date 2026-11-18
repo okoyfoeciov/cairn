@@ -130,6 +130,7 @@ import { configurePersist, discardPendingUi, flushUi, patchUi } from './state'
 import { createTabStrip, type TabId, type TabStrip } from './tabstrip'
 import { mountMemoir, type MemoirView } from './memoir'
 import { mountReader, type ReaderView } from './reader'
+import { mountExplain } from './explain'
 import { createTree, MEMOIR_PATH, type TreeController } from './tree'
 import { registerLinkHost } from './livepreview'
 import { registerTotpHost } from './totp'
@@ -1857,6 +1858,17 @@ function boot(): void {
       transport: { readEpub, openExternal },
       onProgress: rememberBookmark,
       onError: reportError,
+      // §0.56 E109 — the explanation band.  The shell-side values are bound
+      // here, so the reader never imports the panel.
+      mountExplain: (host, hooks) =>
+        mountExplain(host, {
+          ...hooks,
+          base: window.__CAIRN_AI_BASE__ ?? 'http://127.0.0.1:8770',
+          initialHeight: window.__CAIRN_EXPLAIN_H__ ?? null,
+          saveHeight: (h: number) => patchUi({ explainH: h }),
+          openExternal,
+          onError: reportError,
+        }),
     })
   }
   // §0.38 E85.  AFTER `tree` exists?  No — the host reads `tree` lazily on each

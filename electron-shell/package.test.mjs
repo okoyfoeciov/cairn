@@ -72,7 +72,9 @@ test('the staged package is complete and its entry point exists', { skip: SKIP }
   assert.ok(existsSync(join(app, pkg.main)), `package.json main (${pkg.main}) does not exist`)
   assert.equal(pkg.type, 'module', 'app-main.mjs is ESM; the package must say so')
 
-  for (const f of ['electron-shell/native.mjs', 'electron-shell/preload.cjs', 'electron-shell/cairn.node', 'electron-shell/app/app.js', 'tools/verify-geometry.js']) {
+  // THIRD-PARTY-NOTICES.md: the OFL on the inlined Lora faces asks for its
+  // licence text with every copy (CONTRACT §0.56 E109).
+  for (const f of ['electron-shell/native.mjs', 'electron-shell/preload.cjs', 'electron-shell/cairn.node', 'electron-shell/app/app.js', 'tools/verify-geometry.js', 'THIRD-PARTY-NOTICES.md']) {
     assert.ok(existsSync(join(app, f)), 'missing from the package: ' + f)
   }
 

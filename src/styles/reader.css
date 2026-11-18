@@ -10,7 +10,9 @@
  * ONE SCROLLER. The book is the only scroller; the Mod-F find bar is the note
  * viewer's own overlay, never a second view or a third scroller.  The sidebar
  * keeps its own scroller, so the document has two rendered scrollers in reader
- * mode, like the note viewer.
+ * mode, like the note viewer — three while the explanation band is open, whose
+ * own scroller E109 allows, and four while it is split or previews the split,
+ * one per half (E110, explain.css).
  *
  * DECLARES NO CUSTOM PROPERTY — tokens.css is the only declaration site
  * (§5.1).  Numbers that are the reader's own (measure, type scale) stand here
@@ -46,10 +48,6 @@
   box-sizing: border-box;
   padding: 52px 32px 112px;
   outline: none;
-  /* base.css sets `user-select: none` on <body> for the app chrome.  A book is
-     text the user can quote, so the reading band opts back in explicitly. */
-  -webkit-user-select: text;
-  user-select: text;
 }
 .ep-scroller::-webkit-scrollbar { width: var(--scrollbar-w-editor); background: transparent; }
 .ep-scroller::-webkit-scrollbar-track { background: var(--scrollbar-track); }
@@ -69,7 +67,14 @@
   line-height: 1.72;
   color: var(--text-normal);
   overflow-wrap: break-word;
+  /* E109: a press on a word picks it and a drag picks a phrase, so book text
+     is not selectable.  Inherited from <body> already; stated here because
+     this is the element whose behaviour depends on it. */
+  -webkit-user-select: none;
+  user-select: none;
 }
+/* The reader sets this while the pointer is over a pickable word. */
+.ep-content.ex-over-word { cursor: pointer; }
 
 .ep-chapter + .ep-chapter {
   margin-top: 64px;

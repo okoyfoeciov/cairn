@@ -19,7 +19,7 @@ remain: every escalation is settled in §9.**
 One row per ruling id, with the rule as it stands and where it lives. **Section numbers and ids are
 never renumbered or reused** — code cites them (ids like `E14` and section numbers like `§7.3`), so a
 superseded id points at the rule that replaced it or at its own tombstone rather than disappearing.
-Sections are numbered in the order below: §0's passes are §0.1–§0.54, then the body is §1–§10.
+Sections are numbered in the order below: §0's passes are §0.1–§0.57, then the body is §1–§10.
 
 | Id | Current rule | Where |
 |---|---|---|
@@ -78,7 +78,7 @@ Sections are numbered in the order below: §0's passes are §0.1–§0.54, then 
 | M56 | The tab strip, owner 03 — now two fixed tabs | §7.4 |
 | M57 | `nc://vault-lost` has a handler; there is no refresh affordance | §7.3 case 8, §0.12.2 |
 | M58 | **Removed** — the Linux target block | §6.2 |
-| M59 | Rule 5: no transitions anywhere, with three named exemptions | §5.1, §0.24.5 E53, §0.44 E90 |
+| M59 | Rule 5: no transitions anywhere, with five named exemptions | §5.1, §0.24.5 E53, §0.44 E90, §0.56 E109 |
 | M60 | **Struck by E9** — the sidebar resizes, and `sidebar_w` is a global field | §0.7, §7.6 |
 | M61 | **Overturned by E19** — every folder draws a chevron | §0.17, §5.2 |
 | M62 | **Removed** — the retired memory composition | §8 |
@@ -231,6 +231,8 @@ Sections are numbered in the order below: §0's passes are §0.1–§0.54, then 
 | E106 | Canonical roots; `forget_vault`'s silent no-op; the scroll driver above 120 Hz | §0.53.7 |
 | E107 | Copy image on a pasted image: one row, command 27, PNG/JPEG as they are, the rest redrawn | §0.54 |
 | E108 | EPUB files are first-class tree entries (OS copy or Import move) with an in-house reader, commands 28/29, and per-vault bookmarks | §0.55 |
+| E109 | Click-to-explain in the reader: a press (or a drag of ≤ 8 words) on a book word asks the local ai-service; the answer streams into a bottom band with comart's frozen pronunciation badges; book text is not selectable | §0.56 |
+| E110 | The band's answer fills its width; a pick on a band that holds an answer is STAGED, then placed over the whole band or in a half (comart §3h); the split lasts until the band closes or both halves have ended empty | §0.57 |
 
 ### §0.1 — DELETED (the errata changelog; the X/Y/Z ids it alone defined are folded into §0's index).
 
@@ -550,7 +552,7 @@ nothing else), and **the watcher started**. `CAIRN_DIAG=1` logs the event bus in
 
 #### §0.21.1 — DELETED (a deleted app's artefacts outlive the deletion; a measurement of a stale binary is not a measurement).
 
-#### §0.21.3 — DELETED (G10's instrument — E37; G10 and `tools/g10.mjs` were removed. `tools/png.mjs`, `tools/pixel-diff.mjs` and `tools/capture-app.mjs` remain as general capture and diff tools).
+#### §0.21.3 — DELETED (G10's instrument — E37; G10 and `tools/g10.mjs` were removed. `tools/png.mjs` remains as a PNG reader/writer; there is no pixel-diff or capture-app tool any more, and the one capture path is the `CAIRN_CAPTURE` seam in `app-main.mjs`).
 
 ### §0.22 — macOS runs, the gate window, the watcher (E39–E45)
 
@@ -628,7 +630,7 @@ passing test.
 
 **Two capture rules, both bought with a wrong number:** force `--force-color-profile=srgb` on BOTH
 sides of any pixel comparison, or a colour profile invents a palette defect (Obsidian stores
-`#242424` for a surface its own computed style calls `#282828` — `tools/capture-app.mjs` refuses a
+`#242424` for a surface its own computed style calls `#282828` — a capture tool must refuse a
 tagged capture); and kill every leaked dev process before capturing, or a capture can come out at
 the wrong scale **while its report still says `dpr=1`**.
 
@@ -1870,11 +1872,14 @@ button — the shortcut is the entry point.
   through whole-book matches; each current match is centred in the reading surface. A match is
   found across inline text-node boundaries (a converted EPUB may split “lizard” into six spans),
   while block boundaries are kept as separators so a match never spans paragraphs. Esc or outside
-  click closes; a closed bar forgets its query. It is an overlay, not a scroller. The reading
-  band overrides the chrome's `user-select: none`, so book text remains selectable, but a selection
-  does not prefill the field: Ctrl-F always opens empty in the reader.
+  click closes; a closed bar forgets its query. It is an overlay, not a scroller. Ctrl-F always
+  opens empty in the reader. **Book text is not selectable** — this bullet's earlier "book text
+  remains selectable" is STRUCK by §0.56 E109, where a press on a word picks it for an explanation.
 - **Scrollers.** Reader mode replaces the note viewer in the same band: the sidebar scroller plus
   the book scroller is **two rendered scrollers** (§5.12.4); the find bar overlays and adds none.
+  The explanation band adds a **third, only while it is open** (§0.56 E109), and a **fourth** only
+  while it is split or previews the split (§0.57 E110).
+- **Click-to-explain** is §0.56 E109: the one thing a click on book text does.
 - **Progress.** `EpubBookmark { chapter, href, offset, progress }` is stored per vault in
   `state.json` (§7.6), keyed by the vault-relative EPUB path, capped at 500, sanitised on read and
   write. Progress never writes into the vault (gate G8). An in-app rename/move re-keys it.
@@ -1885,6 +1890,482 @@ button — the shortcut is the entry point.
   fixed-layout pages are treated as normal flow; ZIP64 is refused; CRC fields are not verified;
   non-UTF-8 XML is not transcoded; EXIF orientation is not interpreted; the 500-bookmark cap is
   lexicographic, not recency-based.
+
+### §0.56 — Click-to-explain in the EPUB reader (E109)
+
+**User ruling (2026-11-17).** A press on a word in a book explains it. A band docked at the BOTTOM
+of the reading area streams a plain-English explanation of the word in the sense the passage uses
+it, with Merriam-Webster pronunciation badges, from the local `ai-service` at `127.0.0.1:8770`. A
+drag from a word picks a phrase. A press on a word of a finished answer asks about that word next.
+
+**§0.17's method does not apply here, as in §0.46.** Obsidian has nothing like it. The reference is
+the user's own **comart** Chrome extension (`~/comart`), read directly: `panel.js` (the request,
+the SSE reader, the renderer, the badges, the follow-up), `panel.css` (the badge), `content.js`
+(the word, the context window, the drag clamp, the outside click, the reveal, the grip) and
+`app-listen.js` (`playBadge`). What follows is design. Each divergence from comart is stated with
+its reason. **Not ported:** Ask, its caption card and draggable card, credits (`/api/credits`), the
+code block's copy button, and Open Sans. This list also named "comart's split/staging and placement
+modes"; that is STRUCK by §0.57 E110, which ports them.
+
+- **The band (rulings 1–3, 9).** `div.ep-explain` is an in-flow flex item under `.ep-scroller` in
+  `#reader`'s column, the full width of the reading area (not the file tree). The book's scroller
+  gets SHORTER instead of the band floating over it: the book's scrollbar stays whole, the end of
+  the book stays reachable, and the line width never changes, so nothing re-wraps. It is `[hidden]`
+  (`display: none`) until the first pick. "Its content column is `.ep-content`'s 792px, centred, so
+  the answer starts on the book text's left edge" is STRUCK by §0.57 E110: the answer fills the band,
+  or its half. **No title and no ×.** It prints nothing unasked except the error line.
+- **Height.** Default **320** CSS px, minimum **140**, maximum the reader's height − **24**. A 6px
+  grip on the top edge drags it (pointer-captured, `row-resize`, an `--accent` bar on hover, while
+  dragging and on keyboard focus: `.sidebar-resize` turned on its side). ArrowUp/ArrowDown on the
+  focused grip move it by **24**. A short window clamps the applied height and keeps the chosen
+  one, and a grip click or a key that the clamp swallows is not a new choice. When the band opens or
+  grows over the picked word, the book scrolls by exactly the overlap plus 12px (comart's
+  `revealMarks`). Only a mark in the rows the band now covers is revealed: a mark the reader has
+  scrolled far away from stays put when the band is resized.
+- **Picking (ruling 7).** A trusted, unmodified primary press on a word picks it. A drag from a word
+  extends the pick to a phrase of **up to 8 words** (comart's ±7 clamp) inside one block: never
+  across a `\n` (a nested block or a `<br>`), and never through an external or chapter link, whose
+  words cannot be picked. The release (window, capture) asks. The click that trails it is swallowed
+  for 250 ms (comart's `swallowClick`). The second press of a double-click asks nothing when its
+  first press already asked, so one gesture is one request; a quick re-click after a press that
+  missed every word still asks. "A second pick in the book REPLACES the answer with a new thread;
+  comart's split/staging is not ported" is STRUCK by §0.57 E110: a pick on a band that holds an
+  answer is STAGED, and the user places it over the whole band or in a half. Words inside `pre`,
+  `code`, `kbd`, `samp` and `var` are not prose and are never lit or picked, as in comart (its
+  `SKIP_SEL`).
+- **The hit-test.** There are no word spans. A caret hit-test (`caretPositionFromPoint`, falling back
+  to `caretRangeFromPoint`) finds the text node. `bookpick.ts`'s `wordAt` finds the word in the
+  block's normalized text. The word counts only if the pointer is inside one of its own line boxes
+  (±2px); otherwise a margin or a line's blank end would snap to the nearest word. The book's DOM is
+  never rewritten: the CSS Highlight API paints `cairn-explain-hover` (the word under the pointer,
+  with a pointer cursor through `.ep-content.ex-over-word`) and `cairn-explain-mark` (the pick the
+  band is showing). A word is comart's `WORD_RE`, extended so combining marks (`\p{M}`) stay inside a
+  word and a soft hyphen (U+00AD) does not split one. The soft hyphen is dropped from the word sent.
+- **Book text is not selectable.** §0.55's "book text remains selectable" is STRUCK. `.ep-content`
+  is `user-select: none`, and a press on a word is `preventDefault`ed. Focus moves to the book's
+  scroller, so keyboard scrolling keeps working.
+- **Links keep working as links (ruling 8).** A word inside an actionable link (`a[data-ep-external]`,
+  `a[data-ep-chapter]`, `a.ep-noteref`) is never picked, and the link keeps its click. A link inside
+  an answer (`a.ex-link`) exists only for `http:`/`https:`; any other scheme stays text. Its click
+  opens the system browser through command 22 (`open_external`). Middle-click and drag are prevented
+  on it.
+- **The context rule (`bookpick.ts`).** The passage is the chapter's text walked FRESH from the live
+  DOM, because find's marks split text nodes. Footnote markers are blanked out of it, or `lizard¹²`
+  reads `lizard12`. It takes the sentences the pick touches plus up to **5** on each side
+  (`SENT_WINDOW`). The window crosses paragraphs but never leaves the chapter. The pad shrinks from 5
+  to 0 until the passage fits **2,500** characters (`CONTEXT_CAP`). Sentences in one block are
+  joined by a space, and blocks by `\n`. A sentence also ends after a closing quote or bracket
+  (`.”`, `?"`, `!)`), and a blank block is not a sentence. If the touching sentences alone exceed
+  the cap, the passage is a 2,500-character cut CENTRED on the pick, with its edges moved up to 40
+  characters to whitespace; comart cut from the start and could lose the word. The prefix
+  `"<title> — <author>\n<chapter>\n\n"` (empty parts omitted) goes in front only when the whole
+  still fits the cap, and the context is never cut to make room for it. `<chapter>` is the text of
+  the last non-empty `h1`–`h6` before the pick in its chapter, if it is 300 characters or fewer
+  (comart's `nearestHeadingBefore`). One spine file can hold several chapters, and its title only
+  names the first. The spine file's title is used instead when there is no such heading, or when
+  the title already contains the heading ("Chapter I. The Ball" says more than a bare "I").
+  `Untitled book` and a chapter title that is only a file stem (`index_split_005`) are sent as
+  empty.
+- **The request.** ai-service's routes are unchanged; Cairn is a second client of `/api/explain`
+  and `/api/pron`, after comart. The band sends `POST <base>/api/explain` with
+  `content-type: application/json` (ai-service answers 415 without it). The body is
+  `{ text, items: [{ phrase, words }], history }`. `text` is the THREAD's passage, which a follow-up
+  sends again. `phrase` is the words joined by single spaces. `history` is the last 3 raw answers at
+  most, tags included, oldest first. A single-word item is what earns ai-service's Merriam-Webster
+  prefetch. The page is `file://`, so the request carries no `Origin` and no preflight: no CORS is
+  involved. That was measured on the pinned engine, and Memoir already relies on it.
+- **The stream.** The answer is SSE, parsed by hand because `EventSource` cannot POST. `pron-data`
+  (`{prons: {word: {hword, variants}}}`, at most once, before any chunk) is cached under `word|`.
+  `chunk` (`{text}`) re-renders only the live round. `error` (`{message}`) becomes the error line.
+  `done` is always last. Every new request aborts the one in flight in its own half; the other
+  half's stream runs on (§0.57 E110). A superseded stream never paints and commits nothing: an
+  identity check runs after every read. The live request keeps whatever arrived as a round, with
+  the error line under it.
+- **Error lines**, the only text the band prints unasked: network failure → *"Can't reach
+  ai-service. It isn't answering on 127.0.0.1:8770."*; a non-2xx answer → *"ai-service answered
+  HTTP <status>: <its JSON error>"*, or the status alone; an `error` event → its message; a stream
+  that ends without `done` → *"The answer was cut off — the backend stopped mid-stream."*; no `done`
+  within 180 s → *"ai-service didn't finish within 180 s, so the request was stopped."*
+- **One gesture, one billed request.** Nothing is sent on hover, an untrusted event picks nothing,
+  and `/api/credits` and `/api/ask` are never called. ai-service forwards the passage, the picked
+  words and the history to whichever explain provider its tray picker selected, and that call is
+  billed. Cairn shares comart's provider pick, keys, MW cache and bill. Each request logs
+  `[explain] "<phrase>" · N chars · K earlier answers` and the passage to the console. By design
+  (comart's), the passage has no UI. Since §0.57 E110, a book pick on a band that holds an answer
+  is staged and costs nothing until it is placed; the placing click or key is the billed gesture,
+  and while a pick is staged a click anywhere in the band below the grip places it.
+- **Pronunciation.** A badge with nothing cached sends one `GET <base>/api/pron?word=&pos=`,
+  deduplicated while in flight. A 200 is cached. A 404 shows the model's respelling as the violet "≈
+  … AI" badge, or the amber "no pron" badge when the model gave none. Anything else shows the red
+  "pron unavailable" badge. **The cache belongs to one thread.** A new thread (a book pick) starts
+  with it empty, and a lookup that lands after its thread has gone is dropped. comart's cache died
+  with its page, but Cairn's renderer lives all day. Over a day, the related-form bridge below would
+  lend one thread's clips to another, and a passing MW outage would stay "pron unavailable". A
+  failed lookup never replaces data the server's `pron-data` already filed under the same key. **The
+  related-form bridge is tighter than comart's** (`prefetchedRealFor`, `lemmaForUserWord`). It takes
+  the exact word first, then the entry MW filed under this headword, then a pure inflection of a
+  stem of 3+ letters (`-s`, `-es`, `-d`, `-ed`, `-ing`, `'s`). comart took any shared 3-letter
+  prefix, so it played *state* for *statement*, and *onerous* for *on* with no length guard at all.
+  A learner hears the clip as the word's sound, so a near miss falls to a real lookup instead. A
+  real badge plays MW's mp3 straight from `media.merriam-webster.com` with `new Audio`, following
+  comart's `playBadge`: one clip at a time, and a new click stops the previous clip and clears its
+  `.is-playing`. A mouse click on a badge moves focus to the band. comart blurred the badge to
+  `<body>`, which Cairn's Esc (`#reader`'s) never hears.
+- **Follow-up (ruling 12).** A press, or a drag of up to 8 words, on a word of a FINISHED answer
+  (`span.ex-word`) cuts the thread back to that answer and streams a new round below it. This is
+  comart's drill-down. Answer words are wrapped once their round commits; badges, the likelihood
+  chip, code blocks, links and the error line are not wrapped. The live round's words cannot be
+  picked. The second press of a double-click on the same answer word asks nothing (comart sent it
+  twice). There is no question box.
+- **Close rules.** A trusted click outside the band closes it (document, capture phase, never
+  consumed). Some clicks do not close it: a click inside the band, inside an open menu
+  (`.ctx-menu`), the modal (`.nc-modal-back`) or the reader's find bar (`.find-bar`), and the click
+  that trails a pick. comart's find bar is the browser's, so the page never sees a click on it.
+  Since §0.57 E110, a click whose trusted left press began inside the band, or inside one of those
+  layers, does not close it either, wherever it is released. The engine aims a press-drag-release's
+  click at the common ancestor, so a press on the band's padding released over the book clicks
+  `#reader`, which would otherwise close the band (measured; comart's band is an iframe, which
+  keeps the whole gesture inside it), and so does a drag-select in the find field released over
+  the book (measured). A
+  press on a scrollbar fires no `click`, so grabbing the book's scrollbar leaves the answer up
+  (measured). A click on a book link IS an outside click. A press on a word whose hover frame
+  was still pending is a pick, not a release (measured: the engine flushes the last hover move
+  into the same task as the press). Esc closes the band, after the find bar's own Esc. Since
+  §0.57 E110 a staged pick is a layer between the two (find bar → staged pick → band), and a held
+  Esc acts on one layer only: every layer ignores `e.repeat`. Leaving the book closes it and
+  forgets both threads: a tab switch, another note or book, a vault switch, and the reader's hide,
+  close and reset. Closing aborts both streams, drops a staged pick, stops the audio and clears the
+  mark. When find paints or clears its marks, the book highlights are dropped (their Ranges would
+  point into split text nodes) and the band stays open.
+- **Persistence.** `explain_h` is a GLOBAL `state.json` field beside `sidebar_w` (§7.6). It is
+  written when the grip is released and on each arrow key. `prefs.rs` bounds it to `[140, 4000]`: a
+  value outside the band is REFUSED, never clamped, and dropped on load. Only a changed choice is
+  written. It reaches the page as
+  `window.__CAIRN_EXPLAIN_H__` through `additionalArguments` (`--cairn-explain-h=…`), exactly like
+  the sidebar width (§0.7), and never under `--pixeltest`. **`CAIRN_AI_BASE` is the test seam.** The
+  main process accepts only an `http:` URL on `127.0.0.1`, `localhost` or `[::1]`, reduces it to its
+  origin, and hands it over as `window.__CAIRN_AI_BASE__` (`--cairn-ai-base=…`). Anything else is
+  REFUSED and FAILS CLOSED: one console line that does not echo the value, and the page gets
+  `http://127.0.0.1:9`. Chromium will not fetch port 9, so the band says it cannot reach
+  `127.0.0.1:9`. A mistyped test base can never fall back to the billed default. The seam exists so a
+  real-engine test can serve a fake ai-service; no test reaches a billed route, and
+  `explain.test.mjs` refuses to drive a page whose base is not the one it expects.
+- **The badge is comart's, FROZEN (rulings 4, 5).** The badge's DOM and classes are comart's
+  verbatim. `explain.css` carries comart's `panel.css:733-817` with every `var()` replaced by the
+  literal comart resolves it to and the freeze block folded in. The font is pinned to `13.95px/1.7
+  "Lora", Georgia, "Iowan Old Style", "Times New Roman", serif` with `-webkit-font-smoothing:
+  antialiased`. Weight and style still inherit, as comart's `font: inherit` leaves them, so a badge
+  the model puts inside `**…**` is bold as it is there. Measured on Debian by
+  `electron-shell/explain-badge.test.mjs`: **0 differing pixels** inside the badge box in all
+  eleven states (one of them inside bold text), at rest and on `:hover`, at dpr 1, 1.25, 1.5 and 2,
+  with the fixture inside §0.57 E110's band (`.ex-slots > .ex-thread`). Its render child writes a
+  ~146 KB result line and exits only after the write has finished; before that, 3 of 8 runs died
+  mid-line (SIGTRAP) and failed. Since the fix: 8 of 8 runs in a row in the repository (build hash
+  `afeda6bf5f5f0334`) and 8 of 8 in a review copy of the tree, each 21 of 21 (KNOWN-ISSUES §5). The reference is a frozen copy
+  of comart's sheet (`tests/fixtures/comart-badge/`, pinned by hash) with comart's own two Lora
+  files, which the test reads from a comart checkout at run time (`COMART_DIR`, default
+  `~/comart`, pinned by hash); the repository carries no copy of them.
+  `explain-css.test.mjs` pins the block rule by rule. **Lora is shipped:** Cyreal's unchanged
+  Original Version of Lora 3.008 (`Lora[wght].ttf`, `Lora-Italic[wght].ttf`; SIL OFL 1.1 with the
+  Reserved Font Name "Lora"; see `THIRD-PARTY-NOTICES.md`), which `build-app.mjs` inlines byte for
+  byte as `data:font/ttf` URLs (§6.3). comart's own files are Latin subsets, a Modified Version that
+  may not keep the name (OFL-FAQ 2.6), so they are not shipped (decided by the lead at the user's
+  request; KNOWN-ISSUES X-15). Each face carries a `unicode-range` of exactly those subsets' 226 code
+  points, so the glyphs the subsets lack (ə, ā, ≈ …) still fall back per glyph as in comart; without
+  the range the badge's pixels change (measured). **Open Sans is not shipped:** comart's `.ipa` font list is invalid, so its
+  IPA renders in Lora too. **The blend is accepted:** over `--bg-secondary` the badge's translucent
+  hover, fill and border composite differently than over comart's `#0C130E`. The declared values are
+  identical, and there is no `#0C130E` patch. The rest of the band consumes Cairn tokens.
+- **The fifth exemption to §5.1 rule 5 (ruling 6).** Two of comart's motions run: the badge's 0.15s
+  background/colour fade, and the thinking dots' pulse until the first chunk (frozen dots read as a
+  hung panel). Both are scoped to `.ep-explain` by the chevron's specificity mechanism (§0.44 E90).
+  Each has a `prefers-reduced-motion` override placed AFTER it, so the preference wins on source
+  order (measured). Drill-down words and the grip stay unanimated.
+- **The band's scroller (ruling 10).** `.ex-scroll` is a third RENDERED scroller in reader mode,
+  and only while the band is open: closed is `display: none`, which generates no box (§5.12.4).
+  Code blocks in an answer wrap instead of scrolling sideways, so a half never adds a second
+  scroller. "So there is no fourth" is STRUCK by §0.57 E110: the band's second half is a fourth,
+  only while the band is split or previews the split. Its gutter and 12px bar are `.ep-scroller`'s.
+  `explain-css.test.mjs` pins exactly one scroller declaration in the sheet; each half gets its box
+  from that one rule.
+- **Status pills are not controls (ruling 10, §9 E4).** The loading, "≈ … AI", "no pron" and "pron
+  unavailable" badges are comart's `disabled` buttons with a title. They report a state and offer
+  no action, so they are status pills, not E4's inert controls. The likelihood chip (`[[SENSE]]` →
+  "N%") is a span with a title.
+- **The navigation guard.** `app-main.mjs` denies every new window (`setWindowOpenHandler` → `deny`)
+  and cancels every navigation the page raises (`will-navigate` → `preventDefault`). A page loaded
+  in THIS window would run the preload and get `window.cairn`. A window the page opens gets no
+  preload (measured), but it would be a stray app window on a URL a book chose. A link that slips
+  past the band's and the reader's own handlers (a middle click on a book link, a dropped link, a
+  `target=_blank` answer link, a script's `window.open` or `location`) therefore does nothing, and a
+  link reaches the browser only through command 22. `loadFile` and `webContents.reload()` raise no
+  `will-navigate` (measured), so the dev reload and the crash reload still work. The page's own
+  `location.reload()` is refused, like Ctrl+R, because it would skip §1.6's flush.
+  `electron-shell/explain.test.mjs` drives each escape route.
+- **Files and owners.** `src/explain-types.ts` (03, the seam, types only); `src/explain.ts` (03, the
+  band). "The band: I/O, thread, badges, audio, grip" is STRUCK by §0.57 E110: `explain.ts` is now
+  the controller (layout, staging, gestures, audio, grip), and one half's thread, I/O and badge
+  lookups are `src/explain-thread.ts` (03); `src/explain-render.ts` (03, comart's renderer as DOM
+  building: no HTML string, and model text only as Text nodes, §6.1); `src/bookpick.ts` (03, pure:
+  the word, the sentences, the passage); `src/reader.ts` (03, picking and the close rules; it
+  imports the panel's types only); `src/main.ts` (01, binds `mountExplain` to the base, the height
+  and `open_external`); `src/styles/explain.css` and `src/styles/fonts/Lora{,-Italic}[wght].ttf`
+  (03); `core/src/prefs.rs` (02, `explain_h`); `src/state.ts`, `src/ipc.d.ts` and `src/globals.d.ts`
+  (`explainH` and the two page globals); `electron-shell/app-main.mjs`, `preload.cjs` and
+  `build-app.mjs` (07). There is no new IPC command (the table stays at 29), no new npm dependency,
+  and no vault write (G8).
+- **Tests.** `tests/frontend/explain-render.test.mjs` (34), `explain-panel.test.mjs` (30 for E109;
+  56 with §0.57 E110's; a fake ai-service whose `fetch` returns real `ReadableStream` SSE bodies),
+  `explain-css.test.mjs` (17 for E109; 23 with E110's), `explain-persist.test.mjs` (12),
+  `bookpick.test.mjs` (21), the 22 `explain: …` tests in `reader.test.mjs` (E110 adds 11 `split: …`
+  tests), and 5 `explain_h` unit tests in `prefs.rs`. Each was watched failing under mutation. The
+  renderer was also run differentially against comart's own `panel.js` in the pinned engine: 0
+  mismatches over 6,007 Markdown cases and 1,728 badge cases. That run came before the bridge was
+  tightened, which is the one deliberate difference. The real-engine suites are
+  `electron-shell/explain.test.mjs` (61 with §0.57 E110's steps: a hermetic app on a generated
+  book, a fake ai-service through `CAIRN_AI_BASE`, and CDP's trusted input) and
+  `electron-shell/explain-badge.test.mjs` (21, the badge's pixels). The live leg bills one real
+  `/api/explain` and runs only with `CAIRN_EXPLAIN_LIVE=1`. §0.57's Tests bullet quotes the latest
+  run.
+- **Known gaps, recorded rather than hidden** (KNOWN-ISSUES §5): the badge's pixel match is measured
+  on Debian only, and macOS's fallback glyphs are unmeasured; CJK text is not segmented into words,
+  and `。！？` do not end sentences; `Mr.` ends a sentence; picked words are not NFC-normalized.
+
+### §0.57 — The explanation band fills its width, and a second pick can split it (E110)
+
+**User ruling (2026-11-17).** Two requests, verbatim: *"the explanation panel should not restrict
+the text's width. Let the text fill the whole panel, like comart."* and *"support the split:
+clicking another word in the book should let users either replace the current panel or split the
+panel into two halves. Look at comart."*
+
+**§0.17's method does not apply, as in §0.56.** The reference is comart's §3h split, read in
+`~/comart` at `7ec2379`: `panel.js:503-525` (start or stage), `:2645-2647` (`threadHasContent`),
+`:2725-2817` (the overlay, the placement and the halves' listeners), and `panel.css:126-160` and
+`:355-419` (the row, the columns, the overlay, the wash and the dividers). It is ported as it is,
+except where a divergence below says otherwise, with its reason. This pass STRIKES five sentences
+of §0.56, each marked there, and adds one exemption to its close rules (a press that began in the
+band), marked there too. The rest of E109 stands, and it applies to each half: what a pick sends,
+the stream, the error lines, the badges, the follow-up and the close rules.
+
+- **W — the width.** `.ex-content` has no `max-width` and no auto margin, so the answer fills the
+  band, or its half. `.ex-scroll`'s sides are comart's 16px (`padding: 20px 16px 24px`; comart
+  `panel.css:355-365`). It keeps E109's `scrollbar-gutter: stable` and `.ep-scroller`'s 12px bar,
+  so an answer that starts to overflow while it streams never re-wraps. Three differences from
+  comart: its bar shows only on overflow, its bar is 10px wide (`panel.css:419`) where Cairn's is
+  12px (`--scrollbar-w-editor`), and its bottom padding is 20px, not E109's 24px.
+- **Start or stage** (comart `panel.js:503-525`). A half *has content* when it holds a round, a
+  stream (even before its first chunk), an error line or a buffer. When NEITHER half has content,
+  a book pick starts the left thread at full width, and `explain()` returns `'started'`. This is
+  also true when the band is open but empty (a stream that ended with no text). Any other pick is
+  STAGED: nothing is fetched, and `explain()` returns `'staged'`. The mode is fixed when the pick is
+  staged: **second** while the band is one panel, **replace** once it is split. A newer pick
+  replaces the staged one, and the replaced one never cost a request. It swaps only the waiting
+  pick: the overlay, the mode, the preview, the inert columns and focus all stay. The mode cannot
+  have changed, because only a placement, a close or a start changes the layout, and each drops
+  the stage first. The reason is a book drag released over a half, which re-stages under a still
+  pointer: an overlay hidden and shown again in the same task gets no new `mouseenter`, so the
+  preview would go blank and stay blank while the pointer moved inside that half (measured on the
+  code without this rule).
+- **Staging is invisible until hover or focus** (comart). A transparent overlay, `.ex-place`,
+  covers both columns. Its two halves carry no text. The cues are the book mark on the staged word
+  and a pointer cursor over the band. The halves have comart's aria-labels (`panel.js:2727-2735`):
+  second → "Replace the whole panel with the new explanation" / "Split the panel and put the new
+  explanation on the right"; replace → "Put the new explanation in the left panel" / "Put the new
+  explanation in the right panel".
+- **The preview.** `mouseenter` or `focus` on a half sets it; the overlay's `mouseleave` clears it.
+  Nothing is fetched. A half that appears under a still pointer gets a `mouseenter` from the
+  engine's hover update, so a book drag released over the band shows the preview at once, with no
+  move (measured and asserted, for a first stage and for a re-stage: `['place-left']` after the
+  release, before any move).
+  - second, left: the whole band takes the wash.
+  - second, right: the right column appears EMPTY as an equal half, with the wash. The left answer
+    reflows to half width at once. The centre line is an inset shadow on the left column.
+  - replace: only the target half takes the wash. Nothing moves.
+- **Placing** (comart `placePending`, `panel.js:2752-2776`): a trusted click, or a trusted Enter or
+  Space on a focused half.
+  - second, left: both halves reset (the old stream is aborted), the band is one panel, and the
+    left thread starts with the pick.
+  - second, right: the band splits and the right thread starts. The left thread is untouched: it
+    keeps streaming, and keeps its marks, its drill-down chain and its scroll position.
+  - replace, left or right: that half resets and starts over. The other half is untouched.
+  - Then the overlay hides, the columns stop being inert, focus goes to the band root, and the band
+    calls `hooks.onPlaced()`: the reader's mark now belongs to the placed pick.
+- **The split lasts until the band closes, or until both halves have ended empty.** No control
+  closes one half. When neither half has content any more (both streams ended with no text), the
+  next book pick starts the left thread at full width and the band is one panel again (comart's
+  own rule, `panel.js:508-512`), and D6 does the same at the click. The split is a fixed 50/50: no
+  draggable divider, and no minimum width per half (comart has none either).
+- **One per half** (`src/explain-thread.ts`; comart's `newThread`, `panel.js:160-212`): the
+  scroller, the rounds, the drill-down chain, the history (the last 3 answers of THAT half), the
+  passage, the stream with its `AbortController` and 180 s deadline, the error line, the drill-down
+  marks, the pron-only rows, and the pronunciation cache with its own in-flight set and epoch. Both
+  halves can stream at once. A drill-down extends the half it was pressed in, and the other half
+  keeps its marks. The double-click guard on answer words is per half. Each request logs E109's
+  console line; a request from the right half adds ` · right half`.
+- **One per band** (`src/explain.ts`): the height and the grip, `onShown`, the audio (one clip
+  across both halves; placing a pick does not stop a playing clip, as in comart), the drill-down
+  gesture, the click swallow, and exactly TWO window listeners, however many halves stream.
+- **The divergences from comart, each with its reason.**
+  - **D1 — the mark after Esc.** When Esc drops a staged pick, the book mark goes back to the word
+    of the last PLACED pick. Cairn already does this for a drag that lost its release. comart has
+    no single rule: its result depends on where focus happened to be.
+  - **D2 — following the stream.** A half that was following its stream (within 48px of the
+    bottom) before the band changed its width keeps following after it: the band re-pins it around
+    the right preview, its removal and a committed split. comart loses the pin, because the
+    engine's scroll anchoring holds the old `scrollTop` while the text re-wraps.
+  - **D3 — the pronunciation cache stays per half.** This is E109's rule: the related-form bridge
+    scans the whole cache, so one half's clips must never stand in for the other half's words.
+    comart shares one cache (`panel.js:223-229`).
+  - **D4 — trust, repeats and focus.** A placement is a billed request, so the click AND Enter or
+    Space need `isTrusted`; comart checks neither (`panel.js:2792-2803`). Every Esc layer ignores
+    `e.repeat`, as comart does (`content.js:3044`, `panel.js:1219`). Every path that hides or
+    disables a focused half moves focus to the band root `.ep-explain` (`tabindex=-1`), inside
+    `#reader`, where Esc is heard. comart blurs it to `<body>` (`panel.js:2746`). A newer pick is
+    not such a path: it hides nothing, so a focused half keeps focus, and Enter places the newer
+    pick.
+  - **D5 — inert columns.** While a pick is staged, both columns are `inert`. The overlay already
+    blocks the pointer; `inert` also stops the keyboard reaching a badge or a link underneath, and
+    Tab goes from the grip straight to the halves.
+  - **D6 — no blank left half.** If no half has content any more when a half is clicked (the left
+    stream ended empty while the pick waited), the pick starts the left thread at full width, not a
+    split with a blank left half. comart does not check again (`panel.js:2763-2766`).
+  - **Smaller ones, stated in the code.** (a) When a focused half blurs, the preview goes back to
+    the half under the pointer, or clears. comart clears it too, but while the pointer is over the
+    overlay it keeps the last preview, whichever half that was (`panel.js:2787-2791`). (b) The
+    wheel goes to the half under the pointer (the event's target), skips Ctrl+wheel (the zoom) and
+    turns line and page deltas into px; comart reads the `place-right` class, which keyboard focus
+    can also set, and adds the raw `deltaY` (`panel.js:2811-2817`). (c) The overlay's z-index is 1, below the grip's 2, so the band can be
+    resized while a pick waits; comart's 4 had to beat its Ask buttons, which Cairn does not have.
+    (d) A focused half's ring is an inset `box-shadow`, not comart's outline, because base.css
+    draws rings as box-shadows.
+- **The states.** The band is closed, one panel, or split; a staged pick sits on top of one panel
+  or of a split.
+
+  | State | A book pick | A click, Enter or Space on a half | Esc | A click outside the band |
+  |---|---|---|---|---|
+  | closed | starts the left thread at full width → one panel | — | — | — |
+  | open, but neither half has content | starts the left thread at full width → one panel | — | closes the band | closes the band |
+  | one panel | staged, mode second | — | closes the band | closes the band |
+  | split | staged, mode replace | — | closes the band (both halves) | closes the band (both halves) |
+  | staged on one panel | replaces the stage | left → one panel, a new thread; right → split | drops the stage → one panel | closes the band |
+  | staged on a split | replaces the stage | that half starts over → split | drops the stage → split | closes the band |
+
+  D6 runs first at the click. Leaving the book closes the band from every state (§0.56).
+- **Esc, the outside click and focus.** The reader owns both, as in §0.56; the band never
+  dismisses itself. Esc on `#reader` acts on ONE layer per press, in this order: the find bar, the
+  staged pick (`cancelStaged()`: nothing is spent, and the mark goes back to the last placed word,
+  D1), then the band, both halves. Esc never closes one half. A held key's repeats do nothing. The
+  mark goes back also when Esc comes during the held second press of a double-click, which asks
+  nothing and never painted the mark; only a drag that will ask keeps the mark until its release.
+  A trusted click outside the band closes it, as before: both threads, the stage, and back to one
+  panel (comart's `panel-hidden`, `panel.js:426-430`). A press on a book word while a pick is
+  staged is a new pick, not an outside click: it replaces the stage. A click on a half is a click
+  inside the band, so the outside-click rule never sees it. **A press that begins inside the band
+  is never an outside click, wherever it is released.** The engine aims a press-drag-release's
+  click at the common ancestor of the press and the release: a press on a half released over the
+  book clicks `#reader`, and one released on the sidebar clicks `.app` (measured). Without this
+  rule, that click closed the band, dropped both answers and the stage, and left focus on `<body>`
+  (measured). comart cannot hit it, because its band is an iframe. The reader records whether the
+  latest trusted LEFT press began in the band or in a layer (`.find-bar`, `.ctx-menu`,
+  `.nc-modal-back`) on `pointerdown` (document, capture), and forgets it at the next trusted click.
+  `pointerdown`, because every press makes one, even where a handler suppresses the `mousedown`
+  (the sidebar's resize grip does): so a band press whose click never reaches the reader (a
+  drill-down, whose click the band swallows) or a right or middle press leaves nothing behind for
+  the next click to inherit (measured: a sidebar-grip click after either closes the band). A
+  keyboard click (`detail` 0) belongs to no press, and an untrusted press protects nothing. The
+  same rule covers a press on the band's padding with nothing staged, and a press in the find
+  field slid off over the book (§0.56 Close rules). The grip stays live while a pick is staged. After a placement, focus is on the band root. A cancel moves
+  only focus that was inside the overlay to the band root; an Esc pressed with focus on the book
+  leaves it on the book. Either way focus stays inside `#reader`, so the next Esc still reaches it.
+- **Billing: a new way to spend a request.** While a pick is staged, the overlay covers both
+  columns, their scrollbars included. So a click ANYWHERE in the band below the grip places the
+  pick and sends a billed request, also a click aimed at an answer word, a badge, a link or a
+  column's scrollbar. This is comart's behaviour, ported on purpose. §0.56's "a press on a scrollbar
+  fires no `click`" stays true for the book's scrollbar, but a press and release on the band's
+  scrollbar while a pick is staged is a click on a half. Only the wheel reaches the answers then: it
+  is forwarded to the half under the pointer (in one panel, to the left thread). A drill-down is
+  blocked while a pick is staged. A book pick on a band that holds an answer costs nothing until it
+  is placed, and a newer pick or Esc drops it for free.
+- **The reader's marks** (`src/reader.ts`). It keeps `shown`, the last pick the band started or
+  placed, and `staged`, a pick waiting for a half. The mark paints `staged ?? shown`. A drag paints
+  its own words until it ends; a drag that lost its release paints `staged ?? shown` again.
+  `onPlaced` makes the staged pick the shown one. `onClosed` and find's painting clear both. The
+  reveal (§0.56 Height) follows `shown` only, so placing a staged pick does not scroll the book.
+  E109's double-click guard stays: a double-click on a closed band sends one request and stages
+  nothing.
+- **The seam** (`src/explain-types.ts`): `explain(req): ExplainOutcome` (`'started' | 'staged'`),
+  `cancelStaged(): boolean`, `isStaged(): boolean` and `ExplainHooks.onPlaced()`. `close()` also
+  drops a staged pick and goes back to one panel. Nothing else changed.
+- **The DOM contract** (inside `section#reader`; everything inside `.ex-content` is E109's):
+
+  ```
+  div.ep-explain[hidden][tabindex=-1][role=region][aria-label=Explanation]
+    div.ex-grip[role=separator][tabindex=0]
+    div.ex-slots[data-layout=single|split][data-place=second|replace, only while staged]
+                (+ class place-left or place-right while a half is previewed)
+      div.ex-thread[data-slot=0][inert while staged] > div.ex-scroll > div.ex-content
+      div.ex-thread[data-slot=1][inert while staged] > div.ex-scroll > div.ex-content
+      div.ex-place[hidden]
+        div.ex-place-half.ex-place-left[role=button][tabindex=0][aria-label]
+        div.ex-place-half.ex-place-right[role=button][tabindex=0][aria-label]
+  ```
+- **The CSS** (`src/styles/explain.css`). Every rule stays under `.ep-explain`, and the layout lives
+  on `.ex-slots`, never on `.ep-explain`. `.ex-slots` is a flex row and each `.ex-thread` is
+  `flex: 1 1 0; min-width: 0`. One panel hides column 1 (`display: none`), except while the right
+  half is previewed. A committed split draws `border-left: var(--hairline) solid
+  var(--divider-color)` on column 1. The preview's centre line is an inset `box-shadow` of the same
+  width and colour on column 0, only in one-panel layout, so the two lines never double. The wash
+  is `color-mix(in srgb, var(--accent) 8%, transparent)` on the target COLUMN, under the
+  transparent overlay, so the answer stays readable through it. `.ex-place` is `position: absolute;
+  inset: 0; z-index: 1`, with its own `[hidden] { display: none }`, because its `display: flex`
+  beats the browser's `[hidden]` rule. `.ex-scroll` is still the sheet's ONLY scroller
+  declaration. **No new motion:** the wash, the reflow and the lines are instant. comart's
+  `.explain-place-half` transition animates a background that no rule sets, so it is not ported,
+  and §5.1 rule 5 keeps exactly five exemptions.
+- **Scrollers.** Reader mode has a **fourth** rendered scroller, the second `.ex-scroll`, while the
+  band is split and while one panel previews the right half. Leaving the preview or closing the
+  band takes it away again (`display: none`). All of this is measured in the engine (Tests below).
+  The user's "two halves", each scrolling on its own as in comart, is the ruling (§5.12.4). Code
+  blocks still wrap, so there is no fifth.
+- **Files and owners.** All 03. `src/explain.ts` is the controller of what there is one of: the
+  root, the grip and the height, the layout, the staged pick and its overlay, focus, the gestures,
+  the audio, the swallow and the two window listeners. NEW `src/explain-thread.ts` is one half: its
+  column, its state and its I/O, and no listener. `src/explain-render.ts` is unchanged and holds no
+  listener. `src/explain-types.ts` holds the seam, `src/reader.ts` the staged mark and the Esc
+  layer, and `src/styles/explain.css` the width and the split. There is no new IPC command (the
+  table stays at 29), no new npm dependency, no new `state.json` field (one `explain_h` for both
+  halves) and no vault write (G8).
+- **Tests.** `tests/frontend/explain-panel.test.mjs` (56: E110 rewrote 3 of E109's 30 and added
+  26, one or more for each rule above), `explain-css.test.mjs` (23: the width test replaced
+  E109's 792px test, plus 6 `split: …` tests: scoping, the row, the dividers, the wash on the
+  column, the overlay under the grip with its ring, and no motion), and `reader.test.mjs`'s 11
+  `split: …` tests (the staged mark, placing, Esc and its repeats, the outside click, the lost
+  release, a double-click on a closed band, the reveal, find's painting, a press on the band
+  released over the book, and Esc during a double-click's second press). Each new test was
+  watched failing first, against the code before E110 or under mutation (the band's 24
+  mutations: 24 caught; the review fixes' 11: 11 caught). Two later review mutations still
+  survive (KNOWN-ISSUES §5). **In the real engine**, `electron-shell/explain.test.mjs` gives
+  `ℹ tests 61`, `ℹ pass 61`, `ℹ fail 0`, `ℹ skipped 0` against the fake ai-service, with the live
+  leg not run, on build hash `afeda6bf5f5f0334`. Its wide leg prints
+  `dpr 1.25, viewport 1700x900 CSS px`; the 1200×800 session prints no dpr, so its CSS px numbers
+  below carry none. Its 21 `E110:` steps walk one band through: staging; both previews; Esc and a
+  held Esc; a drag released over the band, with the preview asserted at once; the grip over a
+  staged pick; the wheel (40px of wheel scrolls the answer under the overlay by 40, and the book
+  not at all); both placements, with focus on `.ep-explain` after each; a split with two live
+  streams and D2 against real scroll anchoring; four rendered scrollers while split and during
+  the right preview, two after closing and three when it reopens; the replace mode; a drill-down
+  per half; the keyboard path past the inert columns; the outside click; a press on a half
+  released on the book's margin, a book word or the sidebar; Esc during a double-click's held
+  second press; and a newer pick re-staged under a still pointer. An E109 control presses the
+  band's padding and releases over the book. A second E109 step checks that a press counts for
+  its own click only: after a right press on the band, and after a drill-down, a click on the
+  sidebar's resize grip closes the band; a drag-select in the find field released over the book
+  keeps it. A 3-test leg at 1700×900 measures the full width, one panel and split. The E109
+  steps that pick on a band holding an answer place the pick over the whole panel. On the code
+  before the first review fixes the suite (then 60) gave `ℹ pass 56`, `ℹ fail 4`, and each fix's
+  tests fail alone on that fix's pre-fix code. On the code before the press was recorded on
+  `pointerdown` it gives `ℹ pass 60`, `ℹ fail 1`: the press step, with all three of its legs
+  wrong. What the engine does not reach yet is listed in KNOWN-ISSUES §5.
 
 ## 1. The IPC contract
 
@@ -2106,6 +2587,10 @@ export interface UiPatch {
    *  of the resize drag. Rust clamps it on read, so a hand-edited state.json cannot ship a 0px
    *  or a 90,000px sidebar. */
   sidebarW?: number;
+  /** §0.56 E109. The reader's explanation band height in px, GLOBAL like `sidebarW`. Written on
+   *  release of the band's grip and on each arrow-key step. Rust refuses a value outside
+   *  [140, 4000] and drops one on load. */
+  explainH?: number;
   lastNote?: VaultPath | null;
   sort?: SortMode;
   expanded?: VaultPath[];    // folders only; capped at 2000, see §7.6
@@ -2839,12 +3324,23 @@ was Obsidian's LIGHT-theme hover.
 time and drift sub-pixel; the number is measured, so it is written as a number.
 
 **Rule 5 — `*, *::before, *::after { transition: none !important; animation: none !important }` —
-is upheld everywhere (M59) with THREE exemptions**, each Obsidian's own number and each carrying
-`!important` because a stylesheet `!important` outranks a normal inline style: the Properties fold
-slide, the fold arrow's rotation (§0.24.5 E53) and the tree chevron's 100ms turn (§0.44 E90). The
-rule's original rationale was a WebKitGTK async-scrolling engine that was deleted, but whether a
-blanket ban still earns its keep is a user ruling and it has not been taken. The task checkbox's
-dead `box-shadow` transition is still dead and named (§0.24.5).
+is upheld everywhere (M59) with FIVE exemptions**, each carrying `!important` because a stylesheet
+`!important` outranks a normal inline style. The fold slide is an inline `!important`; the other
+four are stylesheet `!important`s that win on specificity over `*`:
+
+1. the Properties fold slide and 2. the fold arrow's rotation (§0.24.5 E53), Obsidian's own numbers;
+3. the tree chevron's 100ms turn (§0.44 E90), Obsidian's own number;
+4. the Memoir page's checking animation (ink ring, ink dot, shimmer lines; `memoir.css`, scoped to
+   `#memoir`), exempted after the user reported it frozen. Memoir is a standing user feature with
+   no E-number of its own (§9), and its numbers are its own design;
+5. the explanation band's badge fade and thinking dots (§0.56 E109), comart's numbers, scoped to
+   `.ep-explain`.
+
+The rule's original rationale was a WebKitGTK async-scrolling engine that was deleted, but whether
+a blanket ban still earns its keep is a user ruling and it has not been taken. Until it is, each new
+motion is its own ruling. The task checkbox's dead `box-shadow` transition is still dead and named
+(§0.24.5). The fourth and fifth exemptions each have a `prefers-reduced-motion` override placed
+AFTER the exemption, so the preference wins on source order (measured; KNOWN-ISSUES UI-14, closed).
 
 ### 5.2 The file-tree box model (B9)
 
@@ -3200,7 +3696,7 @@ hook is missing or returns `false`, the row FAILS** — it never SKIPs.
 | `sidebar.gutter` | `.tree-scroller` computed `overflow-y: scroll`; gutter width **8**; scroller border box right edge **409** |
 | `banner.absent` | zero `.cap-banner` elements, **zero `.watch-degraded` elements**, `.tree-scroller` height **881** |
 | `vault.bar` | box `y 921`, height **43**, `border-top: 1px`, rule `rgb(51,64,82)` (Oceanic `--bg-modifier-border`; Obsidian's was `rgb(51,51,51)`), chevron box `x 16..32`, label box left **40** |
-| `layers.scrollers` | §5.12.4's rendered-box rule: exactly two RENDERED scrollable boxes, and `document.scrollingElement.scrollHeight === clientHeight` |
+| `layers.scrollers` | §5.12.4's rendered-box rule: exactly two RENDERED scrollable boxes in note mode (the gate never opens Memoir or a book), and `document.scrollingElement.scrollHeight === clientHeight` |
 
 **`verify()` re-seats `K.hairline`, `K.step` and `K.rowH` from the page's own computed values before
 the table is built** (§0.49 E97), and one row asserts `step == 16 + a snapped border` as a
@@ -3219,7 +3715,7 @@ because comparing it to a constant would only compare Cairn to Cairn (§0.37 E84
   a geometry is how a measurement ends up describing a window nobody opened.
 - **The capture seams** are `CAIRN_CAPTURE`, `CAIRN_CAPTURE_DPR`, `CAIRN_CAPTURE_EVAL` and
   `CAIRN_CAPTURE_CLICK` (one real `mousedown` before a capture, so an interactive state can be
-  photographed at all); `tools/capture-app.mjs` drives any Electron app over CDP.
+  photographed at all).
 - **The `bench-mark` event has no consumer on this shell** — its only reader was the retired memory
   harness — and is treated as dead code (§1.4).
 - **Window etiquette is void.** Launching a window is allowed; the only validity rule left is that a
@@ -3231,7 +3727,7 @@ because comparing it to a constant would only compare Cairn to Cairn (§0.37 E84
 The WebKit flag architecture this section ruled (`AsyncOverflowScrollingEnabled = NO`, set through
 private SPI) was deleted with the Tauri/WebKit engine (§0.20.6 E35). **Three rules survive**, and
 they survive because they are about the DOM and the layout rather than about the engine:
-**§5.12.4** (exactly two rendered scrollers), **§5.12.5** (the main frame never scrolls) and
+**§5.12.4** (two rendered scrollers in note mode, and a table of the other modes' counts), **§5.12.5** (the main frame never scrolls) and
 **§5.12.6** (the scroll-critical-path obligations). The rest — the flag route, its promotion rules,
 the fallback and the memory numbers — is deleted below.
 
@@ -3243,8 +3739,8 @@ the fallback and the memory numbers — is deleted below.
 
 #### 5.12.4 The DOM and CSS that result
 
-The whole document has **exactly two RENDERED scrollable boxes**, and the main frame is not one of
-them:
+In note mode, the document has **exactly two RENDERED scrollable boxes**, and the main frame is not
+one of them:
 
 ```
 html, body                               overflow: hidden; height: 100%      (§5.12.5 — normative)
@@ -3260,15 +3756,34 @@ html, body                               overflow: hidden; height: 100%      (§
 `.tree-scroller` and `.search-scroller` are never live at the same time — the search panel REPLACES
 the tree (§4.5) — so the ceiling is two scrollers, not three.
 
+**The other modes replace `.cm-scroller`, and their counts are these** (the rendered-box test
+below; every row was measured in the app, the two band rows by `electron-shell/explain.test.mjs`,
+the split's both while split and while one panel previews the right half; the main frame never
+scrolls in any of them):
+
+| Mode | Rendered scrollers | Status |
+|---|---|---|
+| note | `.tree-scroller` or `.search-scroller`, `.cm-scroller` — **2** | ruled; G9's `layers.scrollers` |
+| reader (§0.55 E108) | the sidebar's, `.ep-scroller` — **2**; the find bar adds none | ruled |
+| reader, explanation band open | the sidebar's, `.ep-scroller`, `.ex-scroll` — **3** | ruled (§0.56 E109): only while open; closed is `display: none` |
+| reader, explanation band split | the sidebar's, `.ep-scroller`, two `.ex-scroll` — **4** | ruled (§0.57 E110): only while split, and while one panel previews the right half; otherwise the right column is `display: none` |
+| Memoir tab | the sidebar's, `textarea#mm-editor`, the check drawer's `.mm-scroll` — **3**, drawer open or closed | **measured, never ruled** (KNOWN-ISSUES X-14) |
+
+The Memoir drawer counts while it is closed because closed is `transform: translateX(100%)`, not
+`display: none`: the box is clipped by `.editor`'s paint containment (§0.52 E100) but still has
+client rects. No gate sees any of these third or fourth scrollers, because G9 runs in note mode
+only.
+
 1. **§5.2's scroller block and §5.3's `.cm-scroller` block stand exactly as written.** The 8px
    sidebar gutter, the 12px editor gutter, the 401px row width and the 1432px line box are not
    amended by anything here.
 2. **The `::-webkit-scrollbar` rules must be on `.cm-scroller`**, never on an ancestor: a rule on
    the ancestor does not reach CodeMirror's real scroller, which then inherits the **17px** legacy
    scrollbar and measures its own mistake.
-3. **No third scroller, ever.** Menus, popovers, the tab strip, the vault bar and all three banners
-   must **fit or clip** — single-line with `text-overflow: ellipsis`, or `overflow: hidden`, never a
-   scrollbar. **"Scroller" here means a RENDERED box, and that qualifier is normative (Z6):** an
+3. **No third scroller in note mode, and chrome never scrolls.** A third or fourth rendered
+   scroller exists only where the table above rules it. Menus, popovers, the tab strip, the vault bar and all three
+   banners must **fit or clip** — single-line with `text-overflow: ellipsis`, or `overflow: hidden`,
+   never a scrollbar. **"Scroller" here means a RENDERED box, and that qualifier is normative (Z6):** an
    element inside a `display: none` subtree generates no box, so it cannot scroll and cannot cost
    anything — but `getComputedStyle()` still returns its `overflow-y` as `auto`. **Computed style
    alone therefore over-counts, and it over-counts the shipping app**, whose sidebar holds both
@@ -3381,7 +3896,8 @@ One builder: **`electron-shell/build-app.mjs`**, owner 07.
 | bundler | **esbuild 0.28.2** directly. No Vite, no Rollup, no PostCSS, no framework. |
 | output format | **`iife`**, one `app.js` + a plain `<script>` |
 | target | **`chrome142`** — the pinned Electron's Chrome, which is also the build being cloned |
-| CSS | esbuild the CSS in **`CSS_ORDER`** (`tokens.css, base.css, chrome.css, tree.css, editor.css, search.css, memoir.css`) and **string-substitute it into the page as a `<style>` block**; `electron-shell/app-chrome.css` carries the Electron-only chrome rules (the drag region, §5.7) |
+| CSS | esbuild the CSS in **`CSS_ORDER`**, ten sheets (`tokens.css, base.css, chrome.css, tree.css, editor.css, search.css, find.css, memoir.css, reader.css, explain.css`), then `electron-shell/app-chrome.css` (the Electron-only drag region, §5.7) LAST, in one pass, and **string-substitute it into the page as a `<style>` block**. `.ttf` is a **`dataurl`** loader (`data:font/ttf`), so `explain.css`'s two Lora faces (§0.56 E109) are inlined too, their bytes unchanged, and the page stays one self-contained file (E34) |
+| importable | `build-app.mjs` exports `CSS_ORDER` and `bundleCss()` (the real stylesheet pass, returning the CSS without writing anything) and builds only when it is run as a script, so a unit test can check the real pass without rewriting `electron-shell/app/` |
 | size gates | **BOTH RETIRED** — CSS by §0.19 E26, JS by §0.47 E95. `build-app.mjs` still PRINTS `js=` and `css=`; neither fails the build |
 | pins | `electron` 39.8.3, `esbuild` 0.28.2, `typescript` 5.9.3; `@codemirror/state` 6.7.2, `@codemirror/view` 6.43.10, `@codemirror/commands` 6.11.0 |
 
@@ -3416,7 +3932,13 @@ src/totp.ts              03  the totp block (§0.46)
 src/secrets.ts           03  secret notes
 src/memoir.ts            03  the Memoir tab
 src/epub.ts              02  the EPUB container, OPF/spine/TOC and chapter text
-src/reader.ts            03  the EPUB reader surface and sanitising renderer
+src/reader.ts            03  the EPUB reader surface, sanitising renderer and word pick (E109)
+src/find.ts              03  the find bar, shared by the note viewer and the reader
+src/bookpick.ts          03  E109's word, sentences and passage — pure, no DOM
+src/explain.ts           03  E109's explanation band, E110's controller: layout, staging, gestures, audio, grip
+src/explain-thread.ts    03  E110's one half of the band: its column, rounds, stream and ai-service I/O; no listener
+src/explain-render.ts    03  E109's DOM builders — comart's renderer, no HTML strings
+src/explain-types.ts     03  the reader/band seam, types only
 src/menu.ts              01  the one menu primitive
 src/vaultbar.ts          01  the switcher and its recents popover
 src/search.ts            05  the search panel
@@ -3426,19 +3948,20 @@ src/icons.ts             --  the inline SVG literals; the ONE innerHTML-adjacent
 src/styles/tokens.css    01  the only declaration site (§5.1)
 src/styles/tree.css      01  declares the grouped .tree-scroller/.search-scroller rule; search.css consumes it
 src/styles/reader.css    03  the EPUB reader's one-band surface (E108)
+src/styles/explain.css   03  the explanation band, its two halves and comart's frozen badge (E109, E110)
+src/styles/fonts/*.ttf   03  Lora, regular and italic, Cyreal's unchanged files — the only font files shipped (E109)
 src/styles/*             05  search.css; the rest are 01/03/04 by module
 core/src/*               02  fsops, tree, scan, watcher, search, prefs, note_frame, error, app
 core/napi/src/lib.rs     07  the binding layer — no logic, no wire types (§6.2)
 core/tests/*             02  vault_ops, dataloss, path_safety, search_int, frame_fixtures, …
-electron-shell/app-main.mjs   07  the shell: window, IPC bridge, capture probes
+electron-shell/app-main.mjs   07  the shell: window, IPC bridge, navigation guard, capture probes
 electron-shell/preload.cjs    07  the page bridge
 electron-shell/native.mjs     07  the addon loader and the value envelope
 electron-shell/build-app.mjs  07  the frontend build (§6.3)
 electron-shell/build-native.mjs 07  core/cairn.node, release by default
 electron-shell/app-chrome.css 07  the drag region (§5.7)
-electron-shell/*.test.mjs     07  native, close-handshake, lifecycle, window-control, menu,
-                                  live-preview, indent, pane-paint, fold, empty-pane, totp,
-                                  sync-client, package, shipped-binary, image-copy
+electron-shell/*.test.mjs     07  the real-engine suites; `ls electron-shell/*.test.mjs` is the
+                                  list, so this table cannot fall behind it
 tools/verify-geometry.js      01  the G9 probe (§5.11)
 tools/scroll-bench.mjs        06  the scroll bench (§5.12.6(d))
 tools/package-electron.mjs    07  the .deb / macOS package, no electron-builder
@@ -3875,6 +4398,7 @@ The schema is **per-vault keyed**, because a flat one holds exactly one vault's
   "recents": ["/Users/me/Notes", "/Users/me/Work"],   // max 8, MRU, deduplicated by canonical path
   "win": { "w": 1000, "h": 700, "x": 0, "y": 0, "max": false },   // global, not per-vault
   "sidebar_w": 412,                              // GLOBAL, beside `win`; absent = never resized
+  "explain_h": 320,                              // §0.56 E109; GLOBAL; absent = never resized; 140..4000
   "vaults": {
     "/Users/me/Notes": {
       "sort": 0,                                 // u8 0..3
@@ -3901,6 +4425,13 @@ a resize with no vault open still persists. It is an `Option`, and absence means
 so a fresh install serialises no width and the page keeps the 412 default. The core bounds a stored
 value to `[120, 4000]` on both apply and load — a hand-edited file cannot ship a 0px sidebar — and
 deliberately does **not** clamp against the window, which only the page knows the width of.
+
+`explain_h` (§0.56 E109, the reader's explanation band height) follows `sidebar_w` in every
+respect: GLOBAL, applied above the per-vault early return, an `Option` whose absence means "never
+resized" (the band opens at 320), and never clamped against the window. Its band is `[140, 4000]`:
+a value outside it is refused on apply, so the stored height stays, and dropped on load.
+`app-main.mjs` repeats that band when it reads the raw file for `additionalArguments`, and a test
+pins the two copies together.
 
 `bookmarks` is keyed by the vault-relative `.epub` path (§0.55 E108), capped at **500**, and
 omitted when empty so a fresh file keeps its old bytes. Rust clamps `offset`/`progress` to `0..1`,
@@ -4017,7 +4548,8 @@ code blocks. The fullscreen traffic-light hole is accepted: fullscreen is not in
 but ⌃⌘F and the green button reach it, and only there do the lights leave the strip (§5.6). No
 section may draw any of them, reserve space for them, or gate on them. **E4 forbids controls that do
 nothing, not features** — the Memoir page, secret notes and drag-to-move are deliberate additions
-(see the last subsection here).
+(see the last subsection here). The explanation band's disabled pronunciation badges are status
+pills that report a state, not controls (§0.56 E109).
 
 ### E4a — the `panel-left` title-bar button — **RULED HERE: omitted**
 
@@ -4097,8 +4629,9 @@ TOTP row** — there is no `Copy` button (§0.46.6).
    its loser and its reason. §9 is the set of standing user decisions, and **do not infer a vendor or
    an organisation from a path, a hostname or an account name** (§9 E1).
 5. **Read §5.12 before adding any scrolling box, any `overflow` declaration or any
-   `::-webkit-scrollbar` rule.** Three rules carry it: there are exactly **two** rendered scrollable
-   boxes and the main frame is not one of them; the editor's `::-webkit-scrollbar` must be on
+   `::-webkit-scrollbar` rule.** Three rules carry it: note mode has exactly **two** rendered
+   scrollable boxes, every other mode's count is in §5.12.4's table (Memoir's is measured, not
+   ruled), and the main frame is never one of them; the editor's `::-webkit-scrollbar` must be on
    `.cm-scroller` itself; and the tree's `scroll` handler must not force layout. G9's
    `layers.scrollers` row catches all three. **Do not write `src/vscroll.ts`** — it belonged to a
    fallback that is deleted with its engine.

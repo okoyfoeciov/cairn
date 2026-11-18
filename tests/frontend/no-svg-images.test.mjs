@@ -49,9 +49,11 @@
 // registers nothing extra today; it exists so the next one cannot hide.
 // The BUILT-PAGE row stays as the independent check on the inlined result.
 //
-// The build file is PARSED, NOT IMPORTED: it runs esbuild at top level and
-// writes `electron-shell/app/`, and a unit test must not rebuild the app as a
-// side effect of being loaded (other runs may be reading that directory).  A
+// The build file is PARSED, not imported.  Importing it would be harmless —
+// `build-app.mjs` builds only when it is run as a script, and
+// explain-css.test.mjs imports its `CSS_ORDER` — but the sheets the stylesheet
+// pass appends (`app-chrome.css`) are not exported, and the parse also checks
+// that the pass builds its imports from `CSS_ORDER` at all.  A
 // parse can rot silently — a refactor of `build-app.mjs` would match nothing
 // and register zero rows, which is green — so every way it can come back empty
 // or wrong THROWS at load, and node --test reports the file as failed.
@@ -68,8 +70,7 @@
 // a missing build reads as `skipped 1` instead of a row that silently vanishes
 // and takes one off the total.  Either way this file registers
 // `CSS_ORDER.length + extras + imported + 1 built + 1 static` rows —
-// 6 + 1 + 0 + 1 + 1 = 9 on both machines at this commit, whatever else is
-// lying in `src/styles`.
+// 10 + 1 + 0 + 1 + 1 = 13 today, whatever else is lying in `src/styles`.
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync, existsSync } from 'node:fs'

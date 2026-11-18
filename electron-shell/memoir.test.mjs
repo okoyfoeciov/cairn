@@ -35,6 +35,8 @@ import { dirname, join } from 'node:path'
 import process from 'node:process'
 import { test, after } from 'node:test'
 import { fileURLToPath } from 'node:url'
+import { decodePng } from '../tools/png.mjs'
+import { launch as cdpLaunch } from './cdp-drive.mjs'
 import { NO_DISPLAY } from './have-display.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
@@ -227,4 +229,207 @@ test('Memoir — typing autosaves to disk and Check returns issues', {
     'the ink ring carries no running animation: ' + JSON.stringify(d.live.spin))
   assert.equal(d.live.sawSpinner, false,
     'the Check button showed a spinner (removed 2026-09-18)')
+})
+
+/* ── THE CHECKING STATE AND THE TWO BARS, OVER CDP ─────────────────────────
+ * Three memoir.css traps that read right in the sheet and were dead in the
+ * engine (memoir-css.test.mjs pins the text): a reduced-motion override that
+ * lost to its own exemption on source order, shimmer delays that the
+ * `animation` shorthands reset to 0s, and 9px bar rules switched off by an
+ * inherited `scrollbar-color`.  The env probe above cannot emulate a media
+ * feature or photograph a bar, so these legs drive the page over the
+ * DevTools protocol.  `window.fetch` is stubbed for ai-service's origin before
+ * Check is pressed: the checking state stays up while the stub is pending,
+ * the stub's answer fills the drawer, and nothing reaches a billed route. */
+
+const ISSUES = 24
+
+async function runBars() {
+  const app = await cdpLaunch({ files: { 'Agent/Memory.md': 'a memoir probe note\n' }, note: 'Agent/Memory.md' })
+  try {
+    const { send, evaluate, frames } = app
+    const until = async (what, expr, ms = 10_000) => {
+      const t0 = Date.now()
+      for (;;) {
+        if (await evaluate(expr)) return
+        if (Date.now() - t0 > ms) throw new Error('timed out waiting for ' + what + '\n' + app.stderr())
+        await new Promise((r) => setTimeout(r, 50))
+      }
+    }
+
+    await evaluate(`(() => {
+      const real = window.fetch
+      window.__mm = { calls: [], release: null }
+      window.fetch = (url, init) => {
+        if (!String(url).startsWith('http://127.0.0.1:8770/')) return real(url, init)
+        window.__mm.calls.push(String(url))
+        return new Promise((resolve) => { window.__mm.release = resolve })
+      }
+      return 1
+    })()`)
+    // The page the way a user reaches it: the memoir tab, then Check.
+    await evaluate(`(() => {
+      const tab = document.querySelector('.tab-strip [data-tab="memoir"]')
+      for (const type of ['mousedown', 'mouseup', 'click']) {
+        tab.dispatchEvent(new MouseEvent(type, { bubbles: true, cancelable: true, button: 0 }))
+      }
+      return 1
+    })()`)
+    await until('the Memoir page to load', `(() => {
+      const m = document.getElementById('memoir'), e = document.getElementById('mm-editor')
+      return !!(m && !m.hidden && e && !e.readOnly)
+    })()`)
+    await evaluate(`(() => {
+      document.getElementById('mm-editor').value = 'Yesterday I go to office at morning.'
+      document.getElementById('mm-checkBtn').click()
+      return 1
+    })()`)
+    await until('the checking animation', `!!document.querySelector('#mm-checkPanel .mm-checking .mm-ink-ring')`)
+
+    const motion = async (value) => {
+      await send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value }] })
+      await frames()
+      return evaluate(`(() => {
+        const name = (e) => e ? getComputedStyle(e).animationName : null
+        const lines = document.querySelectorAll('#memoir .mm-lines span')
+        return {
+          reduce: matchMedia('(prefers-reduced-motion: reduce)').matches,
+          ring: name(document.querySelector('#memoir .mm-ink-ring')),
+          dot: name(document.querySelector('#memoir .mm-ink-dot')),
+          lines: Array.from(lines, name),
+          delays: Array.from(lines, (e) => getComputedStyle(e).animationDelay),
+        }
+      })()`)
+    }
+    const normal = await motion('no-preference')
+    const reduced = await motion('reduce')
+    await send('Emulation.setEmulatedMedia', { features: [] })
+
+    // The stub's answer: enough cards to overflow the drawer.
+    await evaluate(`(() => {
+      const issues = Array.from({ length: ${ISSUES} }, () =>
+        ({ category: 'grammar', original: 'go', suggestion: 'went', reason: 'past tense' }))
+      window.__mm.release(new Response(JSON.stringify({ issues }),
+        { status: 200, headers: { 'Content-Type': 'application/json' } }))
+      return 1
+    })()`)
+    await until('the issue cards', `document.querySelectorAll('#mm-checkPanel .mm-issue').length === ${ISSUES}`)
+    await frames()
+
+    // The width the bar takes out of the box: everything offsetWidth holds
+    // that clientWidth does not, less the borders.
+    const bar = (sel) => evaluate(`(() => {
+      const e = document.querySelector(${JSON.stringify(sel)})
+      const cs = getComputedStyle(e)
+      const r = e.getBoundingClientRect()
+      return {
+        reserved: e.offsetWidth - e.clientWidth - parseFloat(cs.borderLeftWidth) - parseFloat(cs.borderRightWidth),
+        scrollHeight: e.scrollHeight, clientHeight: e.clientHeight,
+        top: r.top, right: r.right, dpr: devicePixelRatio,
+      }
+    })()`)
+    // A box's bar, photographed at scrollTop 0: the thumb starts at the
+    // track's top.  Columns in CSS px from the box's right edge R: the bar is
+    // [R-9, R), its first two columns are the thumb's inset, R-4.5 is the
+    // thumb itself, and R-12.5 is the scroller's own ground.
+    const shoot = async (box) => {
+      const clip = { x: box.right - 32, y: box.top, width: 32, height: 64, scale: 1 }
+      const shot = await send('Page.captureScreenshot', { format: 'png', clip })
+      const png = decodePng(Buffer.from(shot.data, 'base64'))
+      const px = (dx, y) => {
+        const x = Math.floor((box.right - dx - clip.x) * (png.width / clip.width))
+        const yy = Math.floor((y - clip.y) * (png.height / clip.height))
+        const i = (yy * png.width + x) * 4
+        return Array.from(png.data.subarray(i, i + 3))
+      }
+      const y = box.top + 32
+      return {
+        thumbEstimate: box.clientHeight * box.clientHeight / box.scrollHeight,
+        ground: px(12.5, y), inset1: px(8.5, y), inset2: px(7.5, y), thumb: px(4.5, y),
+      }
+    }
+    const drawer = await bar('#mm-checkPanel .mm-scroll')
+    const drawerPixels = await shoot(drawer)
+
+    // The journal textarea, overflowing, on the page's own ground.  120 lines
+    // keep its thumb taller than the 32px the sample sits down.
+    await evaluate(`(() => {
+      document.querySelector('#mm-checkPanel .mm-close').click()
+      const e = document.getElementById('mm-editor')
+      e.value = Array.from({ length: 120 }, (_, i) => 'line ' + i).join('\\n')
+      e.scrollTop = 0
+      return 1
+    })()`)
+    await frames()
+    const editor = await bar('#mm-editor')
+    const editorPixels = await shoot(editor)
+    const calls = await evaluate('window.__mm.calls.slice()')
+    return { normal, reduced, drawer, editor, pixels: { drawer: drawerPixels, editor: editorPixels }, calls }
+  } finally {
+    await app.close()
+  }
+}
+
+let barsCached = null
+const bars = async () => (barsCached ??= await runBars())
+
+test('Memoir — reduced motion stops the checking animation, which otherwise runs', { skip: SKIP }, async () => {
+  const b = await bars()
+  assert.deepEqual(b.calls, ['http://127.0.0.1:8770/api/memoir/check'], 'Check did not go through the stub once')
+  const { delays: _n, ...normal } = b.normal
+  const { delays: _r, ...reduced } = b.reduced
+  assert.deepEqual(normal, {
+    reduce: false, ring: 'mm-spin', dot: 'mm-pulse', lines: ['mm-shimmer', 'mm-shimmer', 'mm-shimmer'],
+  }, 'the fourth exemption does not run the checking animation')
+  assert.deepEqual(reduced, {
+    reduce: true, ring: 'none', dot: 'none', lines: ['none', 'none', 'none'],
+  }, 'prefers-reduced-motion: reduce leaves the checking animation running')
+})
+
+// The delay rules outrank the reduced-motion override on specificity, so
+// this also proves the override still stops all three lines.
+test('Memoir — the shimmer lines pulse in a stagger, not together', { skip: SKIP }, async () => {
+  const b = await bars()
+  assert.deepEqual(b.normal.delays, ['0s', '0.15s', '0.3s'],
+    'an animation shorthand reset the shimmer delays: ' + JSON.stringify(b.normal))
+  assert.deepEqual(b.reduced.lines, ['none', 'none', 'none'],
+    'prefers-reduced-motion: reduce leaves the shimmer lines running: ' + JSON.stringify(b.reduced))
+})
+
+test('Memoir — the journal and the check drawer reserve the 9px bar, not Chromium\'s 15px', { skip: SKIP }, async (t) => {
+  const b = await bars()
+  for (const [name, m] of [['textarea#mm-editor', b.editor], ['the drawer\'s .mm-scroll', b.drawer]]) {
+    assert.ok(m.scrollHeight > m.clientHeight, `${name} does not overflow, so it shows no bar: ${JSON.stringify(m)}`)
+    t.diagnostic(`dpr ${m.dpr}: ${name} reserves ${m.reserved} CSS px`)
+    // The bar is floor(9 × dpr) device px, and offsetWidth/clientWidth are
+    // whole CSS px: the drawer's box is fractional at dpr 1.5 and 1.75, so its
+    // correct bar reads 8 there (the journal's reads 9).  Chromium's own
+    // bar reads 15, outside the band.  `scrollbar-width: thin` reads 10,
+    // inside it; the thumb-inset legs below catch that one.
+    assert.ok(Math.abs(m.reserved - 9) <= 1,
+      `${name} reserves ${m.reserved} CSS px for its bar at dpr ${m.dpr}, not 9 (±1 for device-pixel snapping)`)
+  }
+})
+
+/** The thumb's 2px inset is a transparent border: both inset columns must be
+ *  the scroller's own ground, whichever ground that is. */
+function insetShowsGround(name, p, box) {
+  assert.ok(p.thumbEstimate > 48, `${name}: the thumb is too short to sample 32px down: ${JSON.stringify(p)}`)
+  const at = ` (dpr ${box.dpr}): ${JSON.stringify(p)}`
+  assert.deepEqual(p.inset1, p.ground, `${name}: the thumb inset is not its ground` + at)
+  assert.deepEqual(p.inset2, p.ground, `${name}: the thumb inset is not its ground` + at)
+  assert.notDeepEqual(p.thumb, p.ground, `${name}: no thumb painted at the bar's centre` + at)
+}
+
+test('Memoir — the drawer\'s thumb inset shows the drawer\'s own ground', { skip: SKIP }, async () => {
+  const b = await bars()
+  insetShowsGround('the drawer (--bg-secondary)', b.pixels.drawer, b.drawer)
+})
+
+test('Memoir — the journal\'s thumb inset shows the page\'s own ground', { skip: SKIP }, async () => {
+  const b = await bars()
+  // Two different grounds, or an inset painted in either one would pass both.
+  assert.notDeepEqual(b.pixels.editor.ground, b.pixels.drawer.ground,
+    'the page and the drawer share a ground colour: ' + JSON.stringify(b.pixels))
+  insetShowsGround('textarea#mm-editor (--bg-primary)', b.pixels.editor, b.editor)
 })

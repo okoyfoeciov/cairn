@@ -588,6 +588,64 @@ function persistedSidebarW() {
 }
 
 /**
+ * §0.56 E109. The explanation panel's persisted height, handed over exactly
+ * like the sidebar width and withheld under `--pixeltest` for the same reason.
+ * This reads the RAW file, before Rust has had a chance to rewrite it, so it
+ * repeats `prefs.rs`'s `EXPLAIN_H_MIN`/`EXPLAIN_H_MAX` band: a hand-edited
+ * value outside it is the panel's default, as it would be after a load.
+ */
+const EXPLAIN_H_BAND = [140, 4000]
+function persistedExplainH() {
+  if (PIXELTEST) return null
+  try {
+    const h = JSON.parse(readFileSync(prefsPath(), 'utf8')).explain_h
+    return Number.isFinite(h) && h >= EXPLAIN_H_BAND[0] && h <= EXPLAIN_H_BAND[1] ? h : null
+  } catch {
+    return null
+  }
+}
+
+/**
+ * §0.56 E109. `CAIRN_AI_BASE` points the explanation panel at another
+ * ai-service — the real-engine suites serve a fake one on a free port, so no
+ * test reaches a billed route. Loopback http ONLY, reduced to its origin: the
+ * panel posts book passages there, and an env var must not be able to send
+ * them off the machine. Anything else is refused, loudly, and FAILS CLOSED:
+ * whoever set the variable meant "not the real service", so the panel gets
+ * `AI_BASE_REFUSED` instead of falling back to the billed default. Port 9 is
+ * on Chromium's restricted list: the renderer refuses the fetch itself, and
+ * the band says it cannot reach 127.0.0.1:9.
+ */
+const AI_BASE_HOSTS = new Set(['127.0.0.1', 'localhost', '[::1]'])
+const AI_BASE_REFUSED = 'http://127.0.0.1:9'
+function loopbackAiBase(raw) {
+  if (!raw) return null
+  let url
+  try {
+    url = new URL(raw)
+  } catch {
+    return null
+  }
+  if (url.protocol !== 'http:' || !AI_BASE_HOSTS.has(url.hostname)) return null
+  return url.origin
+}
+
+/** The E109 half of `additionalArguments`; the sidebar's stays where it was. */
+function explainArguments() {
+  const args = []
+  const h = persistedExplainH()
+  if (h !== null) args.push(`--cairn-explain-h=${h}`)
+  const raw = process.env.CAIRN_AI_BASE
+  const base = loopbackAiBase(raw)
+  if (base !== null) args.push(`--cairn-ai-base=${base}`)
+  else if (raw) {
+    console.error(`CAIRN_AI_BASE refused: not a loopback http origin; the panel gets ${AI_BASE_REFUSED}`)
+    args.push(`--cairn-ai-base=${AI_BASE_REFUSED}`)
+  }
+  return args
+}
+
+/**
  * §8.2 step 5. Build the process's `AppState`, install the §1.4 event sink and
  * load `state.json`. FIRST, and before `whenReady`: `ipcMain.handle` is already
  * registered by this point and a command that arrived before `start()` would
@@ -725,10 +783,26 @@ app.whenReady().then(async () => {
          the MAIN process computes is `additionalArguments`, which the preload
          reads out of its own `process.argv`. A sandboxed preload cannot read a
          file, so the value has to arrive this way. */
-      additionalArguments:
-        persistedSidebarW() === null ? [] : [`--cairn-sidebar-w=${persistedSidebarW()}`],
+      additionalArguments: [
+        ...(persistedSidebarW() === null ? [] : [`--cairn-sidebar-w=${persistedSidebarW()}`]),
+        ...explainArguments(),
+      ],
     },
   })
+
+  /* NOTHING NAVIGATES THIS WINDOW AND NOTHING OPENS ANOTHER ONE.  The page is
+     the whole app: a page loaded HERE would run the preload and get
+     `window.cairn`.  A window the page opens gets no preload (measured), but
+     it would be a stray app window on a URL a book chose.  Links are handled
+     in the page (chapter links scroll, http/https/mailto go through
+     `open_external`), so a link that escapes its `preventDefault` (a middle
+     click on a book link, a target=_blank answer link, a script's
+     `window.open` or `location`) must do nothing.  Measured on this engine: `loadFile` and `webContents.reload()`
+     raise no `will-navigate`, so the dev reload and the crash reload still
+     work.  The page's own `location.reload()` does raise it, and is refused
+     like Ctrl+R (F27): it would skip §1.6's flush.  electron-shell/explain.test.mjs. */
+  win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
+  win.webContents.on('will-navigate', (e) => e.preventDefault())
 
   if (process.env.CAIRN_VAULT) {
     await addon.openVault(process.env.CAIRN_VAULT).catch((e) => {

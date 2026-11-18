@@ -93,6 +93,11 @@ export interface UiPatch {
    *  struck. Rust clamps it on read, so a hand-edited state.json cannot ship a
    *  0px or a 90,000px sidebar. */
   sidebarW?: number;
+  /** §0.56 E109.  The reader's explanation panel height in px, GLOBAL like
+   *  `sidebarW`.  Written when the grip or its arrow keys change the chosen
+   *  height.  Rust refuses a value outside [140, 4000] on write and drops one
+   *  on read; it never clamps. */
+  explainH?: number;
   lastNote?: VaultPath | null;
   sort?: SortMode;
   expanded?: VaultPath[];    // folders only; capped at 2000, see §7.6

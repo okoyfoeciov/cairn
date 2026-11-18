@@ -27,18 +27,21 @@ TCC Files-and-Folders grants are re-prompted after every rebuild, because the ad
 
 It works end to end: tree, editor with live preview, Properties, the Memoir journal page, the
 secrets viewer with live TOTP codes, the EPUB reader (import or copy an `.epub` into the vault;
-continuous read, Mod-F in-book search and per-book resume), search, vault switching, and
-autosave to disk.
+continuous read, Mod-F in-book search and per-book resume; a click on a word explains it in a band
+under the book, through the local ai-service, and a click on a second word can replace the answer
+or split the band into two halves), search, vault switching, and autosave to disk.
 
 Verified numbers move. **Re-run rather than trusting a count quoted here.** The current ones:
 
 ```
-cd core && cargo test --no-fail-fast       327 passed, 0 failed (all targets)
+cd core && cargo test --no-fail-fast       332 passed, 0 failed, 17 ignored (all targets)
 cd core && cargo clippy --all-targets -- -D warnings   clean
 npx tsc --noEmit                            clean
-npm test                                    776 tests: 776 pass, 0 fail, 0 todo
+npm test                                    961 tests: 961 pass, 0 fail, 0 todo
+node --test electron-shell/explain.test.mjs        61 pass (fake ai-service; live leg gated; dpr 1.25)
+node --test electron-shell/explain-badge.test.mjs  21 pass: 0 differing badge pixels, dpr 1/1.25/1.5/2
 node electron-shell/build-native.mjs        BUILD-NATIVE result=PASS tauri_crates=0
-node electron-shell/build-app.mjs           BUILD-APP result=PASS modules=34
+node electron-shell/build-app.mjs           BUILD-APP result=PASS modules=38
 npm run selftest:geometry                   50 identities, 50 pass
 ./tools/run-g9-electron.sh                  137/137, ok=True, 1920x964, dpr=1.25
 node tools/scroll-bench.mjs --self-test     67 passed, 0 failed
@@ -67,6 +70,10 @@ so it never touches the real one.
   `core/tests/` the data-loss and vault suites.
 - `src/` — the frontend. `main.ts` boots and wires; every other file owns one subject. The EPUB
   container is `src/epub.ts`, its reader `src/reader.ts`, and its sheet `src/styles/reader.css`.
+  Click-to-explain is `src/bookpick.ts` (the word and the passage), `src/explain.ts` (the band),
+  `src/explain-thread.ts` (one half of the band), `src/explain-render.ts` (its DOM) and
+  `src/styles/explain.css`; `src/styles/fonts/` holds the only font files shipped (Lora, for the
+  pronunciation badge — see `THIRD-PARTY-NOTICES.md`).
 - `docs/CONTRACT.md` — **normative**; `§0` is the ruling index.
 - `docs/KNOWN-ISSUES.md` — the register of what is wrong or missing in the code. Read it before
   "fixing" anything that looks broken.

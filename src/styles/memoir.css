@@ -37,8 +37,6 @@
   font-family: var(--font-text);
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
-  scrollbar-width: thin;
-  scrollbar-color: var(--scrollbar-thumb) transparent;
 }
 
 #memoir[hidden] { display: none; }
@@ -139,12 +137,18 @@
 
 #memoir ::selection { background: var(--text-selection); }
 
+/* No `scrollbar-color` or `scrollbar-width` on #memoir or inside it.
+   Chromium drops `::-webkit-scrollbar` styling on a scroller whose own value
+   of either is not `auto`, and `scrollbar-color` inherits, so one set on
+   #memoir reaches both scrollers.  The thumb's inset is a transparent border,
+   so it reads right on the page's ground and on the drawer's. */
 #memoir ::-webkit-scrollbar { width: 9px; }
 #memoir ::-webkit-scrollbar-track { background: transparent; }
 #memoir ::-webkit-scrollbar-thumb {
   background: var(--scrollbar-thumb);
   border-radius: 99px;
-  border: 2px solid var(--bg-primary);
+  border: 2px solid transparent;
+  background-clip: content-box;
 }
 
 /* --- Check panel (side drawer + bottom sheet in narrow panes) --- */
@@ -359,9 +363,9 @@
   background-size: 200% 100%;
   animation: mm-shimmer 1.3s ease-in-out infinite;
 }
-.mm-lines span:nth-child(1) { width: 100%; animation-delay: 0s; }
-.mm-lines span:nth-child(2) { width: 82%; animation-delay: 0.15s; opacity: 0.9; }
-.mm-lines span:nth-child(3) { width: 68%; animation-delay: 0.3s; opacity: 0.75; }
+.mm-lines span:nth-child(1) { width: 100%; }
+.mm-lines span:nth-child(2) { width: 82%; opacity: 0.9; }
+.mm-lines span:nth-child(3) { width: 68%; opacity: 0.75; }
 @keyframes mm-shimmer {
   0% { background-position: 200% 0; opacity: 0.5; }
   50% { background-position: 0% 0; opacity: 1; }
@@ -390,14 +394,6 @@
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
-@media (prefers-reduced-motion: reduce) {
-  /* Scoped + !important like the exemption below, and AFTER it, so the
-     accessibility preference still wins where it applies. */
-  #memoir .mm-ink-ring,
-  #memoir .mm-ink-dot,
-  #memoir .mm-lines span { animation: none !important; }
-}
-
 /* FOURTH EXEMPTION TO §5.1 RULE 5 (base.css: `animation: none !important`).
  * Reported frozen mid-frame by the user: the blanket ban stops the ink
  * ring/dot and the shimmer lines.  Scoped to these three selectors inside
@@ -408,6 +404,19 @@
 #memoir .mm-ink-ring { animation: mm-spin 0.9s linear infinite !important; }
 #memoir .mm-ink-dot { animation: mm-pulse 1.4s ease-in-out infinite !important; }
 #memoir .mm-lines span { animation: mm-shimmer 1.3s ease-in-out infinite !important; }
+/* The stagger.  Both shorthands (base.css's and the line above) reset
+   `animation-delay` to 0s, so the delays need `!important` as well; the
+   `:nth-child` makes them outrank the shorthand on specificity. */
+#memoir .mm-lines span:nth-child(2) { animation-delay: 0.15s !important; }
+#memoir .mm-lines span:nth-child(3) { animation-delay: 0.3s !important; }
+@media (prefers-reduced-motion: reduce) {
+  /* Same selectors, same specificity and `!important` as the exemption
+     above, so source order decides: this block must stay AFTER it.  The
+     delays outrank it, but they set only `animation-delay`. */
+  #memoir .mm-ink-ring,
+  #memoir .mm-ink-dot,
+  #memoir .mm-lines span { animation: none !important; }
+}
 
 @media (max-width: 860px) {
   #mm-checkPanel {

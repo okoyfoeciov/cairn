@@ -1,0 +1,151 @@
+/* ==========================================================================
+ * tests/fixtures/comart-badge/panel-badge.css -- THE REFERENCE, FROZEN.
+ * Owner: electron-shell/explain-badge.test.mjs.  Never edit by hand.
+ *
+ * A verbatim copy of the lines of comart's `panel.css` that draw the
+ * Merriam-Webster pronunciation badge, taken from the comart repository at
+ * commit f8ef4de (the file's last change; panel.css sha256 5ca79c9b1470860698
+ * dffccdfcdad55dbf9dcfc24e06a35270da5386a1f21c5a).  The test renders the same
+ * badge DOM under this sheet and under Cairn's real stylesheet and requires
+ * 0 differing pixels: the badge keeps comart's design pixel for pixel
+ * (CONTRACT §0.56 E109).  It is a copy so the test reads nothing of comart's
+ * but its two font files, and frozen so the reference cannot drift with it.
+ *
+ * Copied lines, unchanged, in file order (only the `panel.css:N` marker
+ * comments between them are added):
+ *   62-75    the two Lora @font-face rules.  The url()s are relative: the test
+ *            puts the two woff2 files beside this sheet, after checking they
+ *            hash to comart's bytes (ddb8c660... / d824d807...);
+ *   77       the universal reset the badge sits under;
+ *   81-82    `:root {` and its `color-scheme: dark` (it selects the UA's
+ *            dark defaults for a <button>, and every badge is one);
+ *   86       --text-soft (.badge-pos reads it at :789 before the freeze);
+ *   93-101   the badge tokens;
+ *   106      the `:root` block's closing brace;
+ *   733-817  every badge rule, with the FROZEN block (806-817) last.
+ * Everything else in panel.css styles the panel around the badge.  The
+ * badge's context there (.explain-content's 15.5px/1.65, body's
+ * antialiasing, the pron-only row's flex layout) is reference.html's own
+ * host rules, each cited to its panel.css line.
+ * ======================================================================== */
+
+/* panel.css:62-75 */
+@font-face {
+  font-family: "Lora";
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("Lora-Latin.woff2") format("woff2");
+}
+@font-face {
+  font-family: "Lora";
+  font-style: italic;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("Lora-Latin-Italic.woff2") format("woff2");
+}
+
+/* panel.css:77 */
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+/* panel.css:81-82, 86, 93-101, 106 */
+:root {
+  color-scheme: dark;
+  --text-soft: #CBC3AD;
+  --pron: #8ec5d3;
+  --pron-border: rgba(142, 197, 211, 0.42);
+  --pron-bg: rgba(142, 197, 211, 0.1);
+  --pron-fill: rgba(142, 197, 211, 0.2);
+  --pron-ai: #c3a6e8;
+  --pron-ai-border: rgba(195, 166, 232, 0.5);
+  --pron-ai-bg: rgba(195, 166, 232, 0.12);
+  --err: #FF6B5A;
+  --warn: #e8b34a;
+}
+
+/* panel.css:733-817 */
+.pron-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: transparent;
+  color: var(--pron);
+  border: 1px solid var(--pron-border);
+  border-radius: 100px;
+  padding: 0 8px 0 10px;
+  font: inherit;
+  font-size: 0.9em;
+  line-height: 1.7;
+  cursor: pointer;
+  vertical-align: baseline;
+  margin: 0 2px;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.pron-badge:hover { background: var(--pron-bg); }
+.pron-badge:focus-visible { outline: 2px solid var(--pron); outline-offset: 2px; }
+.pron-badge.is-playing { background: var(--pron-bg); }
+.pron-badge.loading { opacity: 0.55; cursor: progress; }
+.pron-badge.failed { border-style: dashed; cursor: help; }
+/* MW refused the request (Cloudflare's challenge, a 5xx, or a network blip):
+   a loud red error state — never the bare word. */
+.pron-badge.failed.err-mw { color: var(--err); border-color: rgba(255, 90, 77, 0.55); }
+.pron-badge.failed.err-mw:hover { background: rgba(255, 90, 77, 0.1); }
+/* MW answered but has no pronunciation for this word: a softer amber. */
+.pron-badge.failed.err-none { color: var(--warn); border-color: rgba(232, 179, 74, 0.55); }
+.pron-badge.failed.err-none:hover { background: rgba(232, 179, 74, 0.1); }
+.pron-badge .warn { width: 12px; height: 12px; fill: currentColor; }
+.pron-badge .err-label { font-style: normal; font-size: 0.9em; }
+.pron-badge.ai-made {
+  color: var(--pron-ai);
+  border-color: var(--pron-ai-border);
+  border-style: dashed;
+  cursor: help;
+}
+.pron-badge.ai-made:hover { background: var(--pron-ai-bg); }
+.pron-badge.ai-made .approx { font-style: normal; opacity: 0.8; margin-right: -1px; }
+.pron-badge.ai-made .ai-tag {
+  font-style: normal;
+  font-size: 0.62em;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 1px 4px;
+  margin-left: 2px;
+  border-radius: 4px;
+  background: var(--pron-ai-bg);
+  color: var(--pron-ai);
+}
+/* Kept exactly as [A] writes it. Note: `inherit` inside a font-family LIST is
+   invalid CSS, so Chrome drops this whole declaration and the IPA actually
+   renders in the inherited serif — Lora, pinned for the badge in the freeze
+   block below so the Verdigris panel font cannot change it. */
+.pron-badge .ipa { font-style: normal; font-family: "Open Sans", inherit; }
+.pron-badge .speaker { width: 12px; height: 12px; fill: currentColor; margin-left: 1px; }
+.pron-badge .badge-pos { font-style: italic; font-size: 0.85em; color: var(--text-soft); margin-right: 1px; }
+.pron-badge .dot-loader { display: inline-block; width: 16px; text-align: center; letter-spacing: 1px; }
+
+/* As in [A], the pron-only row shows every variant Merriam-Webster lists,
+   the one the model committed to lit and the rest dimmed. */
+.pron-variants { display: inline-flex; align-items: center; flex-wrap: wrap; gap: 4px; }
+.pron-badge.is-picked {
+  border-color: var(--pron);
+  background: var(--pron-fill);
+  box-shadow: 0 0 0 1px var(--pron) inset;
+}
+.pron-badge.is-picked:hover { background: var(--pron-fill); }
+.pron-badge.is-picked .badge-pos { color: var(--pron); font-style: normal; font-weight: 700; }
+.pron-badge.is-picked .ipa { font-weight: 600; }
+.pron-variants:has(.is-picked) .pron-badge:not(.is-picked) { opacity: 0.45; }
+.pron-variants:has(.is-picked) .pron-badge:not(.is-picked):hover { opacity: 1; }
+
+/* ---------------------------------------------------------------------------
+   FROZEN MERRIAM-WEBSTER BADGE. The pronunciation badge's style is MW's, and
+   the Verdigris reskin must not touch it. Three of its values were inherited
+   from the panel rather than declared on the badge — the Lora family (the
+   invalid `font-family: "Open Sans", inherit` on .ipa means the IPA actually
+   renders in the inherited serif), --text-soft for the `n.`, and the error red
+   the reskin changed — so they are pinned here to exactly what they rendered
+   before. Do not restyle this block or the badge rules above it. */
+.pron-badge { font-family: "Lora", Georgia, "Iowan Old Style", "Times New Roman", serif; }
+.pron-badge .badge-pos { color: #c5c2bb; }
+.pron-badge.failed.err-mw { color: #ff5a4d; border-color: rgba(255, 90, 77, 0.55); }
+.pron-badge.failed.err-mw:hover { background: rgba(255, 90, 77, 0.1); }

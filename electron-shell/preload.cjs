@@ -134,6 +134,24 @@ if (sidebarW) {
   if (Number.isFinite(n)) contextBridge.exposeInMainWorld('__CAIRN_SIDEBAR_W__', n)
 }
 
+/**
+ * §0.56 E109, the same seam twice. The explanation panel's persisted height
+ * (absent on a first run and under `--pixeltest`: the panel then opens at its
+ * 320 default), and the ai-service origin from `CAIRN_AI_BASE`, which the main
+ * process has already reduced to a loopback http origin (absent normally: the
+ * panel then talks to `http://127.0.0.1:8770`).
+ */
+const explainH = process.argv.find((a) => a.startsWith('--cairn-explain-h='))
+if (explainH) {
+  const n = Number(explainH.slice('--cairn-explain-h='.length))
+  if (Number.isFinite(n)) contextBridge.exposeInMainWorld('__CAIRN_EXPLAIN_H__', n)
+}
+const aiBase = process.argv.find((a) => a.startsWith('--cairn-ai-base='))
+if (aiBase) {
+  const origin = aiBase.slice('--cairn-ai-base='.length)
+  if (origin) contextBridge.exposeInMainWorld('__CAIRN_AI_BASE__', origin)
+}
+
 contextBridge.exposeInMainWorld('cairn', {
   invoke: (command, args) => ipcRenderer.invoke('cairn:invoke', command, args),
   on: (event, handler) => {

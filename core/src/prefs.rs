@@ -45,9 +45,10 @@
 //! canonical by construction).  IF YOU ADD A CALLER, CANONICALISE BEFORE YOU
 //! CALL — this file cannot catch you.
 //!
-//! `sidebar_w` IS DELETED (M60).  The sidebar is fixed at 412px and there is no
-//! splitter; a persisted field for a dimension that cannot change is a bug
-//! waiting for someone to honour it.
+//! TWO FIELDS ARE GLOBAL, NOT PER-VAULT: `sidebar_w` (§0.7 E9, which struck
+//! M60's deletion of it) and `explain_h` (§0.56 E109).  Both are dimensions of
+//! the window the user arranged, not of the notes in it, so `apply` stores them
+//! even with no vault open.
 //!
 //! WHY THE SCHEMA IS PER-VAULT KEYED: spec-02 §9.3's flat schema held exactly
 //! ONE vault's `expanded`/`last_note`, so switching A -> B -> A lost A's
@@ -99,6 +100,19 @@ fn sane_sidebar_w(w: f64) -> Option<f64> {
     (w.is_finite() && (SIDEBAR_W_MIN..=SIDEBAR_W_MAX).contains(&w)).then_some(w)
 }
 
+/// §0.56 E109.  The reader's explanation panel height: a sanity band like
+/// `SIDEBAR_W_*`, for the same reason.  The panel clamps against the live
+/// reader height itself (`explain.ts`); the floor is the panel's own minimum,
+/// so nothing a drag can produce is refused.  `app-main.mjs` repeats the band
+/// because it reads the raw file before Rust has rewritten it.
+pub const EXPLAIN_H_MIN: f64 = 140.0;
+pub const EXPLAIN_H_MAX: f64 = 4_000.0;
+
+/// `Some(h)` only if `h` could plausibly be a height somebody dragged to.
+fn sane_explain_h(h: f64) -> Option<f64> {
+    (h.is_finite() && (EXPLAIN_H_MIN..=EXPLAIN_H_MAX).contains(&h)).then_some(h)
+}
+
 /// Clamp one bookmark in place; `false` means it cannot be used at all and the
 /// caller should drop it.
 fn sane_bookmark(b: &mut Bookmark) -> bool {
@@ -140,6 +154,8 @@ pub struct UiPatch {
     /// §0.7 E9.  GLOBAL — a property of the window the user arranged, not of
     /// the notes in it.
     pub sidebar_w: Option<f64>,
+    /// §0.56 E109, wire `explainH`.  GLOBAL like `sidebar_w`.
+    pub explain_h: Option<f64>,
 }
 
 /// One EPUB's last reading position (§0.55 E108).
@@ -282,6 +298,14 @@ pub struct State {
         skip_serializing_if = "Option::is_none"
     )]
     pub sidebar_w: Option<f64>,
+    /// §0.56 E109.  Absent until the explanation panel is resized once, for the
+    /// same reason as `sidebar_w`: absent means the panel's 320px default.
+    #[serde(
+        default,
+        deserialize_with = "lenient",
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub explain_h: Option<f64>,
     /// Keyed by the CANONICAL vault root (module header): two spellings of one
     /// directory are two keys here, and nothing joins them back up.
     ///
@@ -299,6 +323,7 @@ impl Default for State {
             vault: None,
             recents: Vec::new(),
             sidebar_w: None,
+            explain_h: None,
             vaults: BTreeMap::new(),
         }
     }
@@ -356,6 +381,10 @@ impl State {
         if let Some(w) = self.sidebar_w {
             self.sidebar_w = sane_sidebar_w(w);
         }
+        // §0.56 E109, the same rule: out of band => the panel's 320 default.
+        if let Some(h) = self.explain_h {
+            self.explain_h = sane_explain_h(h);
+        }
 
         for ui in self.vaults.values_mut() {
             if ui.sort > 3 {
@@ -405,8 +434,8 @@ impl State {
     }
 
     /// §1.5's `UiPatch`, applied to one vault.  A patch with no vault open still
-    /// carries `sidebar_w`, which is global — that is the case a fresh install
-    /// hits.
+    /// carries `sidebar_w` and `explain_h`, which are global — that is the case
+    /// a fresh install hits.
     ///
     /// The other place a `vaults` key is built, so the same rule as
     /// `touch_vault`: `vault` is the CANONICAL root (module header).  The only
@@ -419,6 +448,12 @@ impl State {
         if let Some(w) = patch.sidebar_w {
             if let Some(w) = sane_sidebar_w(w) {
                 self.sidebar_w = Some(w);
+            }
+        }
+        // §0.56 E109.  Global for the same reason, so also above the return.
+        if let Some(h) = patch.explain_h {
+            if let Some(h) = sane_explain_h(h) {
+                self.explain_h = Some(h);
             }
         }
         let Some(vault) = vault else { return };
@@ -870,6 +905,153 @@ mod tests {
         );
     }
 
+    /* ── §0.56 E109, the explanation panel height ─────────────────────────── */
+
+    /// GLOBAL like `sidebar_w`: a resize with no vault open must still land,
+    /// and it must not be filed under a vault either.
+    #[test]
+    fn explain_h_persists_with_no_vault_open() {
+        let mut st = State::default();
+        st.apply(
+            None,
+            &UiPatch {
+                explain_h: Some(300.0),
+                ..Default::default()
+            },
+        );
+        assert_eq!(
+            st.explain_h,
+            Some(300.0),
+            "a resize with no vault open was dropped"
+        );
+
+        st.touch_vault("/A");
+        st.apply(
+            Some("/A"),
+            &UiPatch {
+                explain_h: Some(410.0),
+                ..Default::default()
+            },
+        );
+        assert_eq!(st.explain_h, Some(410.0));
+        let j = serde_json::to_string(st.ui("/A").unwrap()).unwrap();
+        assert!(!j.contains("explain_h"), "the height went per-vault: {j}");
+    }
+
+    /// Out of band is refused and leaves what was stored alone, so the panel
+    /// falls back to its own default rather than opening at 0px or 90,000px.
+    #[test]
+    fn an_insane_explain_h_is_refused_not_stored() {
+        for bad in [
+            0.0,
+            -1.0,
+            f64::NAN,
+            f64::INFINITY,
+            f64::NEG_INFINITY,
+            90_000.0,
+            EXPLAIN_H_MIN - 0.5,
+            EXPLAIN_H_MAX + 0.5,
+        ] {
+            let mut st = State::default();
+            st.apply(
+                None,
+                &UiPatch {
+                    explain_h: Some(bad),
+                    ..Default::default()
+                },
+            );
+            assert_eq!(st.explain_h, None, "{bad} was stored");
+
+            st.explain_h = Some(320.0);
+            st.apply(
+                None,
+                &UiPatch {
+                    explain_h: Some(bad),
+                    ..Default::default()
+                },
+            );
+            assert_eq!(st.explain_h, Some(320.0), "{bad} overwrote a good height");
+        }
+        for ok in [EXPLAIN_H_MIN, 320.0, 333.5, EXPLAIN_H_MAX] {
+            let mut st = State::default();
+            st.apply(
+                None,
+                &UiPatch {
+                    explain_h: Some(ok),
+                    ..Default::default()
+                },
+            );
+            assert_eq!(st.explain_h, Some(ok), "{ok} was refused");
+        }
+    }
+
+    /// The two global fields are independent: a patch naming one never
+    /// touches the other.
+    #[test]
+    fn explain_h_and_sidebar_w_do_not_overwrite_each_other() {
+        let mut st = State::default();
+        st.apply(
+            None,
+            &UiPatch {
+                sidebar_w: Some(500.0),
+                explain_h: Some(250.0),
+                ..Default::default()
+            },
+        );
+        st.apply(
+            None,
+            &UiPatch {
+                explain_h: Some(260.0),
+                ..Default::default()
+            },
+        );
+        st.apply(
+            None,
+            &UiPatch {
+                sidebar_w: Some(510.0),
+                ..Default::default()
+            },
+        );
+        assert_eq!((st.sidebar_w, st.explain_h), (Some(510.0), Some(260.0)));
+    }
+
+    /// A hand-edited or future-version value is dropped on load, and the next
+    /// flush rewrites the file without it.
+    #[test]
+    fn a_hand_edited_explain_h_is_sanitised_on_load() {
+        let d = tempfile::tempdir().unwrap();
+        let p = d.path().join("state.json");
+        for bad in ["0.0", "-5", "1e9", "\"tall\"", "null"] {
+            std::fs::write(&p, format!(r#"{{"v":{SCHEMA_VERSION},"explain_h":{bad}}}"#)).unwrap();
+            assert_eq!(State::load(&p).explain_h, None, "{bad} survived load()");
+        }
+        std::fs::write(&p, format!(r#"{{"v":{SCHEMA_VERSION},"explain_h":333.0}}"#)).unwrap();
+        assert_eq!(
+            State::load(&p).explain_h,
+            Some(333.0),
+            "a good height was thrown away"
+        );
+
+        std::fs::write(&p, format!(r#"{{"v":{SCHEMA_VERSION},"explain_h":5.0}}"#)).unwrap();
+        let s = PrefsStore::load(p.clone());
+        s.flush_now().unwrap();
+        let raw = std::fs::read_to_string(&p).unwrap();
+        assert!(
+            !raw.contains("explain_h"),
+            "the bad height was written back: {raw}"
+        );
+    }
+
+    /// Absence means "never resized", so a fresh state.json names no height.
+    #[test]
+    fn an_unresized_explain_panel_serialises_no_field_at_all() {
+        let j = serde_json::to_string(&State::default()).unwrap();
+        assert!(
+            !j.contains("explain_h"),
+            "a fresh state.json names a height nobody set: {j}"
+        );
+    }
+
     /// §7.6 prints the file with snake_case keys, and it is NOT a wire type, so
     /// it carries no `rename_all`.  `UiPatch` beside it IS a wire type and is
     /// camelCase.  Pinning both here is the only thing stopping somebody
@@ -887,19 +1069,26 @@ mod tests {
                 scroll_top: Some(0.0),
                 bookmarks: None,
                 sidebar_w: Some(300.0),
+                explain_h: Some(280.0),
             },
         );
 
         let j = serde_json::to_string(&st).unwrap();
         assert!(j.contains(r#""last_note":"Misc.md""#), "{j}");
         assert!(j.contains(r#""scroll_top":0.0"#), "{j}");
+        assert!(j.contains(r#""explain_h":280.0"#), "{j}");
         assert!(!j.contains("lastNote"), "{j}");
+        assert!(!j.contains("explainH"), "{j}");
 
         // The patch is read as camelCase — this is what the frontend sends.
-        let p: UiPatch =
-            serde_json::from_str(r#"{"lastNote":"A.md","scrollTop":12,"sort":3}"#).unwrap();
+        let p: UiPatch = serde_json::from_str(
+            r#"{"lastNote":"A.md","scrollTop":12,"sort":3,"sidebarW":300,"explainH":333}"#,
+        )
+        .unwrap();
         assert_eq!(p.last_note, Some(Some("A.md".into())));
         assert_eq!(p.scroll_top, Some(12.0));
+        assert_eq!(p.sidebar_w, Some(300.0));
+        assert_eq!(p.explain_h, Some(333.0));
     }
 
     /// The whole reason the schema is per-vault keyed (M25): A -> B -> A must not
@@ -1226,6 +1415,7 @@ mod tests {
                     scroll_top: Some(432.0),
                     bookmarks: None,
                     sidebar_w: Some(340.0),
+                    explain_h: Some(377.5),
                 },
             );
         });
@@ -1233,6 +1423,8 @@ mod tests {
 
         let st = State::load(s.path());
         assert_eq!(st.v, SCHEMA_VERSION);
+        assert_eq!(st.sidebar_w, Some(340.0));
+        assert_eq!(st.explain_h, Some(377.5));
         assert_eq!(st.recents, vec!["/Users/me/Notes".to_string()]);
         let ui = st.ui("/Users/me/Notes").unwrap();
         assert_eq!(ui.sort, 3);
@@ -1257,6 +1449,7 @@ mod tests {
             &p,
             br#"{"v":1,"vault":"/A","recents":["/A","/B",7],
                 "sidebar_w":"wide",
+                "explain_h":[320],
                 "vaults":{
                   "/A":{"sort":2,"last_note":"n.md","expanded":["x",5,"y"],"scroll_top":12},
                   "/B":{"scroll_top":null,"sort":256,"last_note":3},
@@ -1267,6 +1460,7 @@ mod tests {
         assert_eq!(st.vault.as_deref(), Some("/A"));
         assert_eq!(st.recents, vec!["/A".to_string(), "/B".to_string()]);
         assert_eq!(st.sidebar_w, None);
+        assert_eq!(st.explain_h, None);
         let a = st.ui("/A").unwrap();
         assert_eq!(
             (a.sort, a.last_note.as_deref(), a.scroll_top),

@@ -20,9 +20,11 @@
  * request, so the dimension CAN change and the reason M60 gave for deleting the
  * field no longer holds.  It is GLOBAL, beside `win`, not per-vault: it is a
  * property of the window the user arranged, not of the notes in it.
+ * `explainH` (§0.56 E109, the reader's explanation panel height) is global
+ * for the same reason.
  * `expanded` is folders only and is capped at 2000 entries (§7.6).
  *
- * WHY A DEBOUNCE AND NOT A WRITE PER EVENT.  Three of the five fields are
+ * WHY A DEBOUNCE AND NOT A WRITE PER EVENT.  Three of the fields are
  * produced by things that fire continuously: `scrollTop` on every frame of a
  * trackpad fling, `expanded` on every chevron, `lastNote` on every note switch.
  * §7.6 fixes the window at 1,000 ms.  The tree already debounces its own two
@@ -77,6 +79,7 @@ function mergeInto(target: UiPatch, p: UiPatch): void {
   if (p.scrollTop !== undefined) target.scrollTop = p.scrollTop
   if (p.bookmarks !== undefined) target.bookmarks = p.bookmarks
   if (p.sidebarW !== undefined) target.sidebarW = p.sidebarW
+  if (p.explainH !== undefined) target.explainH = p.explainH
 }
 
 /**

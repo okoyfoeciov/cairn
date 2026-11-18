@@ -35,8 +35,9 @@ electron-shell/cairn.node.tmp-*
 out/
 
 
-# Generated fixture vaults (tools/gen-vault.sh)
-fixtures/
+# Generated fixture vaults (tools/gen-vault.sh).  Anchored: tests/fixtures/
+# holds authored fixtures too.
+/fixtures/
 /vault-*/
 *.vault/
 

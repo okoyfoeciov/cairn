@@ -102,9 +102,9 @@ export const EDITOR_MIN = 320
  *
  * A window narrower than `SIDEBAR_MIN + EDITOR_MIN` cannot satisfy both. The
  * floor wins, because a sidebar that has collapsed to nothing looks broken and
- * an editor that is merely narrow does not. `minWidth: 900` (§6.1) means the
- * app never actually reaches that case; the branch exists so the arithmetic is
- * total rather than accidentally correct.
+ * an editor that is merely narrow does not. The BrowserWindow sets no
+ * `minWidth`, so a narrow window can reach that case; the branch keeps the
+ * arithmetic total there rather than accidentally correct.
  */
 export function clampSidebarW(want: number, winW: number): number {
   const max = Math.max(SIDEBAR_MIN, winW - EDITOR_MIN)

@@ -96,6 +96,11 @@ function stageApp(appDir) {
   mkdirSync(join(appDir, 'tools'), { recursive: true })
   cpSync(join(ROOT, 'tools', 'verify-geometry.js'), join(appDir, 'tools', 'verify-geometry.js'))
 
+  /* The notices travel with every copy: the OFL that covers the inlined Lora
+     faces (CONTRACT §0.56 E109) asks for its copyright line AND its licence
+     text, and the MIT/ISC/Apache notices ask the same. */
+  cpSync(join(ROOT, 'THIRD-PARTY-NOTICES.md'), join(appDir, 'THIRD-PARTY-NOTICES.md'))
+
   writeFileSync(
     join(appDir, 'package.json'),
     JSON.stringify(

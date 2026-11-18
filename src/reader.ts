@@ -7,8 +7,23 @@
  * the pane, which hides the CodeMirror host while the book is up.  It owns ONE
  * rendered scroller: the book itself.  Mod-F mounts the NOTE VIEWER'S OWN
  * find bar (`find.ts`/find.css) as an overlay, never a second view and never a
- * third scroller (§5.12.4's two-scroller ceiling).  There is no visible search
- * button; the shortcut is the only way in.
+ * third scroller (§5.12.4's two-scroller ceiling; the explanation band below
+ * is the one exception: E109's third, and E110's fourth while it is split).
+ * There is no visible search button; the shortcut is the only way in.
+ *
+ * CLICK-TO-EXPLAIN (§0.56 E109).  A press on a word picks it, a drag from a
+ * word picks a phrase of up to 8 words inside one block, and the passage
+ * around the pick goes to the explanation band `main.ts` hands over as
+ * `mountExplain` (explain.ts; this file knows only its type).  There are no
+ * word spans: a caret hit-test plus the word's own line boxes find the word,
+ * and the CSS Highlight API paints it, so the book's DOM is never rewritten.
+ * Book text is not selectable.  Links stay links: a word inside an actionable
+ * link is never picked.  The band brings its own scroller while it is open.
+ *
+ * TWO HALVES (§0.57 E110).  A pick on a band that already holds an answer is
+ * STAGED: the band asks nothing until a half is clicked, and the reader marks
+ * the staged word meanwhile.  Esc drops the stage and the mark goes back to
+ * the last placed word; the next Esc closes the band.
  *
  * NO `innerHTML` ASSIGNMENT (§6.1).  The EPUB's XHTML is parsed by `epub.ts`
  * into an inert tree, then walked through an allow-list here.  Scripts, forms,
@@ -34,6 +49,16 @@ import {
 } from './epub'
 import { findMatches, mountFind, type FindPanel } from './find'
 import type { EpubBookmark } from './ipc'
+import {
+  MAX_WORDS,
+  buildPassage,
+  contextWindow,
+  wordAt,
+  wordsIn,
+  type PassageMeta,
+  type PickWord,
+} from './bookpick'
+import type { ExplainHooks, ExplainPanel, MountExplain } from './explain-types'
 
 interface LoadedImage {
   url: string
@@ -51,6 +76,51 @@ export interface ReaderDeps {
   /** Save one position.  `main.ts` debounces the corresponding `save_ui_state`. */
   onProgress(path: string, bookmark: EpubBookmark): void
   onError(err: unknown, context: string): void
+  /** §0.56 E109: the explanation band's factory, bound by `main.ts`.  Absent,
+   *  the book has no word picking at all. */
+  mountExplain?: MountExplain
+  /** Test seam for the two layout questions a pick asks; defaults to the
+   *  engine's own.  The minidom tests have no layout. */
+  probe?: ReaderProbe
+}
+
+/** A position inside one of the book's text nodes. */
+export interface TextPoint {
+  node: Text
+  offset: number
+}
+
+export interface PickRect {
+  left: number
+  top: number
+  right: number
+  bottom: number
+}
+
+export interface ReaderProbe {
+  /** The caret position under a viewport point, if any. */
+  caretAt(x: number, y: number): { node: Node; offset: number } | null
+  /** The line boxes of the text from `start` to `end`, in viewport px. */
+  rectsOf(start: TextPoint, end: TextPoint): ArrayLike<PickRect>
+}
+
+function engineProbe(doc: Document): ReaderProbe {
+  return {
+    caretAt(x, y) {
+      if (typeof doc.caretPositionFromPoint === 'function') {
+        const pos = doc.caretPositionFromPoint(x, y)
+        return pos ? { node: pos.offsetNode, offset: pos.offset } : null
+      }
+      const range = doc.caretRangeFromPoint?.(x, y) ?? null
+      return range ? { node: range.startContainer, offset: range.startOffset } : null
+    },
+    rectsOf(start, end) {
+      const range = doc.createRange()
+      range.setStart(start.node, start.offset)
+      range.setEnd(end.node, end.offset)
+      return range.getClientRects()
+    },
+  }
 }
 
 export interface ReaderView {
@@ -80,6 +150,30 @@ export interface ReaderView {
 type Mode = 'read' | 'error'
 
 const SAVE_DEBOUNCE_MS = 600
+
+/* §0.56 E109.  Highlight registry names; explain.css paints them. */
+const HOVER_HIGHLIGHT = 'cairn-explain-hover'
+const MARK_HIGHLIGHT = 'cairn-explain-mark'
+/** A link that acts on a click keeps the click: its words are never picked. */
+const ACTIONABLE = 'a[data-ep-external], a[data-ep-chapter], a.ep-noteref'
+/** A footnote marker: its digits are noise in a passage, and they glue onto
+ *  the word before them ("lizard12") because inline boundaries add no space. */
+const NOTEREF = 'a.ep-noteref'
+/** Code is not prose: comart never picks it either. */
+const NOT_PROSE = 'pre, code, kbd, samp, var'
+/** A layer above the book owns its own clicks.  The find bar too: comart's is
+ *  the browser's, which a page never sees clicked. */
+const LAYERS = '.ctx-menu, .nc-modal-back, .find-bar'
+/** px around a word's line boxes that still hit it; comart's chip reaches 2px
+ *  past each side of the word. */
+const PICK_SLOP = 2
+/** comart's swallowClick window. */
+const SWALLOW_MS = 250
+/** Room kept between a revealed mark and the band (comart's revealMarks). */
+const REVEAL_GAP = 12
+const HEADING_TAG = /^H[1-6]$/i
+/** comart's cap: a longer "heading" is a styled paragraph, not a title. */
+const MAX_HEADING = 300
 
 /* The sanitising allow-list.  Anything not here is either unwrapped (its text
  * survives) or dropped whole (the dangerous set below). */
@@ -195,6 +289,25 @@ export function mountReader(pane: HTMLElement, deps: ReaderDeps): ReaderView {
   let openSeq = 0
   /** The row vanished externally: keep the text, stop pretending it saves. */
   let orphaned = false
+
+  /* E109 pick state.  `shown` is the last pick the band started or placed;
+   * `staged` is a pick waiting for a half (E110).  The mark paints
+   * `staged ?? shown`, and a drag paints its own run over it until it fires.
+   * The reveal follows `shown` only. */
+  const probe = deps.probe ?? engineProbe(doc)
+  let explain: ExplainPanel | null = null
+  let drag: Drag | null = null
+  /** This click sequence (detail 1, 2, 3…) has already asked. */
+  let seqPicked = false
+  let shown: PickSpan | null = null
+  let staged: PickSpan | null = null
+  let hover: PickSpan | null = null
+  let pointer: { x: number; y: number; buttons: number } | null = null
+  let moveFrame = 0
+  let swallowing = false
+  let swallowTimer: ReturnType<typeof setTimeout> | null = null
+  /** The latest left press began inside the band or a layer (onDocDown). */
+  let pressKeeps = false
 
   function clearChildren(node: Element | HTMLElement): void {
     node.textContent = ''
@@ -742,7 +855,9 @@ export function mountReader(pane: HTMLElement, deps: ReaderDeps): ReaderView {
     currentMark = null
     paintKey = ''
     paintGroups = []
-    for (const mark of content.querySelectorAll<HTMLElement>('mark.cm-find-match')) {
+    const marks = content.querySelectorAll<HTMLElement>('mark.cm-find-match')
+    if (marks.length > 0) dropPickHighlights()
+    for (const mark of marks) {
       const text = doc.createTextNode(mark.textContent)
       try {
         mark.replaceWith(text)
@@ -877,6 +992,7 @@ export function mountReader(pane: HTMLElement, deps: ReaderDeps): ReaderView {
     let painted = paintGroups
     if (key !== paintKey) {
       clearMarks()
+      dropPickHighlights()
       const section =
         content.querySelector<HTMLElement>('[id="ep-chapter-' + chapter + '"]') ??
         content.querySelectorAll<HTMLElement>('.ep-chapter')[chapter] ??
@@ -999,6 +1115,466 @@ export function mountReader(pane: HTMLElement, deps: ReaderDeps): ReaderView {
     }
   }
 
+  /* ── click-to-explain (§0.56 E109) ────────────────────────────────────── */
+
+  interface PickSpan {
+    start: TextPoint
+    end: TextPoint
+  }
+
+  /** A pickable word under the pointer, in its block's own text. */
+  interface Hit {
+    block: HTMLElement
+    section: HTMLElement
+    ct: { text: string; runs: TextRun[] }
+    /** `ct.text` with actionable links blanked: the words a pick may take. */
+    text: string
+    word: PickWord
+    span: PickSpan
+  }
+
+  interface Drag {
+    block: HTMLElement
+    section: HTMLElement
+    runs: TextRun[]
+    text: string
+    /** `ct.text` with only footnote markers blanked.  Where it differs from
+     *  `text` a link sits, and a phrase cannot run through a link: its words
+     *  were never picked, so the phrase would have a hole in it. */
+    crossable: string
+    words: PickWord[]
+    anchor: number
+    current: number
+    /** False for the second press of a double-click: same gesture, no new ask. */
+    fire: boolean
+  }
+
+  function paintHighlight(name: string, span: PickSpan | null): void {
+    if (typeof CSS === 'undefined' || !CSS.highlights) return
+    let range: Range | null = null
+    if (span && typeof Highlight === 'function' && typeof doc.createRange === 'function') {
+      try {
+        range = doc.createRange()
+        range.setStart(span.start.node, span.start.offset)
+        range.setEnd(span.end.node, span.end.offset)
+      } catch {
+        range = null
+      }
+    }
+    if (range) CSS.highlights.set(name, new Highlight(range))
+    else CSS.highlights.delete(name)
+  }
+
+  function sameSpan(a: PickSpan | null, b: PickSpan | null): boolean {
+    if (a === null || b === null) return a === b
+    return (
+      a.start.node === b.start.node &&
+      a.start.offset === b.start.offset &&
+      a.end.node === b.end.node &&
+      a.end.offset === b.end.offset
+    )
+  }
+
+  function setHover(span: PickSpan | null): void {
+    content.classList.toggle('ex-over-word', span !== null)
+    if (sameSpan(hover, span)) return
+    hover = span
+    paintHighlight(HOVER_HIGHLIGHT, span)
+  }
+
+  /** Find is about to split or re-join text nodes, and a Range into them would
+   *  paint the wrong text.  The band keeps its answer and its staged pick. */
+  function dropPickHighlights(): void {
+    drag = null
+    shown = null
+    staged = null
+    setHover(null)
+    paintHighlight(MARK_HIGHLIGHT, null)
+  }
+
+  function closeExplain(): void {
+    explain?.close()
+    dropPickHighlights()
+  }
+
+  /** The nearest block at or above `el`, never above its chapter. */
+  function blockOf(el: HTMLElement, section: HTMLElement): HTMLElement {
+    for (let n: HTMLElement | null = el; n && n !== section; n = n.parentElement) {
+      if (BLOCK_FLOW.has(n.tagName.toLowerCase())) return n
+    }
+    return section
+  }
+
+  /** `ct.text` with every character inside a `selector` element made a space.
+   *  Same length, so the runs' offsets still hold. */
+  function blankOut(ct: { text: string; runs: TextRun[] }, selector: string): string {
+    let out = ''
+    let at = 0
+    for (const run of ct.runs) {
+      if (!run.node.parentElement?.closest(selector)) continue
+      out += ct.text.slice(at, run.start) + ' '.repeat(run.end - run.start)
+      at = run.end
+    }
+    return out + ct.text.slice(at)
+  }
+
+  /** Normalized offset of raw offset `raw` in `run`: the last character that
+   *  starts at or before it. */
+  function runIndex(run: TextRun, raw: number): number {
+    let k = 0
+    while (k + 1 < run.map.length && run.map[k + 1]! <= raw) k++
+    return run.start + k
+  }
+
+  /** The DOM endpoints of `[from, to)` in a chapterText string. */
+  function spanOf(runs: TextRun[], from: number, to: number): PickSpan | null {
+    const a = runs.find((r) => r.start <= from && from < r.end)
+    const b = runs.find((r) => r.start < to && to <= r.end)
+    const start = a?.map[from - a.start]
+    const last = b?.map[to - 1 - b.start]
+    if (!a || !b || start === undefined || last === undefined) return null
+    return { start: { node: a.node, offset: start }, end: { node: b.node, offset: last + 1 } }
+  }
+
+  function covers(span: PickSpan, x: number, y: number): boolean {
+    let rects: ArrayLike<PickRect>
+    try {
+      rects = probe.rectsOf(span.start, span.end)
+    } catch {
+      return false
+    }
+    for (let i = 0; i < rects.length; i++) {
+      const r = rects[i]!
+      if (
+        x >= r.left - PICK_SLOP && x <= r.right + PICK_SLOP &&
+        y >= r.top - PICK_SLOP && y <= r.bottom + PICK_SLOP
+      ) return true
+    }
+    return false
+  }
+
+  /** The pickable word under a viewport point.  The caret alone is not enough:
+   *  in a margin or past a line's end it still snaps to the nearest text, so
+   *  the word's own line boxes must hold the point. */
+  function wordUnder(x: number, y: number): Hit | null {
+    let caret: { node: Node; offset: number } | null
+    try {
+      caret = probe.caretAt(x, y)
+    } catch {
+      return null
+    }
+    if (!caret || caret.node.nodeType !== 3 || !content.contains(caret.node)) return null
+    const node = caret.node as Text
+    const parent = node.parentElement
+    if (!parent || parent.closest(ACTIONABLE) || parent.closest(NOT_PROSE)) return null
+    const section = parent.closest<HTMLElement>('.ep-chapter')
+    if (!section) return null
+    const block = blockOf(parent, section)
+    const ct = chapterText(block)
+    const run = ct.runs.find((r) => r.node === node)
+    if (!run) return null
+    const text = blankOut(ct, ACTIONABLE)
+    const at = runIndex(run, caret.offset)
+    // On a glyph's right half the caret sits AFTER it, so the word ending
+    // there is the second candidate.
+    for (const i of [at, at - 1]) {
+      const word = wordAt(text, i)
+      if (!word) continue
+      const span = spanOf(ct.runs, word.from, word.to)
+      if (span && covers(span, x, y)) return { block, section, ct, text, word, span }
+    }
+    return null
+  }
+
+  function canPick(): boolean {
+    return explain !== null && book !== null && mode === 'read' && !root.hidden
+  }
+
+  /** comart's article gesture: the press marks the word, a drag extends it,
+   *  the release asks.  A press anywhere else stays the page's own. */
+  function onContentDown(ev: Event): void {
+    const e = ev as MouseEvent
+    if (!e.isTrusted || e.button !== 0 || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return
+    // A new click sequence; a double-click's second press only repeats a
+    // press that picked, so a re-click after a miss still asks.
+    if (e.detail < 2) seqPicked = false
+    if (!canPick()) return
+    const hit = wordUnder(e.clientX, e.clientY)
+    if (!hit) return
+    // No native selection and no focus move; the book keeps the keyboard.
+    e.preventDefault()
+    scroller.focus({ preventScroll: true })
+    setHover(null)
+    // A hover sample flushed with this press still says buttons 0; its frame
+    // must not read it as a release.
+    pointer = { x: e.clientX, y: e.clientY, buttons: e.buttons | 1 }
+    const words = wordsIn(hit.text)
+    const anchor = words.findIndex((w) => w.from === hit.word.from)
+    if (anchor < 0) return
+    const asks = !seqPicked
+    seqPicked = true
+    drag = {
+      block: hit.block,
+      section: hit.section,
+      runs: hit.ct.runs,
+      text: hit.text,
+      crossable: blankOut(hit.ct, NOTEREF),
+      words,
+      anchor,
+      current: anchor,
+      fire: asks,
+    }
+    if (drag.fire) paintHighlight(MARK_HIGHLIGHT, hit.span)
+  }
+
+  function onPointerMove(ev: Event): void {
+    const e = ev as MouseEvent
+    pointer = { x: e.clientX, y: e.clientY, buttons: e.buttons }
+    if (moveFrame !== 0) return
+    moveFrame = requestAnimationFrame(() => {
+      if (moveFrame === 0) return
+      moveFrame = 0
+      applyMove()
+    })
+  }
+
+  function onPointerLeave(): void {
+    pointer = null
+    setHover(null)
+  }
+
+  function applyMove(): void {
+    const p = pointer
+    if (!p || !canPick()) return
+    if (drag) {
+      // The release never arrived (comart drops the drag); the mark goes back
+      // to the staged pick, or else to what the band shows.
+      if (p.buttons === 0) {
+        drag = null
+        paintHighlight(MARK_HIGHLIGHT, staged ?? shown)
+        return
+      }
+      extendDrag(p.x, p.y)
+      return
+    }
+    setHover(wordUnder(p.x, p.y)?.span ?? null)
+  }
+
+  function extendDrag(x: number, y: number): void {
+    const d = drag
+    if (!d || !d.fire) return
+    const hit = wordUnder(x, y)
+    if (!hit || hit.block !== d.block) return
+    let i = d.words.findIndex((w) => w.from === hit.word.from)
+    if (i < 0) return
+    // comart's ±7 clamp: a drag picks a phrase, not a paragraph.
+    i = Math.max(d.anchor - (MAX_WORDS - 1), Math.min(d.anchor + (MAX_WORDS - 1), i))
+    const lo = d.words[Math.min(d.anchor, i)]!
+    const hi = d.words[Math.max(d.anchor, i)]!
+    // Never across a `\n` (a nested block or a <br>) or a link.
+    const run = d.text.slice(lo.from, hi.to)
+    if (run.includes('\n') || run !== d.crossable.slice(lo.from, hi.to)) return
+    if (i === d.current) return
+    d.current = i
+    const span = spanOf(d.runs, lo.from, hi.to)
+    if (span) paintHighlight(MARK_HIGHLIGHT, span)
+  }
+
+  function onWindowUp(): void {
+    if (!drag) return
+    // A release inside the same frame as the last move must not lose it.
+    if (moveFrame !== 0) {
+      moveFrame = 0
+      applyMove()
+    }
+    const d = drag
+    drag = null
+    if (!d) return
+    swallowClick()
+    if (d.fire) fire(d)
+  }
+
+  /** The click after a pick belongs to the pick (comart's swallowClick).  The
+   *  timer frees the flag when a release produces no click at all. */
+  function swallowClick(): void {
+    swallowing = true
+    if (swallowTimer !== null) clearTimeout(swallowTimer)
+    swallowTimer = setTimeout(() => {
+      swallowing = false
+      swallowTimer = null
+    }, SWALLOW_MS)
+  }
+
+  /** Where the latest press began.  The engine aims a press-drag-release's
+   *  click at the common ancestor, so a press on the band released over the
+   *  book clicks #reader; comart's band is an iframe, which keeps that whole
+   *  gesture inside it.  The same holds for a press in a layer.  pointerdown,
+   *  not mousedown: every press makes one, even where a handler suppresses
+   *  the mousedown (the sidebar grip), so the flag is never left over. */
+  function onDocDown(ev: Event): void {
+    const e = ev as PointerEvent
+    const t = e.target as Node | null
+    const el = t && t.nodeType === 1 ? (t as Element) : (t?.parentElement ?? null)
+    pressKeeps = e.isTrusted && e.button === 0 && !!explain && !!t &&
+      (explain.element().contains(t) || !!el?.closest(LAYERS))
+  }
+
+  /** comart's band rule: a click outside the band closes it.  Capture phase,
+   *  never consumed.  A press on a scrollbar makes no click, so grabbing the
+   *  book's scrollbar leaves the answer up. */
+  function onDocClick(ev: Event): void {
+    const e = ev as MouseEvent
+    // A script must not be able to dismiss an answer or eat a pick's click.
+    if (!e.isTrusted) return
+    // A keyboard click (detail 0) belongs to no press.
+    const keeps = pressKeeps && e.detail > 0
+    pressKeeps = false
+    if (swallowing) {
+      swallowing = false
+      e.preventDefault()
+      e.stopPropagation()
+      return
+    }
+    if (!explain || !explain.isOpen() || e.defaultPrevented || keeps) return
+    const target = e.target as Node | null
+    if (target && explain.element().contains(target)) return
+    const el = target && target.nodeType === 1 ? (target as Element) : (target?.parentElement ?? null)
+    if (el?.closest(LAYERS)) return
+    explain.close()
+  }
+
+  /** The text of the last non-empty h1–h6 before `block` in its chapter
+   *  (comart's nearestHeadingBefore); '' when there is none.  A spine file
+   *  can hold several chapters, and its title is only the first one's. */
+  function headingBefore(section: HTMLElement, block: HTMLElement): string {
+    const textOf = (h: Element): string => (h.textContent ?? '').replace(/\s+/g, ' ').trim()
+    const lastIn = (el: Element): string => {
+      const kids = Array.from(el.children)
+      for (let i = kids.length - 1; i >= 0; i--) {
+        const k = kids[i]!
+        const inner = lastIn(k)
+        if (inner) return inner
+        if (HEADING_TAG.test(k.tagName)) {
+          const t = textOf(k)
+          if (t) return t
+        }
+      }
+      return ''
+    }
+    for (let n: Element = block; n !== section; ) {
+      const parent = n.parentElement
+      if (!parent) break
+      const kids = Array.from(parent.children)
+      for (let i = kids.indexOf(n) - 1; i >= 0; i--) {
+        const k = kids[i]!
+        const inner = lastIn(k)
+        if (inner) return inner
+        if (HEADING_TAG.test(k.tagName)) {
+          const t = textOf(k)
+          if (t) return t
+        }
+      }
+      n = parent
+    }
+    return ''
+  }
+
+  /** Title, author and chapter for the passage.  epub.ts's placeholders are
+   *  noise to the model: 'Untitled book', and a chapter titled after a
+   *  machine-made file name (`index_split_005`, `ch01`, maybe with " (2)").
+   *  The heading the pick sits under wins over the spine file's title unless
+   *  that title already says it ("Chapter I. The Ball" over "I"). */
+  function orientation(section: HTMLElement, block: HTMLElement): PassageMeta {
+    const meta = book?.metadata
+    const index = /^ep-chapter-(\d+)$/.exec(section.getAttribute('id') ?? '')
+    const chapter = index ? book?.chapters[Number(index[1])] : undefined
+    let chapterTitle = chapter?.title ?? ''
+    if (chapter) {
+      const stem = chapter.href.slice(chapter.href.lastIndexOf('/') + 1).replace(/\.[^.]+$/, '')
+      const suffix = chapterTitle.startsWith(stem) ? chapterTitle.slice(stem.length) : null
+      const fromFile = suffix !== null && (suffix === '' || /^ \(\d+\)$/.test(suffix))
+      if (fromFile && /^[^\s]*[\d_][^\s]*$/.test(stem)) chapterTitle = ''
+    }
+    const heading = headingBefore(section, block)
+    if (heading && heading.length <= MAX_HEADING && !chapterTitle.includes(heading)) chapterTitle = heading
+    return {
+      title: meta?.title === 'Untitled book' ? '' : (meta?.title ?? ''),
+      author: meta?.author ?? '',
+      chapter: chapterTitle,
+    }
+  }
+
+  /** The passage for a pick, from its chapter walked FRESH: find's marks split
+   *  and re-join text nodes, so the cached search index can hold dead nodes. */
+  function passageFor(d: Drag, span: PickSpan, from: number, to: number): string {
+    const ct = chapterText(d.section)
+    const a = ct.runs.find((r) => r.node === span.start.node)
+    const b = ct.runs.find((r) => r.node === span.end.node)
+    const context =
+      a && b
+        ? contextWindow(blankOut(ct, NOTEREF), runIndex(a, span.start.offset), runIndex(b, span.end.offset - 1) + 1)
+        : contextWindow(d.crossable, from, to)
+    return buildPassage(context, orientation(d.section, d.block))
+  }
+
+  function fire(d: Drag): void {
+    if (!explain || !book) return
+    const picked = d.words.slice(Math.min(d.anchor, d.current), Math.max(d.anchor, d.current) + 1)
+    const first = picked[0]
+    const last = picked[picked.length - 1]
+    if (!first || !last) return
+    const span = spanOf(d.runs, first.from, last.to)
+    if (!span) return
+    const words = picked.map((w) => w.text)
+    const outcome = explain.explain({
+      text: passageFor(d, span, first.from, last.to),
+      items: [{ phrase: words.join(' '), words }],
+    })
+    // A staged pick explains nothing yet, so `shown` stays for Esc to restore.
+    if (outcome === 'staged') {
+      staged = span
+    } else {
+      shown = span
+      staged = null
+    }
+    paintHighlight(MARK_HIGHLIGHT, span)
+  }
+
+  /** The band took the bottom of the book's box: if the marked word is now
+   *  under it, scroll by exactly the overlap (comart's revealMarks). */
+  function revealMark(): void {
+    if (!shown || !canPick()) return
+    let bottom = -Infinity
+    try {
+      const rects = probe.rectsOf(shown.start, shown.end)
+      for (let i = 0; i < rects.length; i++) bottom = Math.max(bottom, rects[i]!.bottom)
+    } catch {
+      return
+    }
+    if (bottom === -Infinity) return
+    const limit = scroller.getBoundingClientRect().top + scroller.clientHeight - REVEAL_GAP
+    // Only a mark in the rows the band now holds: one the reader scrolled
+    // away from stays where it is when the band is resized.
+    if (bottom > limit && bottom <= root.getBoundingClientRect().bottom) scroller.scrollTop += Math.ceil(bottom - limit)
+  }
+
+  const explainHooks: ExplainHooks = {
+    onClosed: () => {
+      shown = null
+      staged = null
+      setHover(null)
+      paintHighlight(MARK_HIGHLIGHT, null)
+    },
+    onShown: () => {
+      requestAnimationFrame(revealMark)
+    },
+    // The mark already paints the staged word; only its role changes.
+    onPlaced: () => {
+      shown = staged
+      staged = null
+    },
+  }
+
   /* ── open / close ─────────────────────────────────────────────────────── */
 
   function showMessage(title: string, detail: string): void {
@@ -1021,6 +1597,9 @@ export function mountReader(pane: HTMLElement, deps: ReaderDeps): ReaderView {
   }
 
   function clearBook(): void {
+    // Leaving the book forgets its explanation; the pick's Ranges point into
+    // DOM that is about to go.
+    closeExplain()
     revokeResources()
     if (book) book.destroy()
     book = null
@@ -1157,7 +1736,9 @@ export function mountReader(pane: HTMLElement, deps: ReaderDeps): ReaderView {
   function hide(): void {
     if (root.hidden) return
     find?.hide()
+    // Before the band closes: its height changes the box the position is read in.
     saveProgress()
+    closeExplain()
     root.hidden = true
     pane.classList.remove('is-reader')
     if (mode !== 'read') showMode('read')
@@ -1189,6 +1770,8 @@ export function mountReader(pane: HTMLElement, deps: ReaderDeps): ReaderView {
   /* ── events ───────────────────────────────────────────────────────────── */
 
   function onScroll(): void {
+    // The text moved under a still pointer; the next move finds the new word.
+    if (hover) setHover(null)
     if (frame !== 0) return
     frame = requestAnimationFrame(() => {
       frame = 0
@@ -1213,6 +1796,7 @@ export function mountReader(pane: HTMLElement, deps: ReaderDeps): ReaderView {
     measure()
     recenterFind()
     if (mode === 'read') updateFromScroll()
+    explain?.relayout()
   })
   // The sidebar resize rewrites a CSS variable and fires no window resize.
   const resizeObserver =
@@ -1223,6 +1807,7 @@ export function mountReader(pane: HTMLElement, deps: ReaderDeps): ReaderView {
           measure()
           recenterFind()
           if (mode === 'read') updateFromScroll()
+          explain?.relayout()
         })
   resizeObserver?.observe(scroller)
 
@@ -1264,17 +1849,55 @@ export function mountReader(pane: HTMLElement, deps: ReaderDeps): ReaderView {
     }
     const target = e.target as HTMLElement | null
     if (target && target.tagName === 'INPUT') return
-    if (e.key === 'Escape' && find?.isOpen) {
+    if (e.key !== 'Escape') return
+    // One layer per press: a held key must not close the next layer too.
+    if (e.repeat) return
+    if (find?.isOpen) {
       e.preventDefault()
       find.close()
       return
     }
+    if (explain?.isStaged()) {
+      e.preventDefault()
+      explain.cancelStaged()
+      staged = null
+      // The mark goes back to the word the band shows.  A drag that will ask
+      // owns the mark until it ends; a double-click's second press never
+      // painted it.
+      if (!drag?.fire) paintHighlight(MARK_HIGHLIGHT, shown)
+      return
+    }
+    if (explain?.isOpen()) {
+      e.preventDefault()
+      const inside = explain.element().contains(doc.activeElement)
+      explain.close()
+      // A hidden band cannot keep focus; the book takes the keyboard back.
+      if (inside) scroller.focus({ preventScroll: true })
+    }
   }
   root.addEventListener('keydown', onKeyDown)
 
+  // The band goes in after the message page and before the find bar, so the
+  // find overlay still stacks above it.
+  try {
+    explain = deps.mountExplain ? deps.mountExplain(root, explainHooks) : null
+  } catch (err) {
+    deps.onError(err, 'explain-mount')
+  }
+  if (explain) {
+    content.addEventListener('mousedown', onContentDown)
+    scroller.addEventListener('mousemove', onPointerMove)
+    scroller.addEventListener('mouseleave', onPointerLeave)
+    // Capture: the release may land anywhere, and nothing else may eat it.
+    window.addEventListener('mouseup', onWindowUp, true)
+    doc.addEventListener('pointerdown', onDocDown, true)
+    doc.addEventListener('click', onDocClick, true)
+  }
+
   find = mountFind(root, {
     placeholder: 'Find in book',
-    // A selection is text to quote, not a search query; Ctrl-F opens empty.
+    // Book text is not selectable (E109), and a selection was never a search
+    // query anyway; Ctrl-F opens empty.
     prefillSelection: false,
     getText: () => (book ? bookText : null),
     getSelection: findSelection,
@@ -1335,6 +1958,17 @@ export function mountReader(pane: HTMLElement, deps: ReaderDeps): ReaderView {
       resizeObserver?.disconnect()
       find?.destroy()
       find = null
+      if (explain) {
+        window.removeEventListener('mouseup', onWindowUp, true)
+        doc.removeEventListener('pointerdown', onDocDown, true)
+        doc.removeEventListener('click', onDocClick, true)
+        explain.destroy()
+        explain = null
+      }
+      if (swallowTimer !== null) clearTimeout(swallowTimer)
+      swallowTimer = null
+      swallowing = false
+      moveFrame = 0
       root.remove()
     },
   }
