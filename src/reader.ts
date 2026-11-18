@@ -147,7 +147,8 @@ export interface ReaderView {
   destroy(): void
 }
 
-type Mode = 'read' | 'error'
+/** `loading` shows neither the book nor the message: a blank pane. */
+type Mode = 'read' | 'error' | 'loading'
 
 const SAVE_DEBOUNCE_MS = 600
 
@@ -1660,14 +1661,15 @@ export function mountReader(pane: HTMLElement, deps: ReaderDeps): ReaderView {
       // The 600 ms scroll debounce would otherwise die with clearBook().
       saveProgress()
     }
-    // A first open shows its progress; a replacement keeps the previous page up
-    // while the new container is parsed, so a corrupt book cannot destroy the
-    // book that is already readable.
+    // A first open takes the pane at once but shows it blank until the text is
+    // in: the parse is short, and any message would only flash.  A replacement
+    // keeps the previous page up while the new container is parsed, so a
+    // corrupt book cannot destroy the book that is already readable.
     if (!book) {
       root.hidden = false
       pane.classList.add('is-reader')
       clearChildren(content)
-      showMessage('Opening book\u2026', '')
+      showMode('loading')
     }
     let next: EpubBook
     try {

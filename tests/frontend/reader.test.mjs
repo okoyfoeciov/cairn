@@ -385,6 +385,53 @@ test('open: a corrupt replacement leaves the readable book in place', async () =
   reader.destroy()
 })
 
+test('open: no "Opening book…" page: the pane stays blank until the text is in, and a failed open\'s page goes at once', async () => {
+  const { pane, reader } = mount(async (path) =>
+    path === 'Books/Bad.epub' ? new ArrayBuffer(8) : fixture()
+  )
+  const message = pane.querySelector('.ep-message')
+  const title = pane.querySelector('.ep-message-title')
+  // Every write to the message page, with how much of the book was in by then.
+  const seen = []
+  const spy = (el, key, label) => {
+    let d = null
+    for (let p = el; p && !d; p = Object.getPrototypeOf(p)) d = Object.getOwnPropertyDescriptor(p, key)
+    Object.defineProperty(el, key, {
+      configurable: true,
+      get() { return d.get.call(this) },
+      set(v) {
+        seen.push({ [label]: v, chapters: pane.querySelectorAll('.ep-chapter').length })
+        d.set.call(this, v)
+      },
+    })
+  }
+  spy(message, 'hidden', 'hidden')
+  spy(title, 'textContent', 'title')
+
+  assert.equal(await reader.open('Books/Test.epub', null), true)
+  await settle()
+  assert.deepEqual(seen.filter((s) => 'title' in s || s.hidden === false), [],
+    'a first open put a message on screen before the book')
+  assert.deepEqual({ chapters: pane.querySelectorAll('.ep-chapter').length, message: message.hidden },
+    { chapters: 2, message: true })
+
+  // A failed first open leaves its error page up...
+  reader.close()
+  assert.equal(await reader.open('Books/Bad.epub', null), true)
+  await settle()
+  assert.deepEqual({ hidden: message.hidden, title: title.textContent },
+    { hidden: false, title: 'This EPUB could not be opened' }, 'fixture: no error page')
+  // ...until the next book's bytes arrive, before that book is parsed.
+  seen.length = 0
+  assert.equal(await reader.open('Books/Test.epub', null), true)
+  await settle()
+  assert.deepEqual({ first: seen[0], titles: seen.filter((s) => 'title' in s), shown: seen.filter((s) => s.hidden === false) },
+    { first: { hidden: true, chapters: 0 }, titles: [], shown: [] },
+    'the old error page stayed up while the next book was parsed, or a message showed instead')
+  assert.equal(pane.querySelectorAll('.ep-chapter').length, 2)
+  reader.destroy()
+})
+
 test('close: hides the reader, drops the takeover class and frees the path', async () => {
   const { pane, reader } = mount()
   await reader.open('Books/Test.epub', null)

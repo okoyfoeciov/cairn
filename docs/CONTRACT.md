@@ -2346,7 +2346,7 @@ the stream, the error lines, the badges, the follow-up and the close rules.
   mutations: 24 caught; the review fixes' 11: 11 caught). Two later review mutations still
   survive (KNOWN-ISSUES §5). **In the real engine**, `electron-shell/explain.test.mjs` gives
   `ℹ tests 61`, `ℹ pass 61`, `ℹ fail 0`, `ℹ skipped 0` against the fake ai-service, with the live
-  leg not run, on build hash `afeda6bf5f5f0334`. Its wide leg prints
+  leg not run, on build hash `0fb5f90da1bf27b6`. Its wide leg prints
   `dpr 1.25, viewport 1700x900 CSS px`; the 1200×800 session prints no dpr, so its CSS px numbers
   below carry none. Its 21 `E110:` steps walk one band through: staging; both previews; Esc and a
   held Esc; a drag released over the band, with the preview asserted at once; the grip over a

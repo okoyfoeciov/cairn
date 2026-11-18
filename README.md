@@ -37,7 +37,7 @@ Verified numbers move. **Re-run rather than trusting a count quoted here.** The 
 cd core && cargo test --no-fail-fast       332 passed, 0 failed, 17 ignored (all targets)
 cd core && cargo clippy --all-targets -- -D warnings   clean
 npx tsc --noEmit                            clean
-npm test                                    961 tests: 961 pass, 0 fail, 0 todo
+npm test                                    962 tests: 962 pass, 0 fail, 0 todo
 node --test electron-shell/explain.test.mjs        61 pass (fake ai-service; live leg gated; dpr 1.25)
 node --test electron-shell/explain-badge.test.mjs  21 pass: 0 differing badge pixels, dpr 1/1.25/1.5/2
 node electron-shell/build-native.mjs        BUILD-NATIVE result=PASS tauri_crates=0

@@ -876,7 +876,7 @@ and are not gaps. These are:
   capture, MW playback, the reveal scroll, code words, the find-bar click and Esc after a badge
   click are `electron-shell/explain.test.mjs`'s subject. Its latest run, with E110 and its review
   fixes, gives 61 of 61 against a fake ai-service (wide leg at dpr 1.25, 1700×900 CSS px; build
-  hash `afeda6bf5f5f0334`). Quote a fresh run before calling any of them verified.
+  hash `0fb5f90da1bf27b6`). Quote a fresh run before calling any of them verified.
 - **The badge's pixel match is per machine.** `electron-shell/explain-badge.test.mjs` measures 0
   differing pixels on Debian at dpr 1, 1.25, 1.5 and 2, where the glyphs outside the faces'
   `unicode-range` (comart's subsets' 226 code points) fall back to Liberation Serif. On macOS the
