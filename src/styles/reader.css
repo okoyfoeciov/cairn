@@ -49,6 +49,14 @@
   padding: 52px 32px 112px;
   outline: none;
 }
+/* A fresh render waits here, laid out but unpainted, until reader.ts has
+   scrolled it to its bookmark, so no frame shows the top of the book first.
+   Opacity, not visibility: a `visibility: hidden` scroller cannot take the
+   focus the open gives it.  No transition (§5.1 rule 5). */
+.ep-scroller.ep-restoring {
+  opacity: 0;
+  pointer-events: none;
+}
 .ep-scroller::-webkit-scrollbar { width: var(--scrollbar-w-editor); background: transparent; }
 .ep-scroller::-webkit-scrollbar-track { background: var(--scrollbar-track); }
 .ep-scroller::-webkit-scrollbar-thumb {

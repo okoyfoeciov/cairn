@@ -432,6 +432,188 @@ test('open: no "Opening book…" page: the pane stays blank until the text is in
   reader.destroy()
 })
 
+/* Resume: a fresh render is laid out but unpainted (`.ep-restoring`) until it
+ * is at its bookmark.  The minidom lays every chapter out at top 0 and 27px
+ * tall, so chapter 1 at offset 0.5 is scrollTop 13.5. */
+const MARK = { chapter: 1, href: '', offset: 0.5, progress: 0.5 }
+const AT_MARK = 13.5
+const view = (scroller) => ({ concealed: scroller.classList.contains('ep-restoring'), top: scroller.scrollTop })
+
+test('resume: a reopened book paints no frame at its top: it waits unpainted and focused, and saves nothing, until it is at its bookmark', async () => {
+  const { reader, scroller, progress } = mount()
+  scroller.scrollTop = 0
+  assert.equal(await reader.open('Books/Test.epub', MARK), true)
+  // Rendered; its two frames have not run yet.
+  const waiting = { ...view(scroller), shown: !scroller.hidden, focus: document.activeElement === scroller }
+  // The engine measures the shown scroller during the wait (its ResizeObserver);
+  // without that, there is no position to save and the guard goes untested.
+  fireWindow('resize', {})
+  reader.flushProgress()
+  const savedWhileWaiting = progress.length
+  await settle()
+  assert.deepEqual({ waiting, savedWhileWaiting, after: view(scroller) }, {
+    waiting: { concealed: true, top: 0, shown: true, focus: true },
+    savedWhileWaiting: 0,
+    after: { concealed: false, top: AT_MARK },
+  }, 'the book was painted before it reached its bookmark, or saved the top of the book meanwhile')
+  reader.flushProgress()
+  assert.deepEqual(progress.map(([p, pos]) => [p, pos.chapter, pos.offset]), [['Books/Test.epub', 1, 0.5]])
+  reader.destroy()
+})
+
+test('resume: hidden during the wait (a tab switch), the book saves nothing, and coming back puts it at its bookmark before painting it', async () => {
+  const got = {}
+  // main.ts comes back by opening the same book again; show() is the API's other way.
+  for (const back of ['open() again', 'show()']) {
+    const { reader, scroller, progress } = mount()
+    scroller.scrollTop = 0
+    await reader.open('Books/Test.epub', MARK)
+    fireWindow('resize', {}) // the engine's measure during the wait
+    reader.hide()
+    await settle()
+    const hidden = { ...view(scroller), saved: progress.length }
+    if (back === 'show()') reader.show()
+    else assert.equal(await reader.open('Books/Test.epub', MARK), true)
+    const returning = view(scroller)
+    await settle()
+    got[back] = { hidden, returning, after: view(scroller) }
+    reader.destroy()
+  }
+  const want = { hidden: { concealed: true, top: 0, saved: 0 }, returning: { concealed: true, top: 0 }, after: { concealed: false, top: AT_MARK } }
+  assert.deepEqual(got, { 'open() again': want, 'show()': want },
+    'a book hidden before its frames ran saved its top, or came back at it, or stayed unpainted')
+})
+
+test('resume: a second click on the same book, a failed read of another, or a cancelled open during the wait still lands the book on its bookmark', async () => {
+  const got = {}
+  for (const leg of ['same book', 'failed read', 'cancelled open']) {
+    const { reader, scroller } = mount(async (path) => {
+      if (path === 'Books/Missing.epub') throw new Error('gone')
+      return fixture()
+    })
+    scroller.scrollTop = 0
+    assert.equal(await reader.open('Books/Test.epub', MARK), true)
+    if (leg === 'same book') assert.equal(await reader.open('Books/Test.epub', MARK), true)
+    if (leg === 'failed read') assert.equal(await reader.open('Books/Missing.epub', null), false)
+    if (leg === 'cancelled open') reader.cancelOpen()
+    await settle()
+    got[leg] = { ...view(scroller), path: reader.path() }
+    reader.destroy()
+  }
+  const want = { concealed: false, top: AT_MARK, path: 'Books/Test.epub' }
+  assert.deepEqual(got, { 'same book': want, 'failed read': want, 'cancelled open': want },
+    'a later open made the book showing skip its bookmark')
+})
+
+test('resume: a rename during the wait keys the bookmark the book was opened with, not its top', async () => {
+  const { reader, scroller, progress } = mount()
+  scroller.scrollTop = 0
+  await reader.open('Books/Test.epub', MARK)
+  reader.adoptPath('Books/Renamed.epub')
+  assert.deepEqual(progress, [['Books/Renamed.epub', MARK]], 'the rename wrote the top of the book')
+  await settle()
+  assert.deepEqual(view(scroller), { concealed: false, top: AT_MARK })
+  reader.destroy()
+})
+
+/** Run `fn` the first time the reader asks for a picture URL while
+ *  `when()` holds: the picture preload, between the parse (the book has its
+ *  path) and the render.  Returns a restore function. */
+function duringPictures(when, fn) {
+  const real = URL.createObjectURL
+  let done = false
+  URL.createObjectURL = (...a) => {
+    if (!done && when()) { done = true; fn() }
+    return real(...a)
+  }
+  return { fired: () => done, restore: () => { URL.createObjectURL = real } }
+}
+
+test('open: a second click on a book still loading its pictures ends with the book on screen, not a blank pane', async () => {
+  const got = {}
+  // First open, and the same after another book: the flag must not outlive the book it was set for.
+  for (const leg of ['first book', 'after another book']) {
+    const { pane, reader } = mount()
+    if (leg === 'after another book') {
+      assert.equal(await reader.open('Books/Other.epub', null), true)
+      await settle()
+    }
+    let second = null
+    const hook = duringPictures(
+      () => reader.path() === 'Books/Test.epub' && pane.querySelectorAll('.ep-chapter').length === 0,
+      () => { second = reader.open('Books/Test.epub', null) })
+    let oks
+    try {
+      const first = await reader.open('Books/Test.epub', null)
+      assert.ok(hook.fired(), `fixture (${leg}): no picture was asked for between the parse and the render`)
+      oks = [first, await second]
+    } finally {
+      hook.restore()
+    }
+    await settle()
+    got[leg] = { oks, path: reader.path(), visible: reader.visible(), chapters: pane.querySelectorAll('.ep-chapter').length }
+    reader.destroy()
+  }
+  const want = { oks: [false, true], path: 'Books/Test.epub', visible: true, chapters: 2 }
+  assert.deepEqual(got, { 'first book': want, 'after another book': want },
+    'the second click took the open-book shortcut, and the first open then dropped the book')
+})
+
+test('open: a cancelled open that has taken the pane with nothing on it gives the pane back at once; a book or an error page stays', async () => {
+  const got = {}
+  for (const leg of ['first open, blank page', 'first open, pictures', 'replacing a book, pictures']) {
+    const { pane, reader } = mount()
+    if (leg.startsWith('replacing')) {
+      assert.equal(await reader.open('Books/Other.epub', null), true)
+      await settle()
+    }
+    const root = pane.querySelector('[id="reader"]')
+    let at = null
+    const cancel = () => {
+      reader.cancelOpen()
+      at = { visible: reader.visible(), takeover: pane.classList.contains('is-reader') }
+    }
+    let hook = null
+    if (leg === 'first open, blank page') {
+      // Right after the takeover shows the blank page, before the parse goes on.
+      const d = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(Object.getPrototypeOf(root)), 'hidden') ??
+        Object.getOwnPropertyDescriptor(Object.getPrototypeOf(root), 'hidden')
+      Object.defineProperty(root, 'hidden', {
+        configurable: true,
+        get() { return d.get.call(this) },
+        set(v) { d.set.call(this, v); if (!v && at === null) queueMicrotask(cancel) },
+      })
+    } else {
+      hook = duringPictures(
+        () => reader.path() === 'Books/Test.epub' && pane.querySelectorAll('.ep-chapter').length === 0, cancel)
+    }
+    let ok
+    try {
+      ok = await reader.open('Books/Test.epub', null)
+    } finally {
+      hook?.restore()
+    }
+    await settle()
+    got[leg] = { at, ok, visible: reader.visible(), path: reader.path() }
+    reader.destroy()
+  }
+  const gone = { at: { visible: false, takeover: false }, ok: false, visible: false, path: null }
+  assert.deepEqual(got, { 'first open, blank page': gone, 'first open, pictures': gone, 'replacing a book, pictures': gone },
+    'a cancelled open left its empty takeover over the surface that cancelled it')
+
+  // Controls: nothing in flight.
+  const kept = {}
+  for (const leg of ['a rendered book', 'an error page']) {
+    const { reader } = mount(async (path) => (path === 'Books/Bad.epub' ? new ArrayBuffer(8) : fixture()))
+    assert.equal(await reader.open(leg === 'an error page' ? 'Books/Bad.epub' : 'Books/Test.epub', null), true)
+    await settle()
+    reader.cancelOpen()
+    kept[leg] = reader.visible()
+    reader.destroy()
+  }
+  assert.deepEqual(kept, { 'a rendered book': true, 'an error page': true }, 'cancelOpen hid a surface that was not in flight')
+})
+
 test('close: hides the reader, drops the takeover class and frees the path', async () => {
   const { pane, reader } = mount()
   await reader.open('Books/Test.epub', null)

@@ -447,7 +447,7 @@ window.__EXP__ = (() => {
 
 /* ── the app over the DevTools protocol ───────────────────────────────── */
 
-async function launch({ vault, state, base, expect = base, geom = '1200x800' }) {
+async function launch({ vault, state, base, expect = base, geom = '1200x800', note = BOOK }) {
   const env = { ...process.env }
   // Hermetic: nothing the caller's shell exports reaches the app.
   for (const k of Object.keys(env)) if (k.startsWith('CAIRN_')) delete env[k]
@@ -455,7 +455,7 @@ async function launch({ vault, state, base, expect = base, geom = '1200x800' }) 
     CAIRN_HEADLESS: '1',
     CAIRN_VAULT: vault,
     CAIRN_STATE_DIR: state,
-    CAIRN_PIXELTEST_NOTE: BOOK,
+    CAIRN_PIXELTEST_NOTE: note,
     CAIRN_ELECTRON_GEOM: geom,
   })
   if (base) env.CAIRN_AI_BASE = base
@@ -591,7 +591,14 @@ async function launch({ vault, state, base, expect = base, geom = '1200x800' }) 
     await send('Runtime.enable')
     // An offscreen window is never focused; the keyboard paths need a focused page.
     await send('Emulation.setFocusEmulationEnabled', { enabled: true })
-    await until('the book to render', `!!document.querySelector('.ep-content .ep-chapter') && !!document.querySelector('#reader .ep-explain')`, 20_000)
+    // A launch on a note has no book yet; the reader is mounted either way.
+    if (note === BOOK) {
+      await until('the book to render', `!!document.querySelector('.ep-content .ep-chapter') && !!document.querySelector('#reader .ep-explain')`, 20_000)
+    } else {
+      // The note's text in the editor, not only its row: a note read still in
+      // flight when the test clicks a book would close that book.
+      await until('the note to open', `!!document.querySelector('#reader .ep-explain') && [...document.querySelectorAll('.tr')].some((r) => !r.hidden && r.textContent.trim() === ${JSON.stringify(note.replace(/\.md$/, ''))}) && (document.querySelector('#ed .cm-content')?.textContent ?? '').trim() !== ''`, 20_000)
+    }
     await inject()
     // Never drive a page that could reach the real, billed ai-service: every
     // click below would post to it.  Only the gated live leg passes null.
@@ -619,9 +626,11 @@ let app = null
 let app2 = null
 let app3 = null
 let wide = null
+let resumeA = null
+let resumeB = null
 
 after(async () => {
-  for (const a of [app, app2, app3, wide]) { try { await a?.close() } catch {} }
+  for (const a of [app, app2, app3, wide, resumeA, resumeB]) { try { await a?.close() } catch {} }
   try { await ai.close() } catch {}
   if (work) { try { rmSync(work, { recursive: true, force: true }) } catch {} }
 })
@@ -1931,6 +1940,108 @@ describe('E110 the answer fills its width, real engine at 1700x900 (fake ai-serv
   test('the wide page threw nothing and asked for nothing unexpected', () => {
     assert.deepEqual(wide?.exceptions ?? null, [], 'the page threw')
     assert.deepEqual(ai.stray, [], 'unexpected requests')
+  })
+})
+
+/* E108 resume, the user's own path: a relaunch on a note, then a click on the
+ * book's row.  A sampler records, at every frame, whether the book is painted
+ * and where it is scrolled.  No painted frame may show it anywhere but at its
+ * bookmark: before, the top of the book was painted first, then it jumped. */
+describe('E108 resume after a relaunch, real engine', { skip: SKIP }, () => {
+  /** The centre-left of the tree row whose label starts with `name`. */
+  const rowAt = (name) => `(() => { const r = [...document.querySelectorAll('.tr')].find((e) => !e.hidden && e.textContent.trim().startsWith(${JSON.stringify(name)}));
+    if (!r) return null; const b = r.getBoundingClientRect(); return { x: b.left + Math.min(40, b.width / 2), y: (b.top + b.bottom) / 2 } })()`
+
+  test('a click on a book with a bookmark paints no frame of its top, and the book keeps the focus', async (t) => {
+    await setup()
+    const st = join(work, 'state-resume')
+    mkdirSync(st, { recursive: true })
+    const painted = `(() => { const s = document.querySelector('.ep-scroller'); const cs = getComputedStyle(s);
+      return !document.getElementById('reader').hidden && !s.hidden && cs.opacity !== '0' && cs.visibility !== 'hidden' &&
+        document.querySelectorAll('.ep-content .ep-chapter').length > 0 })()`
+    const mark = () => {
+      try {
+        const s = JSON.parse(readFileSync(join(st, 'state.json'), 'utf8'))
+        return Object.values(s.vaults ?? {}).map((v) => v.bookmarks?.[BOOK]).find(Boolean) ?? null
+      } catch { return null }
+    }
+
+    // Session 1: open the book from its row, scroll deep, wait for the bookmark.
+    resumeA = await launch({ vault, state: st, base: ai.base, note: 'Note.md' })
+    await resumeA.click(await resumeA.until('the book row', rowAt('Keeper')))
+    await resumeA.until('the book', painted, 20_000)
+    // Past the open's own restore, so it cannot undo the scroll below: the
+    // code before this fix painted the book two frames before restoring it.
+    for (let i = 0; i < 3; i++) await resumeA.frames()
+    const deep = await resumeA.ev(`(() => { const s = document.querySelector('.ep-scroller'); const max = s.scrollHeight - s.clientHeight;
+      s.scrollTop = Math.round(max * 0.6); return { top: s.scrollTop, max } })()`)
+    assert.ok(deep.max > 400, 'fixture: the book is too short to scroll: ' + JSON.stringify(deep))
+    const t0 = Date.now()
+    while (!(mark()?.progress > 0.4) && Date.now() - t0 < 5000) await sleep(100)
+    const saved = mark()
+    assert.ok(saved?.progress > 0.4, 'state.json never got the deep bookmark: ' + JSON.stringify(saved))
+    await resumeA.close()
+    resumeA = null
+
+    // Session 2: the same state, a note first; sample every frame, then click the book.
+    resumeB = await launch({ vault, state: st, base: ai.base, note: 'Note.md' })
+    const b = resumeB
+    await b.ev(`(() => { const f = window.__resumeFrames = []; const s = document.querySelector('.ep-scroller');
+      const tick = () => { const cs = getComputedStyle(s);
+        f.push({ painted: !document.getElementById('reader').hidden && !s.hidden && cs.opacity !== '0' && cs.visibility !== 'hidden',
+          chapters: document.querySelectorAll('.ep-content .ep-chapter').length, top: s.scrollTop });
+        if (!window.__resumeStop) requestAnimationFrame(tick) };
+      requestAnimationFrame(tick); return 1 })()`)
+    await b.click(await b.until('the book row', rowAt('Keeper')))
+    await b.until('the book', painted, 20_000)
+    for (let i = 0; i < 4; i++) await b.frames()
+    await b.ev('(window.__resumeStop = true)')
+    const frames = await b.ev('window.__resumeFrames')
+    const end = await b.ev(`(() => { const s = document.querySelector('.ep-scroller');
+      return { top: s.scrollTop, focus: document.activeElement === s, pointer: getComputedStyle(s).pointerEvents } })()`)
+    const shown = frames.filter((f) => f.painted && f.chapters > 0)
+    const off = shown.filter((f) => Math.abs(f.top - end.top) > 2)
+    t.diagnostic(`frames ${frames.length}, painted with the book ${shown.length}, first painted top ${shown[0]?.top}, ` +
+      `bookmark top ${deep.top} -> restored ${end.top}`)
+    assert.deepEqual({
+      offMark: off.slice(0, 3), anyPainted: shown.length > 0, atBookmark: Math.abs(end.top - deep.top) <= 2,
+      focus: end.focus, pointer: end.pointer,
+    }, {
+      offMark: [], anyPainted: true, atBookmark: true, focus: true, pointer: 'auto',
+    }, 'a frame painted the book away from its bookmark, or the reopened book lost its place or the focus')
+    assert.deepEqual(b.exceptions, [], 'the page threw')
+    await b.close()
+    resumeB = null
+  })
+
+  // A book that fails to open has no path, so a note clicked next must not
+  // key "is a book up?" on the path alone: the error page would stay over it.
+  test('a note clicked after a broken book\'s error page takes the pane back', async () => {
+    await setup()
+    const broken = join(vault, 'Broken.epub')
+    writeFileSync(broken, 'this is not a zip archive')
+    try {
+      resumeA = await launch({ vault, state: join(work, 'state-broken'), base: ai.base, note: 'Note.md' })
+      const a = resumeA
+      await a.click(await a.until('the broken book row', rowAt('Broken')))
+      await a.until('the error page', `!document.getElementById('reader').hidden && !document.querySelector('#reader .ep-message').hidden`)
+      const title = await a.ev(`document.querySelector('#reader .ep-message-title').textContent`)
+      await a.click(await a.until('the note row', rowAt('Note')))
+      await sleep(400)
+      await a.frames()
+      const after = await a.ev(`(() => ({ reader: !document.getElementById('reader').hidden,
+        takeover: document.querySelector('.editor').classList.contains('is-reader'),
+        editor: getComputedStyle(document.getElementById('ed')).display !== 'none',
+        note: (document.querySelector('#ed .cm-content')?.textContent ?? '').includes('a note') }))()`)
+      assert.deepEqual({ title, ...after }, {
+        title: 'This EPUB could not be opened', reader: false, takeover: false, editor: true, note: true,
+      }, 'the broken book\'s error page stayed over the note')
+      assert.deepEqual(a.exceptions, [], 'the page threw')
+    } finally {
+      await resumeA?.close()
+      resumeA = null
+      rmSync(broken, { force: true })
+    }
   })
 })
 

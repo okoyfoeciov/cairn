@@ -77,7 +77,7 @@ const BUNDLE = (
 const drain = async () => { for (let i = 0; i < 10; i += 1) await new Promise((r) => setImmediate(r)) }
 
 let bootSeq = 0
-async function bootMain(extra = {}) {
+async function bootMain(extra = {}, { pane = false } = {}) {
   const log = []
   const calls = {
     log,
@@ -116,6 +116,9 @@ async function bootMain(extra = {}) {
   })
   const g = globalThis
   const el = () => ({ addEventListener() {}, appendChild() {}, style: {}, classList: { add() {}, remove() {} } })
+  // `pane`: `#ed` gets a parent, so boot mounts the Memoir page and the reader
+  // beside it; the caller stubs both (`./memoir:mountMemoir`, `./reader:mountReader`).
+  const host = pane ? el() : null
   const saved = { document: g.document, requestAnimationFrame: g.requestAnimationFrame }
   g.__CAIRN_HARNESS__ = {
     call(mod, name, args) {
@@ -124,7 +127,7 @@ async function bootMain(extra = {}) {
       return r ? r(args) : undefined
     },
   }
-  g.document = { readyState: 'complete', addEventListener() {}, getElementById: () => el(), querySelector: () => el() }
+  g.document = { readyState: 'complete', addEventListener() {}, getElementById: () => (host ? { ...el(), parentElement: host } : el()), querySelector: () => el() }
   g.requestAnimationFrame = () => 0
   try {
     const src = BUNDLE + `\n//# boot=${bootSeq += 1}\n`
@@ -348,4 +351,75 @@ test('a Delete confirmed after a vault switch under the dialog deletes nothing',
   answer('delete')
   await drain()
   assert.deepEqual(calls.argsOf('deleteEntry'), [['Inbox.md', false]])
+})
+
+/* ═══ §0.55 E108 — a note takes the pane back from the reader ═════════════ */
+
+/** A reader stub: `st` is what it reports, `log` what main.ts asked of it. */
+function fakeReader(st, open = () => Promise.resolve(true)) {
+  const log = []
+  const impl = {
+    path: () => st.path,
+    visible: () => st.visible,
+    close: () => { log.push('close'); st.visible = false; st.path = null },
+    cancelOpen: () => { log.push('cancelOpen') },
+    open: (path) => { log.push('open ' + path); return open(path) },
+  }
+  const reader = new Proxy({}, { get: (_t, p) => (p === 'then' ? undefined : impl[p] ?? (() => undefined)) })
+  return { log, reader, closes: () => log.filter((x) => x === 'close').length }
+}
+
+test('a note replaces a reader that is up without a path: a book still loading, or a failed book\'s error page', async () => {
+  const got = {}
+  for (const [label, st] of [
+    ['up, no path yet', { path: null, visible: true }],
+    ['an open book', { path: 'B.epub', visible: true }],
+    ['hidden, no path', { path: null, visible: false }],
+  ]) {
+    const f = fakeReader({ ...st })
+    const { got: g } = await bootMain({
+      './reader:mountReader': () => f.reader,
+      './memoir:mountMemoir': () => new Proxy({}, { get: (_t, p) => (p === 'then' ? undefined : () => false) }),
+      './editor:openNote': (a) => Promise.resolve({ ok: true, path: a[0] }),
+    }, { pane: true })
+    g.treeHost.openNote('N.md')
+    await drain()
+    got[label] = f.closes()
+  }
+  assert.deepEqual(got, { 'up, no path yet': 1, 'an open book': 1, 'hidden, no path': 0 },
+    'the note opened under a reader that stayed up, or a hidden reader was closed for nothing')
+})
+
+test('a note whose read ends after a book was clicked: a book still loading keeps the pane; a reader holding a book is closed, as before', async () => {
+  const got = {}
+  for (const leg of ['still loading', 'opened', 'old book up, newer one failed']) {
+    const old = leg === 'old book up, newer one failed'
+    const st = old ? { path: 'A.epub', visible: true } : { path: null, visible: false }
+    const f = fakeReader(st, (path) => {
+      if (old) return Promise.resolve(false) // a replacement whose read fails keeps A up
+      st.visible = true // the book takes the pane at once
+      if (leg === 'still loading') return new Promise(() => {})
+      st.path = path
+      return Promise.resolve(true)
+    })
+    let release
+    const { got: g } = await bootMain({
+      './reader:mountReader': () => f.reader,
+      './memoir:mountMemoir': () => new Proxy({}, { get: (_t, p) => (p === 'then' ? undefined : () => false) }),
+      './editor:openNote': (a) => new Promise((r) => { release = () => r({ ok: true, path: a[0] }) }),
+    }, { pane: true })
+    g.treeHost.openNote('N.md')
+    await drain()
+    g.treeHost.openNote('B.epub')
+    await drain()
+    assert.ok(f.log.includes('open B.epub'), 'fixture: the book click never reached the reader')
+    release()
+    await drain()
+    got[leg] = f.closes()
+  }
+  // The late note has been applied and holds the tab (the editor applies a
+  // superseded read), so a reader holding a book is closed to match it; only a
+  // path-less one, a newer book still loading, is left to finish.
+  assert.deepEqual(got, { 'still loading': 0, opened: 1, 'old book up, newer one failed': 1 },
+    'a late note closed a book still loading, or left a book up under the note\'s tab')
 })

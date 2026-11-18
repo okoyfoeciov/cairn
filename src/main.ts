@@ -1157,7 +1157,7 @@ async function openNoteAt(path: string): Promise<boolean> {
   if (vaultLostPath !== null) return false
   if (path === MEMOIR_PATH) return openMemoir()
   if (isBookPath(path)) return openBookAt(path)
-  ++surfaceSeq
+  const seq = ++surfaceSeq
   // A note replaces any book, including one still being read; cancel the
   // in-flight read first so it cannot paint over the note later.
   reader?.cancelOpen()
@@ -1187,7 +1187,13 @@ async function openNoteAt(path: string): Promise<boolean> {
     tree.setActivePath(reader?.path() ?? currentPath())
     return false
   }
-  if ((reader?.path() ?? null) !== null) reader?.close()
+  // Step aside a reader that holds a book: this note has been applied and has
+  // the tab, even when a newer click came while it was read.  And one that is
+  // up with no path: a book that failed to open shows its error page with
+  // none.  A path-less reader that a newer surface put up (a book still
+  // loading) is that surface's, so only a current call closes one.  A first
+  // open this note cancelled has given the pane back already (cancelOpen).
+  if (reader !== null && (reader.path() !== null || (seq === surfaceSeq && reader.visible()))) reader.close()
   return true
 }
 

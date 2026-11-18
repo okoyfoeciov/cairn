@@ -1879,10 +1879,30 @@ button — the shortcut is the entry point.
   the book scroller is **two rendered scrollers** (§5.12.4); the find bar overlays and adds none.
   The explanation band adds a **third, only while it is open** (§0.56 E109), and a **fourth** only
   while it is split or previews the split (§0.57 E110).
+- **A note takes the pane back from the reader, whatever it shows.** `cancelOpen()`, which every
+  other surface calls first, gives the pane back at once when an open has taken it with nothing on
+  it yet: a first open's blank page, or a replacement between dropping the old book and rendering
+  the new one. A rendered book and a finished open's error page stay until `main.ts`'s
+  `openNoteAt` has read the note, then close: a reader that holds a book always (the note has been
+  applied and holds the tab), and one up with no path (a broken book's error page) unless a newer
+  surface was asked for meanwhile and owns it (a book still loading). Measured by
+  `electron-shell/explain.test.mjs`'s E108 step: on the code before, a note clicked after a broken
+  book's error page stayed hidden under it.
+  **A second click on a book still preloading its pictures is a new open**, not the already-open
+  shortcut, which needs the book rendered; before, the first open then dropped the book and left a
+  blank pane (`reader.test.mjs`).
 - **Click-to-explain** is §0.56 E109: the one thing a click on book text does.
 - **Progress.** `EpubBookmark { chapter, href, offset, progress }` is stored per vault in
   `state.json` (§7.6), keyed by the vault-relative EPUB path, capped at 500, sanitised on read and
   write. Progress never writes into the vault (gate G8). An in-app rename/move re-keys it.
+  **A book opens at its bookmark, never at its top first.** A fresh render is laid out but not
+  painted (`.ep-scroller.ep-restoring`: opacity 0 and no pointer events, so it still takes focus)
+  until it has been scrolled to its bookmark, two frames after the render; the scroll and the
+  reveal happen in one frame. A render hidden meanwhile (a tab switch) is placed when the same book
+  is opened again. While a render waits, nothing saves its position, so the stored bookmark stands,
+  and a rename re-keys that one. Measured by `electron-shell/explain.test.mjs`'s E108 step (a
+  relaunch on a note, then a click on the book's row): on the code before, 2 frames painted the
+  book at scrollTop 0 before it jumped to its bookmark; now the first painted frame is at it.
 - **Colour.** `--text-book` (`#8fcf9a`, sage green) is a distinct tree-row ink; secrets keep
   `--text-accent` (ice-blue). `tree.ts` paints `is-book` from the blob's kind bit.
 - **Known gaps, recorded rather than hidden:** a damaged/DRM book gets the reader's error page;
@@ -2122,7 +2142,7 @@ modes"; that is STRUCK by §0.57 E110, which ports them.
   renderer was also run differentially against comart's own `panel.js` in the pinned engine: 0
   mismatches over 6,007 Markdown cases and 1,728 badge cases. That run came before the bridge was
   tightened, which is the one deliberate difference. The real-engine suites are
-  `electron-shell/explain.test.mjs` (61 with §0.57 E110's steps: a hermetic app on a generated
+  `electron-shell/explain.test.mjs` (63 with §0.57 E110's steps and §0.55 E108's two steps, the resume and a note after a broken book: a hermetic app on a generated
   book, a fake ai-service through `CAIRN_AI_BASE`, and CDP's trusted input) and
   `electron-shell/explain-badge.test.mjs` (21, the badge's pixels). The live leg bills one real
   `/api/explain` and runs only with `CAIRN_EXPLAIN_LIVE=1`. §0.57's Tests bullet quotes the latest
@@ -2345,8 +2365,8 @@ the stream, the error lines, the badges, the follow-up and the close rules.
   watched failing first, against the code before E110 or under mutation (the band's 24
   mutations: 24 caught; the review fixes' 11: 11 caught). Two later review mutations still
   survive (KNOWN-ISSUES §5). **In the real engine**, `electron-shell/explain.test.mjs` gives
-  `ℹ tests 61`, `ℹ pass 61`, `ℹ fail 0`, `ℹ skipped 0` against the fake ai-service, with the live
-  leg not run, on build hash `0fb5f90da1bf27b6`. Its wide leg prints
+  `ℹ tests 63`, `ℹ pass 63`, `ℹ fail 0`, `ℹ skipped 0` against the fake ai-service, with the live
+  leg not run, on build hash `2ff86c2892a9b23f`. Its wide leg prints
   `dpr 1.25, viewport 1700x900 CSS px`; the 1200×800 session prints no dpr, so its CSS px numbers
   below carry none. Its 21 `E110:` steps walk one band through: staging; both previews; Esc and a
   held Esc; a drag released over the band, with the preview asserted at once; the grip over a

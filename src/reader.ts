@@ -263,6 +263,9 @@ export function mountReader(pane: HTMLElement, deps: ReaderDeps): ReaderView {
   let bookPath: string | null = null
   let mode: Mode = 'read'
   let pendingPosition: EpubBookmark | null = null
+  /** The current book's chapters are in the DOM.  Between the parse and the
+   *  render (the picture preload) a book has its path but nothing on screen. */
+  let rendered = false
   let objectUrls = new Map<string, LoadedImage>()
   let resourceSeq = 0
   let chapterTops: number[] = []
@@ -701,7 +704,7 @@ export function mountReader(pane: HTMLElement, deps: ReaderDeps): ReaderView {
   }
 
   function updateFromScroll(): void {
-    if (!book || restoring) return
+    if (!book || restoring || concealed()) return
     const pos = readPosition()
     if (!pos) return
     lastChapter = pos.chapter
@@ -717,8 +720,9 @@ export function mountReader(pane: HTMLElement, deps: ReaderDeps): ReaderView {
       saveTimer = null
     }
     // `hide()` and `close()` call this BEFORE the box goes away, so a visible
-    // reader is the only one with a measurable position.
-    if (!bookPath || !book || orphaned || root.hidden || scroller.clientHeight === 0) return
+    // reader is the only one with a measurable position.  A concealed render
+    // is not at its bookmark yet, and the stored one is still right.
+    if (!bookPath || !book || orphaned || root.hidden || scroller.clientHeight === 0 || concealed()) return
     const pos = readPosition()
     if (!pos) return
     lastChapter = pos.chapter
@@ -769,6 +773,23 @@ export function mountReader(pane: HTMLElement, deps: ReaderDeps): ReaderView {
       restoring = false
       updateFromScroll()
     })
+  }
+
+  /* A fresh render is laid out but not painted (`.ep-restoring`) until its
+   * first restore has scrolled it to its bookmark, so no frame shows the top
+   * of the book on the way to where the reader left off.  Laid out, because
+   * a scroller with no box can be neither measured nor scrolled. */
+  function concealed(): boolean {
+    return scroller.classList.contains('ep-restoring')
+  }
+
+  /** Scroll a concealed render to its bookmark, then let it paint.  A hidden
+   *  reader has no layout to scroll; the way back to it reveals it instead
+   *  (a reopen of the same book, which is main.ts's way, or `show()`). */
+  function reveal(): void {
+    if (!concealed() || !book || root.hidden) return
+    restore(pendingPosition)
+    scroller.classList.remove('ep-restoring')
   }
 
   function goToId(id: string): void {
@@ -1618,6 +1639,8 @@ export function mountReader(pane: HTMLElement, deps: ReaderDeps): ReaderView {
     lastOffset = 0
     lastProgress = 0
     pendingPosition = null
+    rendered = false
+    scroller.classList.remove('ep-restoring')
     if (saveTimer !== null) {
       clearTimeout(saveTimer)
       saveTimer = null
@@ -1626,15 +1649,18 @@ export function mountReader(pane: HTMLElement, deps: ReaderDeps): ReaderView {
 
   async function open(path: string, position: EpubBookmark | null): Promise<boolean> {
     const seq = ++openSeq
-    if (book && bookPath === path && !orphaned) {
+    if (book && rendered && bookPath === path && !orphaned) {
       // Already laid out: keep the live position.  `show()` is the path back
       // from another tab, and it must not rewind to the position the book had
-      // when it was first opened.
+      // when it was first opened.  Only once rendered: a book still preloading
+      // its pictures is an open in flight, and the open below supersedes it
+      // (this one bumped openSeq, so the older open would drop the book).
       root.hidden = false
       pane.classList.add('is-reader')
       showMode('read')
       requestAnimationFrame(() => {
-        measure()
+        if (concealed()) reveal()
+        else measure()
         recenterFind()
       })
       return true
@@ -1708,7 +1734,9 @@ export function mountReader(pane: HTMLElement, deps: ReaderDeps): ReaderView {
         return false
       }
       renderBook()
+      rendered = true
       buildSearchIndex()
+      scroller.classList.add('ep-restoring')
       showMode('read')
     } catch (err) {
       if (seq !== openSeq) return false
@@ -1721,15 +1749,17 @@ export function mountReader(pane: HTMLElement, deps: ReaderDeps): ReaderView {
         book = null
         bookPath = null
         findTarget = null
+        rendered = false
       }
       return true
     }
     // Two frames: the first lets the chapter boxes lay out, the second lets
-    // images that arrived in that layout settle their boxes.
+    // images that arrived in that layout settle their boxes.  Keyed to the
+    // book, not to this open: a later open that failed, was cancelled or
+    // reopened this same book leaves this one showing, still owed its place.
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        if (seq !== openSeq) return
-        restore(pendingPosition)
+        if (book === next) reveal()
       })
     })
     return true
@@ -1753,7 +1783,9 @@ export function mountReader(pane: HTMLElement, deps: ReaderDeps): ReaderView {
     if (book) showMode('read')
     else showMode('error')
     requestAnimationFrame(() => {
-      measure()
+      // A render whose own frames passed while the reader was hidden.
+      if (concealed()) reveal()
+      else measure()
       recenterFind()
     })
   }
@@ -1924,7 +1956,15 @@ export function mountReader(pane: HTMLElement, deps: ReaderDeps): ReaderView {
 
   return {
     open,
-    cancelOpen: () => { ++openSeq },
+    cancelOpen: () => {
+      ++openSeq
+      // An open that has taken the pane but has nothing on it yet (a first
+      // open's blank page, or a replacement between dropping the old book and
+      // rendering the new one) gives the pane back now: the surface that
+      // cancelled it is about to show, whether or not it then opens.  A
+      // rendered book and a finished open's error page stay.
+      if (!root.hidden && !rendered && mode !== 'error') hide()
+    },
     show,
     hide,
     close,
@@ -1944,13 +1984,17 @@ export function mountReader(pane: HTMLElement, deps: ReaderDeps): ReaderView {
       bookPath = path
       if (old !== path && book) {
         // The old key is gone from the vault; write the same position under the
-        // new one so a rename does not lose the bookmark.
-        deps.onProgress(path, {
-          chapter: lastChapter,
-          href: book.chapters[lastChapter]?.href ?? '',
-          offset: lastOffset,
-          progress: lastProgress,
-        })
+        // new one so a rename does not lose the bookmark.  A concealed render
+        // is not at its place yet: its place is the bookmark it opened with.
+        const pos = concealed()
+          ? pendingPosition
+          : {
+              chapter: lastChapter,
+              href: book.chapters[lastChapter]?.href ?? '',
+              offset: lastOffset,
+              progress: lastProgress,
+            }
+        if (pos) deps.onProgress(path, pos)
       }
     },
     lost,

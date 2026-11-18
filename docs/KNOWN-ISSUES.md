@@ -834,6 +834,12 @@ consequence worth knowing before filing it:
 - **Import is a MOVE, by ruling, and has no undo.** A successful import removes
   the source file; a failed copy or destination write leaves it untouched. A
   name collision is uniquified, never overwritten.
+- **A note whose read ends after a book click wins.** Click a note, then a book
+  before the note's read is back: the editor then applies the note and moves the
+  tab to it (`editor.ts`'s `openNote` has no staleness check), so `openNoteAt`
+  closes the book to keep the pane and the tab in agreement, and the book click
+  is lost. A book still loading at that moment is left to finish. Only a slow
+  note read (a network vault) makes the window wide.
 - **Progress is per-path.** A rename/move through the app re-keys the bookmark;
   an external rename does not, and the old key is harmless but unused. A
   replaced file restores to the nearest chapter by `href`/fraction.
@@ -875,8 +881,8 @@ and are not gaps. These are:
   on the minidom with a fake ai-service. Live SSE through the app window, the grip's pointer
   capture, MW playback, the reveal scroll, code words, the find-bar click and Esc after a badge
   click are `electron-shell/explain.test.mjs`'s subject. Its latest run, with E110 and its review
-  fixes, gives 61 of 61 against a fake ai-service (wide leg at dpr 1.25, 1700×900 CSS px; build
-  hash `0fb5f90da1bf27b6`). Quote a fresh run before calling any of them verified.
+  fixes, gives 63 of 63 against a fake ai-service (wide leg at dpr 1.25, 1700×900 CSS px; build
+  hash `2ff86c2892a9b23f`). Quote a fresh run before calling any of them verified.
 - **The badge's pixel match is per machine.** `electron-shell/explain-badge.test.mjs` measures 0
   differing pixels on Debian at dpr 1, 1.25, 1.5 and 2, where the glyphs outside the faces'
   `unicode-range` (comart's subsets' 226 code points) fall back to Liberation Serif. On macOS the
