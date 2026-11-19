@@ -55,3 +55,19 @@ interface Window {
    *  will not fetch: it fails closed, never to the billed default. */
   __CAIRN_AI_BASE__?: string
   }
+
+/** §0.58 E111.  The VAD worker's code — src/vad-worker.ts with onnxruntime-web,
+ *  its .mjs and wasm, and the Silero model inside — as one string, defined by
+ *  electron-shell/build-app.mjs.  Absent from a bundle built without that
+ *  define (the unit tests), which src/vad.ts reads as "no payload". */
+declare const __CAIRN_VAD_WORKER__: string
+
+/** §0.58 E111.  Chromium exposes MediaStreamTrackProcessor on Window as well as
+ *  in workers; TS 5.9's lib.dom declares neither.  Only what the recorder uses. */
+interface MediaStreamTrackProcessor<T = AudioData> {
+  readonly readable: ReadableStream<T>
+}
+declare var MediaStreamTrackProcessor: {
+  prototype: MediaStreamTrackProcessor
+  new <T = AudioData>(init: { track: MediaStreamTrack; maxBufferSize?: number }): MediaStreamTrackProcessor<T>
+}

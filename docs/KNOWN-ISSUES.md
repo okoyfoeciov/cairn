@@ -406,9 +406,9 @@ such feature under the block is already offset, so deleting one *lowers* the cou
 
 ### X-1 · `base.css`'s blanket `transition: none !important` is a rule whose reason was deleted
 
-`src/styles/base.css:164`. §5.1 rule 5 is in force and was **not** unilaterally repealed, but its
+`src/styles/base.css:172`. §5.1 rule 5 is in force and was **not** unilaterally repealed, but its
 stated rationale is §5.12.6's main-thread scroll path, which was WebKitGTK with async scrolling off —
-an engine this repo deleted (§0.20.6 E35), whose successor sustains 105 fps (spike P). **FIVE**
+an engine this repo deleted (§0.20.6 E35), whose successor sustains 105 fps (spike P). **SIX**
 exemptions now exist (CONTRACT §5.1 lists them):
 
 - two inside the Properties block, Obsidian's own numbers: the fold slide as an inline
@@ -424,7 +424,14 @@ exemptions now exist (CONTRACT §5.1 lists them):
   same specificity mechanism, after the user reported it frozen. Its numbers are Memoir's own;
 - `explain.css`'s badge fade and thinking dots (§0.56 E109), comart's numbers, scoped to
   `.ep-explain`. Their staggered dots needed `!important` delays too, because the blanket shorthand
-  resets `animation-delay`.
+  resets `animation-delay`;
+- `mic.css`'s microphone motion (§0.58 E111), all of comart's: the button's 0.16s
+  transform/background/colour (background left out at idle, so the black circle leaves at once) and
+  its press, the arming dots' 1.15s pulse (with `!important` delays, for the same reason), the red
+  Stop's 1.2s blink, the card's 0.22s entrance, the play button's press and Copy's fade. Scoped to
+  `.ep-mic` and `.ep-mic-layer`, same mechanism. Only the Stop's blink has a
+  `prefers-reduced-motion` override, comart's one, placed after the exemption; the rest run under
+  it, as comart's do. The card closes with no motion.
 
 So there are two *different* ways round this rule and one dead declaration (§0.24.5's checkbox
 `box-shadow`) that nobody has bothered to rescue. **And the same failure mode is not confined to this
@@ -963,6 +970,109 @@ and are not gaps. These are:
   `'started'`, because the seam needs a value; the reader never calls it after destroy. `find.ts`'s
   own Esc handler, on the find field, has no repeat check; after its first press closes the bar,
   the repeats reach `#reader`'s handler, which ignores them.
+
+### The reader's microphone (E111)
+
+**Opened 2026-11-19 with CONTRACT §0.58 E111.** The rulings themselves (Debian only, all of comart's
+motion with no close motion, the VAD runtime inside `app.js` with its boot and idle-memory cost) are
+settled and are not gaps. These are:
+
+- **macOS has no button.** `main.ts` binds `mountMic` only on Linux (ruling 2). The hardened runtime
+  would need `com.apple.security.device.audio-input` in `tools/cairn.entitlements` (three keys,
+  load-bearing), and the package's Info.plist `NSMicrophoneUsageDescription`
+  (`tools/package-electron.mjs` sets neither). `app.js` carries the 18 MB VAD payload on macOS too,
+  where nothing uses it (size goals are retired, §0.47 E95). *Closed by:* a ruling to add both, a
+  TCC-prompt test on the Mac, and dropping the `__CAIRN_OS__` gate.
+- **The real microphone was never measured** (by rule, AUDIO R1). Every run used Chromium's fake
+  capture device, which is fixed at 44.1 kHz stereo, so the real device's rate, channel count,
+  buffer size and arm time are unknown, and the engine suites always take the resampling path
+  below. The 48 kHz path was checked only offline, by the build's scratch encoder harness (the
+  WebCodecs config echoed back, decoded length = input length); no committed test covers it.
+- **A 44.1 kHz device (R7).** Chromium's Opus encoder resamples to 48 kHz itself: +10–31 ms
+  (p50 21 ms) per packet during the take, none after Stop, because `flush()` emits everything at
+  once; the OpusHead says 44100; and the resampler's 0.73 ms delay is not compensated, so that much
+  comes off the very end. At 48 kHz the encoder adds 0.3–0.9 ms.
+- **A UI stall over 3 s drops audio, silently (R3).** `maxBufferSize: 300` held a 2 s stall with no
+  loss; past 300 buffers the processor drops the oldest. The recorder keeps each read's time and
+  buffer end in `stats`, but neither detects a gap nor acts on one.
+- **A 403 is retried, and an early inner error is lost (R4, R5).** Over the WebSocket, ai-service's
+  HTTP 403 before the upgrade looks exactly like a refused connection, so it is retried once
+  (harmless: a 403 comes before routing and is never billed). On a take longer than about 16 s, an
+  inner 413 or 500 answered while ai-service still drains the body becomes close 1011 "stream
+  closed" and its words are lost: the take retries, then says `Transcription failed — transcription
+  connection closed` instead of the server's line.
+- **The classification depends on ai-service's error strings (R9).** An unknown future string is
+  retried once, like the 502 family; a new final error would be retried once before it shows.
+- **`MediaStreamTrackProcessor` on the page is Chromium's, not the standard's (R2).** The spec
+  exposes it in workers only. If a later Electron drops the page exposure, capture moves to a
+  dedicated Worker or an AudioWorklet.
+- **The payload's memory does not all come back.** After a take's worker is terminated and its clip
+  dropped, the renderer settles about +35 MB above idle (186–189 MB RSS against 150–152, 10 s later,
+  after a GC). The likely cause is the 18 MB payload string, materialised when the first worker is
+  made and held until V8 flushes it. Not investigated. Those figures predate keeping the payload's
+  Blob for the page: one ~18 MB Blob now lives in Chromium's blob storage from the first take on,
+  and its memory was not measured.
+- **A page's first take blocks the click for about 88 ms.** Its `start()` runs 87.4–90.1 ms
+  synchronously: V8 materialises the 18 MB payload literal on its first read, and the payload's one
+  Blob copy is made. getUserMedia goes out 0.5–1.3 ms after the click, but Chromium completes it on
+  the page's thread, so the first buffer waits behind the block: click → first buffer 98.1–124.1 ms,
+  against 3.5–29.8 ms on later takes (CONTRACT §0.58, row 10; 4 pages × 6 takes, fake device, X11).
+  *Accepted by user ruling* as ruling 5's once-per-page cost: the button stays on "Starting" until
+  the first buffer, so no speech is lost. Not taken: building the Blob before the first click (at
+  book open, or on the button's `pointerenter`), which charges the same block and memory to every
+  book opened even when the microphone is never used; and moving the warm to the recorder's `armed`
+  or `first-audio` event, which on the first take delays the Stop's paint by the same block and
+  moves further from comart's start order.
+- **The first take's VAD warm is 413–554 ms**, longer than the 350 ms floor, so a Stop between about
+  350 and 550 ms queues the VAD behind its warm. Nothing fails; the card opens later. On a page
+  that had already taken six, three more workers built from the kept Blob warmed in 342.5, 344.4
+  and 355.7 ms, just under it.
+- **The trim's two decodes are not bounded.** `trimClip`'s `decodeAudioData` calls have no timeout
+  (comart's have none either), and `done` waits on the trim, so a decode that never settled would
+  keep the card closed. Not observed. The VAD calls are bounded (`VAD_BOUND_MS`): with a hung VAD
+  the card opens up to 10 s after the hung call began (measured: 7.0 s after the click for a 3 s
+  take), and a `probabilities()` that hangs after a good warm costs a full 10 s after Stop.
+- **A missing or bad base still records.** It fails only after Stop, `Transcription failed —
+  transcription connection failed`, exactly like a refused `CAIRN_AI_BASE`. Failing at `start()`
+  without opening the microphone is the alternative. `main.ts` always passes a base, so only the
+  refused test seam reaches this.
+- **Copy refuses a transcript over 4,096 characters.** Command 23's sanity cap (§1.3) rejects it:
+  the error is reported (`mic-copy`) and no check shows. A 119 s take is roughly 2,400 characters at
+  speaking pace (an estimate, not a measurement).
+- **A staged pick can still be placed from the keyboard under the card.** Tab can reach an
+  `.ex-place-half` under the shield, and Enter or Space places the staged pick, a billed request,
+  while the card is open. A press cannot (the shield takes it). `explain.ts` is unchanged; the fix
+  would be the half's keydown standing down while `cardOpen()`.
+- **The name prompt's Esc.** The new-note name prompt (`main.ts`, z 80, no class) is not in
+  `layerAbove()`, which tests the modal and the menus. Open over the card, its first Esc would close
+  the card. Nothing reaches it while the card is open (Mod-N leaves the book), so it is unreachable
+  today.
+- **A press near the end of a long status pill can lose its click** (comart's own). `:active`
+  `scale(0.9)` shrinks the button about its centre, so a press near either end of a long pill is
+  released outside it, and the click goes to an ancestor. Measured on a 713.6px pill: 20px in from
+  the right end, 0 clicks; 40px in, 1. The idle 56px button has a 2.8px dead rim.
+- **A flash can wipe a newer error** (comart's quirk, kept): a status does not cancel a pending
+  flash's timer, so an error set within 1.8 s of a "Too short" flash is cleared when that timer
+  fires at idle. No test pins it.
+- **GNOME shows its microphone indicator during a take.** voice-typing's `application.id` trick
+  (§0.58's row 3) has no getUserMedia equivalent. Expected, not observed: no run opened the real
+  microphone.
+- **A discarded take was already streamed (R10).** A take cancelled, capped, left or under the floors
+  streamed its audio while it recorded. Closing the socket cancels ai-service's inner request;
+  whether the provider bills an aborted session is unverified. A retry after a lost answer can bill
+  twice (voice-typing accepts that).
+- **The cap timer in a hidden window (R6).** A hidden page's timers are throttled to about 1 Hz; the
+  recorder also checks the cap on the audio clock of every captured buffer, which no timer drives.
+  Not measured in a minimised window.
+- **`mic.test.mjs` E8 writes the desktop clipboard.** It copies a transcript through command 23 and
+  puts the prior text back, as `image-copy.test.mjs` does. Non-text clipboard content cannot be put
+  back, and over 4,096 characters the step skips.
+- **What the engine suite does not reach.** It runs on X11 only: its device locks empty
+  `XDG_RUNTIME_DIR`, which takes the Wayland socket away, so the app runs under
+  `--ozone-platform=x11` (XWayland) and a session with no `DISPLAY` skips. Never run: a Wayland
+  launch of the microphone, macOS, a real microphone, a minimised window, and the 119 s cap end to
+  end (unit tests only, on mock timers). The fake device restarts its WAV at each stream open, so
+  every run's E3 uploads the same 44,218 bytes.
 
 ## 6. Traps that cost real time here — read before measuring
 

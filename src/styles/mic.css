@@ -1,0 +1,333 @@
+/* ==========================================================================
+ * src/styles/mic.css
+ * Owner: 03.  Spec: CONTRACT.md §0.58 E111 — the book reader's microphone.
+ * Not an Obsidian surface: the reference is the user's own comart extension
+ * (`~/comart/mic.css` at 7ec2379), ported rule by rule and restyled with
+ * E109/E110's token mapping.  Each rule carries its comart line.
+ *
+ * THE MAPPING.  comart's Verdigris literals become Cairn tokens as explain.css
+ * mapped them, plus three derived rows tagged [D]:
+ *   X1  the surface #111913 (circle, pill, card) -> --bg-secondary, the band's
+ *       own surface, so the circle reads over the band by its shadow;
+ *   X2  rgba(241,234,216,.08) (play ring, track) -> --bg-modifier-hover;
+ *   X3  the idle glyph #CBC3AD -> --text-muted, not --text-normal, so the
+ *       hover step to --text-normal survives.
+ * The Copy check's green is --accent ([C], the band's precedent), so the glyph
+ * swap is the whole signal.  Black shadows and the halo stay comart's literals.
+ *
+ * WHAT IS DROPPED.  Every `!important` except on motion: in comart it is armour
+ * against host pages.  The zoom-cancelling variables (the button follows
+ * Cairn's zoom), the Stop grid and the extra Stops, the full card, its grip,
+ * CHECK and word chips.
+ *
+ * SCOPE.  Every rule is under `.ep-mic` (the button root) or `.ep-mic-layer`
+ * (the card's layer).  Both are body children: `main.editor` is `contain:
+ * paint`, so nothing inside `#reader` could cover the sidebar.  Nothing here
+ * can reach the note view, so G9 cannot move.
+ *
+ * ONE SCROLLER RULE, `.mc-body`: the card's text scrolls inside a card capped at
+ * a third of the window.  The card is removed on close, never hidden.
+ *
+ * DECLARES NO CUSTOM PROPERTY — tokens.css is the only declaration site (§5.1).
+ * ======================================================================== */
+
+/* ── the button ───────────────────────────────────────────────────────────
+ * Bottom-right, 16px in, and it never moves: over the band it floats above the
+ * band's corner (z 71, over the card layer's 70, under the modal's 80 and the
+ * menus' 100).  `.app` reaches the window's right and bottom edges, so this is
+ * also the reader pane's corner. */
+.ep-mic {                                   /* mic.css:44-92 */
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  z-index: 71;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: flex-end;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  pointer-events: none;
+}
+/* `display: flex` above beats the UA's [hidden]. */
+.ep-mic[hidden] { display: none; }
+
+/* comart's 40px target at its 1.4 grow: a 56px box around a 33.6px glyph. */
+.ep-mic .mc-btn {                           /* mic.css:137-171 */
+  pointer-events: auto;
+  zoom: 1.4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px;
+  border: 0;
+  background: none;
+  box-shadow: none;
+  color: var(--text-muted);                 /* [D] X3 — #CBC3AD :160 */
+  filter: drop-shadow(0 0 1.5px rgba(0, 0, 0, 0.85)) drop-shadow(0 1px 3px rgba(0, 0, 0, 0.5));
+  font: 600 14px/1 var(--font-ui);
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+}
+@media (hover: hover) {
+  .ep-mic .mc-btn:hover { color: var(--text-normal); }         /* :176-178, #F1EAD8 */
+}
+.ep-mic .mc-btn:active { transform: scale(0.9); }              /* :179 */
+.ep-mic .mc-btn.is-error { color: var(--text-error); }         /* :181, #FF6B5A */
+
+/* A status line: the bare glyph becomes the pill, anchored right so it grows
+ * leftward; the halo goes, a drop-shadow smears a filled pill. */
+.ep-mic[data-msg]:not([data-state="recording"]):not([data-state="arming"]) .mc-btn {   /* :318-324 */
+  padding: 6px 16px;
+  border-radius: 100px;
+  background: var(--bg-secondary);          /* [D] X1 — #111913 */
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.28);
+  filter: none;
+}
+/* Arming, recording, transcribing: one circle, the same 56px box in the same
+ * place, so the pointer that pressed the mic is still on the Stop. */
+.ep-mic[data-state="recording"] .mc-btn,
+.ep-mic[data-state="arming"] .mc-btn,
+.ep-mic[data-state="transcribing"] .mc-btn {                   /* :334-342 */
+  padding: 8px;
+  border-radius: 100px;
+  background: var(--bg-secondary);          /* [D] X1 */
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.28);
+  filter: none;
+}
+/* :180's ring, the base.css way (a box-shadow, never outline), AFTER the
+ * shadows above so it composes with them instead of replacing them. */
+.ep-mic .mc-btn:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }
+.ep-mic[data-state="recording"] .mc-btn:focus-visible,
+.ep-mic[data-state="arming"] .mc-btn:focus-visible,
+.ep-mic[data-state="transcribing"] .mc-btn:focus-visible,
+.ep-mic[data-msg]:not([data-state="recording"]):not([data-state="arming"]) .mc-btn:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--accent), 0 6px 20px rgba(0, 0, 0, 0.28);
+}
+
+/* comart's 52vw cap divided by the button's zoom: 52vw on screen. */
+.ep-mic .mc-label {                         /* :344-355 */
+  display: none;
+  max-width: calc(52vw / 1.4);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-variant-numeric: tabular-nums;
+}
+.ep-mic[data-msg]:not([data-state="recording"]):not([data-state="arming"]) .mc-label { display: inline; }   /* :356 */
+.ep-mic[data-state="recording"] .mc-label,
+.ep-mic[data-state="arming"] .mc-label { display: none; }                      /* :358-359 */
+
+.ep-mic .mc-ico { width: 24px; height: 24px; flex: none; display: block; }   /* :361 */
+.ep-mic .mc-ico-stop { display: none; }                                       /* :362 */
+.ep-mic .mc-dots {                                                            /* :366-374 */
+  display: none;
+  width: 24px;
+  height: 24px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+.ep-mic .mc-dots i {                                                          /* :375-381 */
+  display: block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--accent);                /* #D89A6B */
+  opacity: 0.25;
+}
+.ep-mic[data-state="arming"] .mc-dots,
+.ep-mic[data-state="transcribing"] .mc-dots { display: flex; }               /* :386-387 */
+.ep-mic[data-state="arming"] .mc-ico,
+.ep-mic[data-state="transcribing"] .mc-ico { display: none; }                /* :388-389 */
+.ep-mic[data-state="recording"] .mc-btn { color: var(--text-error); }       /* :396, #FF6B5A */
+.ep-mic[data-state="recording"] .mc-ico-mic { display: none; }              /* :397 */
+.ep-mic[data-state="recording"] .mc-ico-stop { display: block; }            /* :398-399 */
+.ep-mic[data-state="transcribing"] .mc-btn { color: var(--text-muted); cursor: progress; }   /* :408, #807B68 */
+
+/* ── the plain card ───────────────────────────────────────────────────────
+ * comart hangs its plain card inside a host modal; here the layer is the
+ * host's frame.  It is appended on open and removed on close.  The layer takes
+ * no pointer: the shield and the card do. */
+.ep-mic-layer { position: fixed; inset: 0; z-index: 70; pointer-events: none; }
+/* The click-catcher: every click outside the card lands here and closes only
+ * the card.  It stops at the title bar, which stays live. */
+.ep-mic-layer .mc-shield {                  /* :767-771 */
+  position: absolute;
+  inset: var(--titlebar-h) 0 0 0;
+  z-index: 2;
+  pointer-events: auto;
+}
+/* mic.ts writes top/left/right/width from #reader's rect: the pane's middle
+ * line, edges and width. */
+.ep-mic-layer .mc-wrap {                    /* :740-755 */
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50vh;
+  height: 0;
+  padding: 0;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  z-index: 2;
+}
+/* :455-508 with the plain card's :779-784 and :802-806 folded in.  The card
+ * hangs on the line by half its own height, so no measurement is needed when
+ * the text reflows; the entrance rides `translate`, since `transform` holds
+ * the centring. */
+.ep-mic-layer .mc-card {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: none;
+  box-sizing: border-box;
+  max-height: 33vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--bg-secondary);          /* [D] X1 — #111913 :488 */
+  border: 0;
+  border-top: var(--hairline) solid var(--divider-color);   /* the band's hairline; comart's copper :495 */
+  border-radius: 0;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+  -webkit-font-smoothing: antialiased;
+  pointer-events: auto;
+  transform: translateY(-50%);
+  opacity: 0;
+  translate: 0 10px;
+}
+.ep-mic-layer .mc-card.is-shown { opacity: 1; translate: none; }              /* :807-809 */
+
+/* :536 with the plain card's 18px top (:798) folded in. */
+.ep-mic-layer .mc-body { overflow-y: auto; padding: 18px 20px 14px; min-height: 0; flex: 1 1 auto; }
+.ep-mic-layer .mc-body::-webkit-scrollbar { width: var(--scrollbar-w-editor); background: transparent; }
+.ep-mic-layer .mc-body::-webkit-scrollbar-track { background: var(--scrollbar-track); }
+.ep-mic-layer .mc-body::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: var(--radius-s);
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+/* The band's own typography, as comart gives the transcript its panel's. */
+.ep-mic-layer .mc-text {                    /* :538-550 */
+  margin: 0;
+  font: 400 var(--fs-text)/var(--lh-text) var(--font-text);
+  white-space: pre-wrap;
+  word-break: break-word;
+  color: var(--text-normal);                /* #F1EAD8 */
+  -webkit-user-select: text;
+  user-select: text;
+}
+.ep-mic-layer .mc-text.is-empty { color: var(--text-muted); font-style: italic; }   /* :551, #807B68 */
+
+.ep-mic-layer .mc-player[hidden] { display: none; }                                  /* :555 */
+.ep-mic-layer .mc-player { display: flex; align-items: center; gap: 10px; margin-top: 14px; }   /* :556 */
+.ep-mic-layer .mc-pp {                                                               /* :562-574 */
+  flex: none;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border-radius: 50%;
+  border: 1px solid var(--bg-modifier-hover);   /* [D] X2 */
+  background: transparent;
+  color: var(--accent);                     /* #D89A6B */
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ep-mic-layer .mc-pp:active { transform: scale(0.93); }                              /* :577 */
+/* comart leaves these two rings to the UA outline, which base.css removes. */
+.ep-mic-layer .mc-pp:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); }    /* [C] */
+.ep-mic-layer .mc-ico-pp { width: 13px; height: 13px; display: block; }              /* :578 */
+.ep-mic-layer .mc-ico-play { margin-left: 2px; }                                     /* :579 */
+.ep-mic-layer .mc-ico-pause { display: none; }                                       /* :580 */
+.ep-mic-layer .mc-player.is-playing .mc-ico-play { display: none; }                  /* :581 */
+.ep-mic-layer .mc-player.is-playing .mc-ico-pause { display: block; }                /* :582 */
+.ep-mic-layer .mc-track {                                                            /* :583-590 */
+  flex: 1;
+  height: 6px;
+  border-radius: var(--radius-s);           /* 3px: both round a 6px bar fully */
+  background: var(--bg-modifier-hover);     /* [D] X2 */
+  cursor: pointer;
+  overflow: hidden;
+}
+/* The width is mic.ts's inline style. */
+.ep-mic-layer .mc-fill { height: 100%; width: 0; background: var(--accent); }        /* :591 */
+.ep-mic-layer .mc-time {                                                             /* :592-599 */
+  flex: none;
+  font: 400 11px/1.3 var(--font-ui);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);                 /* #807B68 */
+  min-width: 72px;
+  text-align: right;
+}
+
+.ep-mic-layer .mc-actions {                                                          /* :605-611 */
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 2px;
+  margin-top: 8px;
+}
+.ep-mic-layer .mc-copy {                                                             /* :641-652 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  color: var(--accent);                     /* #D89A6B */
+  background: none;
+  border: none;
+  border-radius: var(--radius-s);           /* 4px */
+  cursor: pointer;
+}
+.ep-mic-layer .mc-copy:hover { opacity: 0.7; }                                       /* :655 */
+.ep-mic-layer .mc-copy:active { opacity: 0.4; }                                      /* :656 */
+.ep-mic-layer .mc-copy:focus-visible { box-shadow: inset 0 0 0 2px var(--accent); } /* [C] */
+.ep-mic-layer .mc-copy svg { width: 17px; height: 17px; display: block; }            /* :657 */
+.ep-mic-layer .mc-copy .mc-ico-ck { display: none; }                                 /* :658 */
+.ep-mic-layer .mc-copy.is-copied { color: var(--accent); }                          /* [C] :659 #19F56B */
+.ep-mic-layer .mc-copy.is-copied .mc-ico-cp { display: none; }                      /* :660 */
+.ep-mic-layer .mc-copy.is-copied .mc-ico-ck { display: block; }                     /* :661 */
+.ep-mic-layer .mc-copy[hidden] { display: none; }                                    /* :662 */
+
+/* ── SIXTH EXEMPTION TO §5.1 RULE 5 (base.css: `transition: none !important;
+ * animation: none !important`), E111.  All of comart's mic motion, at comart's
+ * numbers.  Each selector outranks base.css's `*` on specificity, which is what
+ * decides between two `!important`s.  The staggered delays carry their own
+ * `!important`: base.css's shorthand resets `animation-delay` too.  The card
+ * has no close motion: comart removes its plain card at once. */
+.ep-mic .mc-btn { transition: transform 0.16s ease, background 0.16s ease, color 0.16s ease !important; }   /* :172 */
+/* Background leaves the transition at idle, so the circle goes at once when
+ * the card opens instead of fading out around the returning glyph. */
+.ep-mic[data-state="idle"] .mc-btn { transition: transform 0.16s ease, color 0.16s ease !important; }       /* :310-312 */
+.ep-mic .mc-dots i { animation: mc-dot 1.15s ease-in-out infinite !important; }   /* :382 */
+.ep-mic .mc-dots i:nth-child(2) { animation-delay: 0.15s !important; }            /* :384 */
+.ep-mic .mc-dots i:nth-child(3) { animation-delay: 0.3s !important; }             /* :385 */
+.ep-mic[data-state="recording"] .mc-ico-stop { animation: mc-blink 1.2s ease infinite !important; }   /* :400 */
+.ep-mic-layer .mc-card { transition: opacity 0.22s ease, translate 0.22s ease !important; }           /* :805 */
+.ep-mic-layer .mc-pp { transition: background 0.15s ease, transform 0.12s ease !important; }          /* :575 */
+.ep-mic-layer .mc-copy { transition: opacity 0.15s ease, color 0.15s ease !important; }               /* :653 */
+@keyframes mc-dot {                                                          /* :390-393 */
+  0%, 80%, 100% { opacity: 0.25; transform: translateY(0); }
+  40% { opacity: 1; transform: translateY(-2px); }
+}
+@keyframes mc-blink { 50% { opacity: 0.3; } }                               /* :402 */
+
+/* comart's one reduced-motion rule that reaches the button or the plain card
+ * (:818): the Stop stops blinking.  The dots, the fades and the entrance run
+ * under it as comart's do.  AFTER the exemption: same selector, both
+ * `!important`, so source order decides. */
+@media (prefers-reduced-motion: reduce) {
+  .ep-mic[data-state="recording"] .mc-ico-stop { animation: none !important; }
+}

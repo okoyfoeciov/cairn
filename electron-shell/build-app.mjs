@@ -15,9 +15,16 @@
  * completely unstyled with no error. The output directory is self-contained.
  * The same goes for fonts: the stylesheet pass inlines them as data: URLs.
  *
+ * THE VAD RUNTIME IS INLINED TOO (CONTRACT §0.58 E111).  `src/vad-worker.ts` is
+ * bundled on its own with comart's four vendored files inside it (SHA-256
+ * checked, the build fails on a mismatch), and app.js carries that bundle as
+ * ONE string, `__CAIRN_VAD_WORKER__`, which src/vad.ts starts as a Worker from
+ * a blob: URL.  So the page still loads nothing from file:// at run time.
+ *
  * Importing this module builds nothing; it exports `CSS_ORDER` and
  * `bundleCss()` so a unit test can check the real stylesheet pass without
- * writing `electron-shell/app/` under another run's feet.
+ * writing `electron-shell/app/` under another run's feet, and the VAD pieces
+ * (`VAD_VENDOR`, `readVadVendor()`, `buildVadWorker()`) for the same reason.
  */
 
 import * as esbuild from 'esbuild'
@@ -44,6 +51,7 @@ export const CSS_ORDER = [
   'memoir.css',
   'reader.css',
   'explain.css',
+  'mic.css',
 ]
 
 /** The token src/index.html carries where the stylesheet is inlined. Spelled the
@@ -77,6 +85,61 @@ export async function bundleCss() {
   return cssResult.outputFiles[0].text
 }
 
+/** The VAD runtime app.js carries: comart's vendor/ files, byte for byte, with
+ *  the SHA-256s of its THIRD_PARTY_NOTICES.md. */
+export const VAD_VENDOR = {
+  ortJs: { file: 'vendor/onnxruntime/ort.wasm.min.js', sha256: '65e09376df69107e881b5c34d2d37aed333a366b6d941073ec518168e269b87d' },
+  ortMjs: { file: 'vendor/onnxruntime/ort-wasm-simd-threaded.mjs', sha256: '30dd851d9c00622940500f71ddd2ff8820c5cb65270816080175b958705385a8' },
+  wasm: { file: 'vendor/onnxruntime/ort-wasm-simd-threaded.wasm', sha256: '71aef04959c5c1b6de461b6538e2058e306610034a85aad2742d0c7fd4533fe4' },
+  model: { file: 'vendor/silero/silero_vad_v6.onnx', sha256: '1a153a22f4509e292a94e67d6f9b85e8deb25b4988682b7e174c65279d8788e3' },
+}
+
+/** The four files' bytes, each checked against its hash.  Throws an Error with
+ *  `reason` ('vendor-missing' | 'vendor-hash') and `file`; the bytes that were
+ *  hashed are the bytes that get embedded. */
+export function readVadVendor(root = ROOT) {
+  const out = {}
+  for (const [key, { file, sha256 }] of Object.entries(VAD_VENDOR)) {
+    let bytes
+    try {
+      bytes = readFileSync(join(root, file))
+    } catch {
+      throw Object.assign(new Error('vendor-missing file=' + file), { reason: 'vendor-missing', file })
+    }
+    const got = createHash('sha256').update(bytes).digest('hex')
+    if (got !== sha256) {
+      throw Object.assign(new Error('vendor-hash file=' + file + ' sha256=' + got), { reason: 'vendor-hash', file })
+    }
+    out[key] = bytes
+  }
+  return out
+}
+
+/** The worker bundle as the text app.js embeds.  The ort scripts go in as
+ *  strings and the wasm and the model as base64, each through a define that
+ *  vad-worker.ts reads exactly once (a define is inlined at every use). */
+export async function buildVadWorker(root = ROOT) {
+  const v = readVadVendor(root)
+  const r = await esbuild.build({
+    entryPoints: [join(ROOT, 'src', 'vad-worker.ts')],
+    bundle: true,
+    format: 'iife',
+    target: 'chrome142',
+    platform: 'browser',
+    minify: true,
+    legalComments: 'none',
+    write: false,
+    logLevel: 'warning',
+    define: {
+      __VAD_ORT_JS__: JSON.stringify(v.ortJs.toString('utf8')),
+      __VAD_ORT_MJS__: JSON.stringify(v.ortMjs.toString('utf8')),
+      __VAD_WASM_B64__: JSON.stringify(v.wasm.toString('base64')),
+      __VAD_MODEL_B64__: JSON.stringify(v.model.toString('base64')),
+    },
+  })
+  return r.outputFiles[0].text
+}
+
 /** Run as a script (`node electron-shell/build-app.mjs`), not imported. */
 function invokedDirectly() {
   try {
@@ -88,6 +151,17 @@ function invokedDirectly() {
 
 async function main() {
   mkdirSync(OUT, { recursive: true })
+
+  let vadWorker
+  try {
+    vadWorker = await buildVadWorker()
+  } catch (e) {
+    if (e && e.reason) {
+      console.error('BUILD-APP result=FAIL reason=' + e.reason + ' file=' + e.file)
+      process.exit(1)
+    }
+    throw e
+  }
 
   /* TWO OPTIONS ARE NOT STYLE:
        `iife`, not `esm` -- under strict-mode ESM a single assignment to a
@@ -110,6 +184,7 @@ async function main() {
     drop: ['debugger'],
     logLevel: 'info',
     metafile: true,
+    define: { __CAIRN_VAD_WORKER__: JSON.stringify(vadWorker) },
   })
 
   // Fail loudly if anything Tauri survived the bundle -- that is the whole
@@ -118,6 +193,17 @@ async function main() {
   const tauri = inputs.filter((p) => p.includes('@tauri-apps'))
   if (tauri.length > 0) {
     console.error('BUILD-APP result=FAIL reason=tauri-in-bundle files=' + tauri.join(','))
+    process.exit(1)
+  }
+
+  /* The payload is in app.js exactly when src/vad.ts is, and exactly once: the
+     model's base64 is the probe, since nothing else in the page can spell it. */
+  const appText = readFileSync(join(OUT, 'app.js'), 'latin1')
+  const vadIn = inputs.some((p) => p.replace(/\\/g, '/').endsWith('src/vad.ts'))
+  const modelB64 = readVadVendor().model.toString('base64')
+  const carried = appText.split(modelB64).length - 1
+  if (carried !== (vadIn ? 1 : 0)) {
+    console.error('BUILD-APP result=FAIL reason=vad-payload vad_ts=' + vadIn + ' copies=' + carried)
     process.exit(1)
   }
 
@@ -165,7 +251,7 @@ async function main() {
   const cssB = Buffer.byteLength(css)
   console.log(
     'BUILD-APP result=PASS modules=' + inputs.length + ' tauri_modules=0 js=' + jsB +
-      ' B css=' + cssB + ' B hash=' + jsHash + ' out=' + OUT
+      ' B css=' + cssB + ' B vad=' + (carried ? vadWorker.length : 0) + ' B hash=' + jsHash + ' out=' + OUT
   )
 }
 

@@ -302,7 +302,7 @@ test('base.css: the blanket ban is unchanged and its exemption list names explai
     noComments(base),
     /\*,\s*\*::before,\s*\*::after\s*\{\s*transition:\s*none\s*!important;\s*animation:\s*none\s*!important;\s*\}/
   )
-  assert.match(base, /THERE ARE FIVE EXEMPTIONS AND NOTHING ELSE/)
+  assert.match(base, /THERE ARE SIX EXEMPTIONS AND NOTHING ELSE/)
   assert.match(base, /`explain\.css`/)
 })
 

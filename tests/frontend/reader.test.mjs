@@ -122,7 +122,7 @@ const settle = async (n = 6) => {
   for (let i = 0; i < n; i++) await new Promise((r) => setTimeout(r, 0))
 }
 
-function mount(readEpub = async () => fixture()) {
+function mount(readEpub = async () => fixture(), extra = {}) {
   const pane = document.createElement('main')
   pane.className = 'editor'
   const progress = []
@@ -134,6 +134,7 @@ function mount(readEpub = async () => fixture()) {
     },
     onProgress: (path, pos) => progress.push([path, pos]),
     onError: (err, ctx) => errors.push([ctx, err]),
+    ...extra,
   })
   const scroller = pane.querySelector('.ep-scroller')
   assert.ok(scroller)
@@ -804,7 +805,7 @@ function fakeBand() {
   return band
 }
 
-async function mountPick(readEpub = async () => pickBook()) {
+async function mountPick(readEpub = async () => pickBook(), extra = {}) {
   const pane = document.createElement('main')
   pane.className = 'editor'
   const layout = fakeLayout(pane)
@@ -816,6 +817,7 @@ async function mountPick(readEpub = async () => pickBook()) {
     onError: (err, ctx) => errors.push([ctx, err]),
     mountExplain: band.mountExplain,
     probe: layout,
+    ...extra,
   })
   assert.equal(await reader.open('Books/Picked.epub', null), true)
   await settle()
@@ -1636,4 +1638,302 @@ test('split: Esc during the second press of a double-click puts the mark back on
   } finally {
     t.reader.destroy()
   }
+})
+
+/* ── §0.58 E111: the reader's microphone ──────────────────────────────────── */
+
+/** A stand-in for mic.ts's mount: it records what the reader asks of it, its
+ *  card's openness is set by the test, and its two body-level roots are
+ *  `.ep-mic` (the button) and `.ep-mic-layer` (shield + card). */
+function fakeMic() {
+  const mic = { mounts: 0, shown: [], leaves: 0, destroyed: 0, host: null, hooks: null, card: false }
+  mic.root = document.createElement('section')
+  mic.root.className = 'ep-mic'
+  mic.btn = document.createElement('button')
+  mic.root.append(mic.btn)
+  mic.layer = document.createElement('div')
+  mic.layer.className = 'ep-mic-layer'
+  mic.shield = document.createElement('div')
+  mic.layer.append(mic.shield)
+  mic.mountMic = (host, hooks) => {
+    mic.mounts++
+    mic.host = host
+    mic.hooks = hooks
+    return {
+      setShown: (on) => { mic.shown.push(on) },
+      leave: () => { mic.leaves++ },
+      cardOpen: () => mic.card,
+      destroy: () => { mic.destroyed++ },
+    }
+  }
+  mic.last = () => mic.shown.at(-1)
+  return mic
+}
+
+const press = (target, extra = {}) =>
+  fireDocument('pointerdown', mouse('pointerdown', { x: 0, y: 0 }, { target, buttons: 1, ...extra }))
+const clickOn = (target, extra = {}) => {
+  const ev = mouse('click', { x: 0, y: 0 }, { target, ...extra })
+  fireDocument('click', ev)
+  return ev
+}
+
+test('mic: mountMic gets #reader and a restoreFocus hook; no mountMic, no mic; a throwing one is reported', async () => {
+  const mic = fakeMic()
+  const t = await mountPick(undefined, { mountMic: mic.mountMic })
+  try {
+    assert.equal(mic.mounts, 1)
+    assert.equal(mic.host, t.root, 'the mic is anchored to #reader')
+    assert.equal(mic.host.getAttribute('id'), 'reader')
+    assert.deepEqual(Object.keys(mic.hooks), ['restoreFocus'])
+    assert.equal(typeof mic.hooks.restoreFocus, 'function')
+  } finally {
+    t.reader.destroy()
+  }
+  // Absent (macOS): the reader is the reader, picks and all.
+  const plain = await mountPick()
+  try {
+    await gesture(plain, plain.layout.at('cold'))
+    assert.equal(plain.band.asks.length, 1)
+  } finally {
+    plain.reader.destroy()
+  }
+  // A mic that cannot mount costs the reader nothing.
+  const boom = new Error('no mic')
+  const broken = await mountPick(undefined, { mountMic: () => { throw boom } })
+  try {
+    assert.deepEqual(broken.errors, [['mic-mount', boom]])
+    await gesture(broken, broken.layout.at('cold'))
+    assert.equal(broken.band.asks.length, 1)
+  } finally {
+    broken.reader.destroy()
+  }
+})
+
+test('mic: the button shows only over a rendered book in read mode', async () => {
+  const mic = fakeMic()
+  const { pane, reader } = mount(
+    async (path) => (path === 'Books/Bad.epub' ? new ArrayBuffer(8) : fixture()),
+    { mountMic: mic.mountMic })
+  try {
+    assert.equal(mic.last(), false, 'mounted with no book')
+    // A first open: the blank page while the pictures load shows no button.
+    const during = []
+    let hook = duringPictures(
+      () => reader.path() === 'Books/Test.epub' && pane.querySelectorAll('.ep-chapter').length === 0,
+      () => during.push(mic.last()))
+    try {
+      assert.equal(await reader.open('Books/Test.epub', null), true)
+    } finally {
+      hook.restore()
+    }
+    await settle()
+    assert.deepEqual(during, [false], 'a button over the blank page of a first open')
+    assert.equal(mic.last(), true, 'no button over the open book')
+    reader.hide()
+    assert.equal(mic.last(), false, 'a button over the note that took the pane')
+    reader.show()
+    assert.equal(mic.last(), true, 'no button back over the book')
+    // A replacement: from the moment the old book is dropped until the new one
+    // is in, the pane holds no book (REVIEW finding 9).
+    during.length = 0
+    hook = duringPictures(
+      () => reader.path() === 'Books/Other.epub' && pane.querySelectorAll('.ep-chapter').length === 0,
+      () => during.push(mic.last()))
+    try {
+      assert.equal(await reader.open('Books/Other.epub', null), true)
+    } finally {
+      hook.restore()
+    }
+    await settle()
+    assert.deepEqual(during, [false], 'the old book\'s button stayed over the blank replacement')
+    assert.equal(mic.last(), true)
+    reader.close()
+    assert.equal(mic.last(), false)
+  } finally {
+    reader.destroy()
+  }
+  // A book that fails to open draws its error page: no button there.
+  const bad = fakeMic()
+  const second = mount(async () => new ArrayBuffer(8), { mountMic: bad.mountMic })
+  try {
+    assert.equal(await second.reader.open('Books/Bad.epub', null), true)
+    await settle()
+    assert.equal(second.pane.querySelector('.ep-message').hidden, false, 'fixture: no error page')
+    assert.equal(bad.last(), false, 'a button over the error page')
+  } finally {
+    second.reader.destroy()
+  }
+})
+
+test('mic: every way out of the book leaves the mic, and nothing else does', async () => {
+  const mic = fakeMic()
+  const { pane, reader } = mount(undefined, { mountMic: mic.mountMic })
+  const leaves = async (fn) => {
+    const n = mic.leaves
+    await fn()
+    return mic.leaves - n
+  }
+  const open = async (path = 'Books/Test.epub') => {
+    assert.equal(await reader.open(path, null), true)
+    await settle()
+  }
+  try {
+    await open()
+    // Not leaving: the same book clicked again, the find bar, a rename.
+    assert.equal(await leaves(() => open()), 0, 'the same book re-clicked discarded the take')
+    assert.equal(await leaves(() => reader.toggleSearch()), 0)
+    assert.equal(await leaves(() => reader.adoptPath('Books/Renamed.epub')), 0)
+    const got = {}
+    got.hide = await leaves(() => reader.hide())
+    reader.show()
+    got.close = await leaves(() => reader.close())
+    await open()
+    got.reset = await leaves(() => reader.reset())
+    await open()
+    got.another = await leaves(() => open('Books/Other.epub'))
+    // A replacement cancelled while its pictures load gives the pane back.
+    let cancelled = 0
+    const hook = duringPictures(
+      () => reader.path() === 'Books/Test.epub' && pane.querySelectorAll('.ep-chapter').length === 0,
+      () => { const n = mic.leaves; reader.cancelOpen(); cancelled = mic.leaves - n })
+    try {
+      await reader.open('Books/Test.epub', null)
+    } finally {
+      hook.restore()
+    }
+    got.cancelOpen = cancelled
+    for (const [way, n] of Object.entries(got)) assert.ok(n >= 1, `${way} left a take running`)
+  } finally {
+    reader.destroy()
+  }
+})
+
+test('mic: a click on the mic or its layer never closes the band', async () => {
+  const mic = fakeMic()
+  const t = await mountPick(undefined, { mountMic: mic.mountMic })
+  try {
+    await gesture(t, t.layout.at('cold'))
+    assert.equal(t.band.open, true)
+    for (const target of [mic.btn, mic.root, mic.shield, mic.layer]) {
+      press(target)
+      const ev = clickOn(target)
+      assert.equal(t.band.open, true, `a click on ${target.className || target.parentNode.className} closed the band`)
+      assert.equal(ev.defaultPrevented, false, 'never consumed')
+    }
+    clickOn(t.content)
+    assert.equal(t.band.open, false, 'control: an outside click still closes')
+  } finally {
+    t.reader.destroy()
+  }
+})
+
+test('mic: while the card is open no click closes the band; the next one does', async () => {
+  const mic = fakeMic()
+  const t = await mountPick(undefined, { mountMic: mic.mountMic })
+  try {
+    await gesture(t, t.layout.at('cold'))
+    mic.card = true
+    // The shield's click (it closes the card at target phase, after this),
+    // and a title-bar click the shield does not cover.
+    const tab = document.createElement('span')
+    tab.className = 'tab-label'
+    for (const target of [mic.shield, t.content, tab]) {
+      clickOn(target)
+      assert.equal(t.band.open, true, 'the click that closes the card closed the band too')
+    }
+    assert.equal(marked(t), 'cold')
+    mic.card = false
+    clickOn(t.content)
+    assert.equal(t.band.open, false, 'the next click is the band\'s')
+
+    // A pick whose press began before the card opened still owns its click:
+    // the swallow comes before the stand-down.
+    t.content.dispatch('mousedown', mouse('mousedown', t.layout.at('stone'), { buttons: 1 }))
+    mic.card = true
+    fireWindow('mouseup', mouse('mouseup', t.layout.at('stone')))
+    const trailing = clickOn(t.content)
+    assert.equal(trailing.defaultPrevented, true, 'the pick\'s trailing click reached the shield')
+    assert.equal(trailing.propagationStopped, true)
+    assert.equal(t.band.asks.at(-1).items[0].phrase, 'stone')
+  } finally {
+    t.reader.destroy()
+  }
+})
+
+test('mic: a press on a book word while the card is open picks nothing; the band still follows its mark', async () => {
+  const mic = fakeMic()
+  const t = await mountPick(undefined, { mountMic: mic.mountMic })
+  try {
+    bandGeometry(t)
+    await gesture(t, t.layout.at('cold'))
+    assert.equal(t.band.asks.length, 1)
+    mic.card = true
+    const { down } = await gesture(t, t.layout.at('stone'))
+    assert.equal(t.band.asks.length, 1, 'a word under the card asked the band')
+    assert.equal(down.defaultPrevented, false, 'the press was taken for a pick')
+    assert.equal(marked(t), 'cold')
+    // Only the press is guarded (REVIEW finding 17): the reveal still runs.
+    assert.equal(await revealed(t), revealOf(t, 'cold'), 'the card stopped the band revealing its mark')
+    mic.card = false
+    await gesture(t, t.layout.at('stone'))
+    assert.equal(t.band.asks.length, 2, 'control: with the card gone the press picks')
+  } finally {
+    t.reader.destroy()
+  }
+})
+
+test('mic: a press that began on the mic or its layer, released over the book, keeps the band', async () => {
+  const mic = fakeMic()
+  const t = await mountPick(undefined, { mountMic: mic.mountMic })
+  try {
+    await gesture(t, t.layout.at('cold'))
+    for (const target of [mic.btn, mic.shield]) {
+      press(target)
+      clickOn(t.root)
+      assert.equal(t.band.open, true, `a press on ${target.parentNode.className} slid off closed the band`)
+    }
+    press(t.content)
+    clickOn(t.root)
+    assert.equal(t.band.open, false, 'control: a press outside still closes')
+  } finally {
+    t.reader.destroy()
+  }
+})
+
+test('mic: restoreFocus lands inside #reader: the band while it is open, else the book; focus already inside stays', async () => {
+  const mic = fakeMic()
+  const t = await mountPick(undefined, { mountMic: mic.mountMic })
+  try {
+    // A shield click leaves focus on <body>.
+    document.activeElement = null
+    mic.hooks.restoreFocus()
+    assert.equal(document.activeElement, t.scroller, 'band closed: the book')
+    await gesture(t, t.layout.at('cold'))
+    document.activeElement = null
+    mic.hooks.restoreFocus()
+    assert.equal(document.activeElement, t.band.el, 'band open: the band, where its Esc is heard')
+    // Already inside #reader (the find field): left where it is.
+    const input = findQuery(t, 'cold')
+    document.activeElement = input
+    mic.hooks.restoreFocus()
+    assert.equal(document.activeElement, input, 'focus was pulled out of the find field')
+    // A hidden reader takes nothing.
+    t.reader.hide()
+    const elsewhere = document.createElement('div')
+    document.activeElement = elsewhere
+    mic.hooks.restoreFocus()
+    assert.equal(document.activeElement, elsewhere)
+  } finally {
+    t.reader.destroy()
+  }
+})
+
+test('mic: destroy leaves and destroys the mic', async () => {
+  const mic = fakeMic()
+  const t = await mountPick(undefined, { mountMic: mic.mountMic })
+  const leaves = mic.leaves
+  t.reader.destroy()
+  assert.equal(mic.destroyed, 1)
+  assert.ok(mic.leaves > leaves, 'destroy did not leave the book first')
 })

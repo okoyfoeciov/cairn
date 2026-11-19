@@ -13,8 +13,9 @@
  * escapes `preventDefault`.
  *
  * HOW.  The app is launched hermetically (temp vault holding one generated
- * EPUB, its own `CAIRN_STATE_DIR`, `CAIRN_HEADLESS=1`) and driven over the
- * DevTools protocol, like `cdp-drive.mjs`: `Input.dispatchMouseEvent` and
+ * EPUB, its own `CAIRN_STATE_DIR`, `CAIRN_HEADLESS=1`, and cdp-drive.mjs's
+ * `deviceLocks`, because the book shows §0.58's record button) and driven
+ * over the DevTools protocol, like `cdp-drive.mjs`: `Input.dispatchMouseEvent` and
  * `Input.dispatchKeyEvent` are TRUSTED input, which the pick and the band
  * insist on.  ai-service is a FAKE served from this process on a free port
  * (`CAIRN_AI_BASE`, loopback only): `/api/explain` as scripted SSE, `/api/pron`
@@ -47,6 +48,7 @@ import process from 'node:process'
 import { after, describe, test } from 'node:test'
 import { fileURLToPath } from 'node:url'
 import { NO_DISPLAY } from './have-display.mjs'
+import { assertLocked, deviceLocks, inputsGuard, refuseRealInputs } from './cdp-drive.mjs'
 import { CONTAINER, zip } from '../tests/frontend/_epub-fixture.mjs'
 
 const HERE = dirname(fileURLToPath(import.meta.url))
@@ -459,9 +461,17 @@ async function launch({ vault, state, base, expect = base, geom = '1200x800', no
     CAIRN_ELECTRON_GEOM: geom,
   })
   if (base) env.CAIRN_AI_BASE = base
-  const child = spawn(BIN, ['--remote-debugging-port=0', join(HERE, 'app-main.mjs')], {
-    cwd: ROOT, env, stdio: ['ignore', 'pipe', 'pipe'],
-  })
+  // The book carries the live record button (§0.58 E111): no real microphone.
+  const locks = deviceLocks(state)
+  Object.assign(env, locks.env)
+  const argv = [...locks.args, '--remote-debugging-port=0', join(HERE, 'app-main.mjs')]
+  try {
+    assertLocked(argv, env)
+  } catch (e) {
+    locks.dispose()
+    throw e
+  }
+  const child = spawn(BIN, argv, { cwd: ROOT, env, stdio: ['ignore', 'pipe', 'pipe'] })
   let err = ''
   child.stdout.on('data', () => {})
   child.stderr.on('data', (d) => { err += d })
@@ -473,6 +483,7 @@ async function launch({ vault, state, base, expect = base, geom = '1200x800', no
     try { ws && ws.close() } catch {}
     if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL')
     await exited
+    locks.dispose()
   }
   try {
     const port = await new Promise((resolve, reject) => {
@@ -600,6 +611,8 @@ async function launch({ vault, state, base, expect = base, geom = '1200x800', no
       await until('the note to open', `!!document.querySelector('#reader .ep-explain') && [...document.querySelectorAll('.tr')].some((r) => !r.hidden && r.textContent.trim() === ${JSON.stringify(note.replace(/\.md$/, ''))}) && (document.querySelector('#ed .cm-content')?.textContent ?? '').trim() !== ''`, 20_000)
     }
     await inject()
+    // Never drive a page that lists a real capture input (listing opens none).
+    refuseRealInputs(await ev(`(${inputsGuard})(navigator, false)`))
     // Never drive a page that could reach the real, billed ai-service: every
     // click below would post to it.  Only the gated live leg passes null.
     const pageBase = await ev('window.__CAIRN_AI_BASE__ ?? null')

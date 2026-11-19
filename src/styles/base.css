@@ -123,7 +123,7 @@ body [contenteditable=""] {
  *     rule outranks it, and nothing in `editor.css` ever sets `box-shadow` on
  *     that element for it to animate.  The hover it belongs to changes
  *     `border-color`, which is not in the transition.
- * THERE ARE FIVE EXEMPTIONS AND NOTHING ELSE.  Each is a user ruling.
+ * THERE ARE SIX EXEMPTIONS AND NOTHING ELSE.  Each is a user ruling.
  *   · the two above, inside the Properties block — "Obsidian - smooth. Cairn:
  *     just show/hide abruptly."
  *   · §0.44 E90, `tree.css`'s `.tr.d::before` — the folder chevron's
@@ -140,8 +140,16 @@ body [contenteditable=""] {
  *     dots' pulse, both comart's.  Scoped to `.ep-explain`, same mechanism,
  *     and each has a `prefers-reduced-motion` override.  Drill-down words and
  *     the resize grip stay banned.
+ *   · §0.58 E111, `mic.css` — the reader's microphone, all of comart's mic
+ *     motion: the button's 0.16s transform/background/colour (background left
+ *     out at idle, so the black circle leaves at once) and its press, the
+ *     arming dots' 1.15s pulse, the red Stop's 1.2s blink, the card's 0.22s
+ *     entrance, the play button's press and Copy's fade.  Scoped to `.ep-mic`
+ *     and `.ep-mic-layer`, same mechanism.  Only the Stop's blink has a
+ *     `prefers-reduced-motion` override — comart's one; the rest run under it
+ *     as comart's do.  The card closes at once, with no motion.
  *
- * THE THIRD ONE IS WHY THIS PARAGRAPH IS WORTH READING BEFORE ADDING A SIXTH.
+ * THE THIRD ONE IS WHY THIS PARAGRAPH IS WORTH READING BEFORE ADDING A SEVENTH.
  * It is declared `!important` in `tree.css` and it WINS, where a normal
  * declaration would have been silently dead: between two AUTHOR `!important`
  * declarations the cascade falls back to SPECIFICITY, and `.tr.d::before`
@@ -149,14 +157,15 @@ body [contenteditable=""] {
  * custom property rather than a literal — `var(--chev-ms, 0ms)` — because the
  * tree's rows are POOLED and a blanket transition would animate a row that
  * merely changed which node it draws.  Neither trick is decoration; see the
- * block on `.tr.d::before` in `tree.css` for the whole argument.  The fourth
- * and fifth won the same way, scoped to `#memoir` and `.ep-explain`.  The
- * shorthand here resets every longhand, `animation-delay` included, so an
- * exemption that staggers needs its own `!important` delays too.  And an
- * exemption's reduced-motion override must come AFTER it: same selector,
- * same specificity, both `!important`, so source order decides.
+ * block on `.tr.d::before` in `tree.css` for the whole argument.  The fourth,
+ * fifth and sixth won the same way, scoped to `#memoir`, `.ep-explain` and
+ * `.ep-mic`/`.ep-mic-layer`.  The shorthand here resets every longhand,
+ * `animation-delay` included, so an exemption that staggers needs its own
+ * `!important` delays too.  And an exemption's reduced-motion override must
+ * come AFTER it: same selector, same specificity, both `!important`, so source
+ * order decides.
  *
- * Five exemptions in, note what the warning above says: this rule's own
+ * Six exemptions in, note what the warning above says: this rule's own
  * rationale names an engine that no longer exists, and whether a blanket ban
  * still earns its keep is a user ruling nobody has taken.  Until it is taken,
  * the ban stands and each new motion is its own ruling. */

@@ -1,0 +1,4 @@
+# The vendored VAD runtime (CONTRACT §0.58 E111) is SHA-256 pinned by
+# electron-shell/build-app.mjs, which refuses to build on a mismatch: git must
+# never rewrite these bytes (line endings, filters) on any platform.
+vendor/** binary

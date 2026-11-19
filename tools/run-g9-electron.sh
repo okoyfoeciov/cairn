@@ -107,8 +107,8 @@ if r.get("error"):
     print("  ERROR: %s" % r["error"])
 print("  rows %s  checks %s  pass %s  FAIL %s  SKIP %s"
       % (r.get("rows"), r.get("checks"), r.get("pass"), r.get("fail"), r.get("skip")))
-print("  gate=%s  ok=%s  inner=%s  dpr=%s"
-      % (r.get("gate"), r.get("ok"), r.get("inner"), r.get("dpr")))
+print("  gate=%s  ok=%s  inner=%s  dpr=%s  focusWait=%s"
+      % (r.get("gate"), r.get("ok"), r.get("inner"), r.get("dpr"), r.get("focusWait")))
 # A dpr other than 1 makes hairline rows fail for the COMPOSITOR's reasons.
 # Say so here rather than letting the reader diagnose four failures twice.
 # The gate runs at ANY display scale. It states its comparison on the device

@@ -2008,6 +2008,91 @@ test('§5.11 — the probe runs AFTER a note is open, not on the boot frame', ()
   assert.match(probe, /c\('x', 430,/)
 })
 
+/** A page for runGeometryProbe alone: its frames, its window listeners and the
+ *  report it emits, with document.hasFocus() under the test's control. */
+function probePage({ focused }) {
+  const page = { focused, frames: [], listeners: new Map(), probes: [], reports: [] }
+  globalThis.cairn = { emit: (ev, p) => page.reports.push([ev, p]) }
+  globalThis.requestAnimationFrame = (fn) => page.frames.push(fn)
+  globalThis.document = { hasFocus: () => page.focused }
+  globalThis.window = {
+    __PIXELTEST__: true,
+    __verifyGeometry: (opts) => {
+      page.probes.push({ ...opts, focused: page.focused })
+      return { ok: true }
+    },
+    addEventListener: (t, fn) => {
+      (page.listeners.get(t) ?? page.listeners.set(t, []).get(t)).push(fn)
+    },
+    removeEventListener: (t, fn) => {
+      const l = page.listeners.get(t) ?? []
+      if (l.includes(fn)) l.splice(l.indexOf(fn), 1)
+    },
+  }
+  page.flush = () => { while (page.frames.length) page.frames.shift()() }
+  page.fire = (t) => { for (const fn of [...(page.listeners.get(t) ?? [])]) fn({ type: t }) }
+  return page
+}
+
+test('§5.11 — the probe waits until the window holds focus, then runs once', (t) => {
+  // G9's heading.marker.shown needs a focused document (live preview reveals
+  // only while view.hasFocus, KNOWN-ISSUES LP-4).  The window is shown and
+  // focused on ready-to-show; a probe that fires on the first frame after
+  // vault-opened can beat it, and then measures an unfocused window at dpr 1.
+  t.mock.timers.enable({ apis: ['setTimeout'] })
+  const page = probePage({ focused: false })
+  C.runGeometryProbe()
+  page.flush()
+  assert.equal(page.probes.length, 0, 'the probe measured a window that has no focus yet')
+  assert.equal(page.reports.length, 0)
+
+  page.focused = true
+  page.fire('focus')
+  page.flush()
+  assert.deepEqual(page.probes, [{ gate: true, focused: true }])
+  assert.equal(page.reports.length, 1)
+  assert.equal(page.reports[0][0], 'geometry-report')
+  assert.equal(page.reports[0][1].focusWait, 'focus')
+
+  // Neither a later focus nor the bound runs it a second time: the shell exits
+  // on the first report.
+  page.fire('focus')
+  t.mock.timers.tick(C.PROBE_FOCUS_WAIT_MS)
+  page.flush()
+  assert.equal(page.probes.length, 1)
+  assert.equal(page.reports.length, 1)
+  assert.equal((page.listeners.get('focus') ?? []).length, 0, 'the focus listener was left behind')
+})
+
+test('§5.11 — a window that already holds focus is probed on the next frame', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] })
+  const page = probePage({ focused: true })
+  C.runGeometryProbe()
+  page.flush()
+  assert.deepEqual(page.probes, [{ gate: true, focused: true }])
+  assert.equal(page.reports[0][1].focusWait, 'had-focus')
+  t.mock.timers.tick(C.PROBE_FOCUS_WAIT_MS)
+  page.flush()
+  assert.equal(page.reports.length, 1)
+})
+
+test('§5.11 — focus that never comes cannot hang the gate: the bound runs the probe and says so', (t) => {
+  t.mock.timers.enable({ apis: ['setTimeout'] })
+  const page = probePage({ focused: false })
+  C.runGeometryProbe()
+  t.mock.timers.tick(C.PROBE_FOCUS_WAIT_MS - 1)
+  page.flush()
+  assert.equal(page.probes.length, 0)
+  t.mock.timers.tick(1)
+  page.flush()
+  assert.deepEqual(page.probes, [{ gate: true, focused: false }])
+  assert.equal(page.reports[0][1].focusWait, 'timeout')
+  page.focused = true
+  page.fire('focus')
+  page.flush()
+  assert.equal(page.reports.length, 1)
+})
+
 test('§0.12 E14 — Copy absolute path writes the clipboard from the click, with no IPC', () => {
   // The minidom has no `navigator` and no `document.execCommand`, and giving it
   // either would be inventing browser behaviour to agree with — `_minidom.mjs`'s

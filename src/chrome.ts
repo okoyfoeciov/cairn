@@ -980,24 +980,51 @@ function isTabMod(e: KeyboardEvent): boolean {
  * CONTRACT §5.11, step "run it" — owner 01's single obligation in the
  * `--pixeltest` chain.
  *
- * On the first animation frame after `nc://vault-opened`, if the probe was
- * injected, run it in gate mode and emit the report.  main.rs (07) listens,
- * prints one JSON line to stdout and exits 0 iff `ok`; that exit code IS gate
- * G9, and no other process needs to understand the event.
+ * On the first animation frame after `nc://vault-opened` AND after the window
+ * holds focus, if the probe was injected, run it in gate mode and emit the
+ * report.  main.rs (07) listens, prints one JSON line to stdout and exits 0 iff
+ * `ok`; that exit code IS gate G9, and no other process needs to understand the
+ * event.
+ *
+ * Why the focus wait: the shell shows and focuses the window on ready-to-show
+ * (app-main.mjs), and nothing orders that before vault-opened.  A probe that
+ * wins the race measures a hidden, unfocused window at dpr 1, where live
+ * preview reveals no marker (LP-4) and heading.marker.shown fails five checks.
+ * A larger app.js made the race common.  The wait is bounded so a window that
+ * never gets focus still reports (red), and `focusWait` says which way it went.
  *
  * A SKIP fails the run by default: a green run that measured nothing is worse
  * than a red one.  (§6.5 G9: the earlier `report.skips === 0` clause is STRUCK —
  * the field is `skip`, and `undefined === 0` would have failed every run.)
  */
+export const PROBE_FOCUS_WAIT_MS = 5000
+
+type FocusWait = 'had-focus' | 'focus' | 'timeout'
+
+function whenFocused(run: (how: FocusWait) => void): void {
+  if (document.hasFocus()) { run('had-focus'); return }
+  let settled = false
+  const settle = (how: FocusWait): void => {
+    if (settled) return
+    settled = true
+    window.removeEventListener('focus', onFocus)
+    clearTimeout(timer)
+    run(how)
+  }
+  const onFocus = (): void => settle('focus')
+  window.addEventListener('focus', onFocus)
+  const timer = setTimeout(() => settle('timeout'), PROBE_FOCUS_WAIT_MS)
+}
+
 export function runGeometryProbe(): void {
   if (!window.__PIXELTEST__) return
-  requestAnimationFrame(() => {
+  whenFocused((focusWait) => requestAnimationFrame(() => {
     const probe = window.__verifyGeometry
     if (!probe) {
       // The flag is set but the script is missing — that is a harness fault, and
       // reporting nothing would let a broken gate read as a passing one.
       emitGeometryReport({ ok: false, rows: 0, checks: 0, pass: 0, fail: 1, skip: 0,
-                           error: '__verifyGeometry missing under --pixeltest' })
+                           error: '__verifyGeometry missing under --pixeltest', focusWait })
       return
     }
     // Gate mode is the contract path and the default.  `__PIXELTEST_GATE__` is
@@ -1006,6 +1033,6 @@ export function runGeometryProbe(): void {
     // at.  Gate G9 is only ever read from a plain `--pixeltest` run, which
     // always gates (§5.11.1).
     const gate = window.__PIXELTEST_GATE__ !== false
-    emitGeometryReport(probe({ gate }))
-  })
+    emitGeometryReport({ ...(probe({ gate }) as Record<string, unknown>), focusWait })
+  }))
 }

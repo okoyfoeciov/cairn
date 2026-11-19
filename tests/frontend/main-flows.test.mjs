@@ -17,8 +17,9 @@
 
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { readFileSync } from 'node:fs'
+import { readFileSync, readdirSync } from 'node:fs'
 import * as esbuild from 'esbuild'
+import ts from 'typescript'
 import { AElement, ADocument } from './_minidom.mjs'
 
 const ROOT = new URL('../../', import.meta.url).pathname
@@ -77,7 +78,7 @@ const BUNDLE = (
 const drain = async () => { for (let i = 0; i < 10; i += 1) await new Promise((r) => setImmediate(r)) }
 
 let bootSeq = 0
-async function bootMain(extra = {}, { pane = false } = {}) {
+async function bootMain(extra = {}, { pane = false, page } = {}) {
   const log = []
   const calls = {
     log,
@@ -127,7 +128,8 @@ async function bootMain(extra = {}, { pane = false } = {}) {
       return r ? r(args) : undefined
     },
   }
-  g.document = { readyState: 'complete', addEventListener() {}, getElementById: () => (host ? { ...el(), parentElement: host } : el()), querySelector: () => el() }
+  // `page`: the window main.ts reads its preload values from (`defaultView`).
+  g.document = { readyState: 'complete', addEventListener() {}, getElementById: () => (host ? { ...el(), parentElement: host } : el()), querySelector: () => el(), defaultView: page }
   g.requestAnimationFrame = () => 0
   try {
     const src = BUNDLE + `\n//# boot=${bootSeq += 1}\n`
@@ -422,4 +424,123 @@ test('a note whose read ends after a book was clicked: a book still loading keep
   // path-less one, a newer book still loading, is left to finish.
   assert.deepEqual(got, { 'still loading': 0, opened: 1, 'old book up, newer one failed': 1 },
     'a late note closed a book still loading, or left a book up under the note\'s tab')
+})
+
+/* ═══ §0.58 E111 — the reader's microphone, bound on Linux only ═══════════ */
+
+/** Boot with a pane and capture what main.ts hands the reader.  Nothing of
+ *  the microphone may be built at boot: the counters see every call, also
+ *  the ones `bootMain` clears from the log. */
+async function bootReader(page, extra = {}) {
+  let deps = null
+  const made = { audios: [], mics: [], explains: [] }
+  const AUDIO = { audio: true }
+  const VIEW = { view: true }
+  const harness = await bootMain({
+    './reader:mountReader': (a) => { deps = a[1]; return new Proxy({}, { get: (_t, p) => (p === 'then' ? undefined : () => undefined) }) },
+    './memoir:mountMemoir': () => new Proxy({}, { get: (_t, p) => (p === 'then' ? undefined : () => false) }),
+    './mic-take:createMicAudio': (a) => { made.audios.push(a[0]); return AUDIO },
+    './mic:mountMic': (a) => { made.mics.push(a); return VIEW },
+    './explain:mountExplain': (a) => { made.explains.push(a); return {} },
+    ...extra,
+  }, { pane: true, page })
+  assert.ok(deps, 'main.ts never mounted the reader')
+  return { ...harness, deps, made, AUDIO, VIEW }
+}
+
+/** The band's factory reads its height from `window`, which node lacks. */
+function withWindow(page, fn) {
+  const had = 'window' in globalThis
+  const saved = globalThis.window
+  globalThis.window = page ?? {}
+  try { return fn() } finally { if (had) globalThis.window = saved; else delete globalThis.window }
+}
+
+test('mic: no __CAIRN_OS__ (macOS, a plain browser): the reader gets no mountMic and nothing is built', async () => {
+  for (const page of [undefined, {}, { __CAIRN_AI_BASE__: 'http://127.0.0.1:4321' }]) {
+    const { deps, made } = await bootReader(page)
+    assert.equal(deps.mountMic, undefined, `mountMic bound off Linux (page ${JSON.stringify(page)})`)
+    assert.equal(typeof deps.mountExplain, 'function', 'the band lost its factory')
+    assert.equal(made.audios.length + made.mics.length, 0)
+  }
+})
+
+test('mic: on Linux, mountMic reaches mic.ts with the reader\'s hooks, a recorder on the band\'s base, command 23 and the modal/menu test', async () => {
+  let modal = false
+  let menu = false
+  const { deps, made, calls, AUDIO, VIEW } = await bootReader({ __CAIRN_OS__: 'linux' }, {
+    './ipc:copyText': (a) => Promise.resolve('copied ' + a[0]),
+    './modal:modalIsOpen': () => modal,
+    './menu:isMenuOpen': () => menu,
+  })
+  assert.equal(typeof deps.mountMic, 'function')
+  assert.equal(made.audios.length + made.mics.length, 0, 'the microphone was built at boot, before a book')
+
+  const host = { id: 'reader' }
+  const hooks = { restoreFocus: () => 'restored' }
+  assert.equal(deps.mountMic(host, hooks), VIEW)
+  assert.equal(made.mics.length, 1)
+  const [gotHost, d] = made.mics[0]
+  assert.equal(gotHost, host)
+  assert.equal(d.restoreFocus, hooks.restoreFocus, 'the reader\'s hook was not passed through')
+  assert.equal(d.audio, AUDIO)
+  assert.deepEqual(Object.keys(d).sort(), ['audio', 'copyText', 'layerAbove', 'onError', 'restoreFocus'])
+
+  // The recorder: one per mount, on the default origin.
+  assert.equal(made.audios.length, 1)
+  assert.equal(made.audios[0].base, 'http://127.0.0.1:8770')
+  assert.deepEqual(Object.keys(made.audios[0]).sort(), ['base', 'onError'])
+
+  // Copy is command 23.
+  calls.clear()
+  assert.equal(await d.copyText('hello'), 'copied hello')
+  assert.deepEqual(calls.argsOf('copyText'), [['hello']])
+
+  // Esc steps aside for a modal or a menu.
+  const seen = []
+  for (const [m, n] of [[false, false], [true, false], [false, true], [true, true]]) {
+    modal = m
+    menu = n
+    seen.push(d.layerAbove())
+  }
+  assert.deepEqual(seen, [false, true, true, true])
+
+  // Both error paths go to reportError.
+  calls.clear()
+  const e1 = new Error('copy')
+  const e2 = new Error('vad')
+  await quietly(async () => { d.onError(e1, 'mic-copy'); made.audios[0].onError(e2, 'mic-vad') })
+  assert.deepEqual(calls.argsOf('messageOf'), [[e1], [e2]])
+})
+
+test('mic: the band and the microphone share one ai-service origin', async () => {
+  for (const [page, want] of [
+    [{ __CAIRN_OS__: 'linux' }, 'http://127.0.0.1:8770'],
+    [{ __CAIRN_OS__: 'linux', __CAIRN_AI_BASE__: 'http://127.0.0.1:4321' }, 'http://127.0.0.1:4321'],
+    [{ __CAIRN_OS__: 'linux', __CAIRN_AI_BASE__: 'http://127.0.0.1:9' }, 'http://127.0.0.1:9'],
+  ]) {
+    const { deps, made } = await bootReader(page)
+    deps.mountMic({}, { restoreFocus() {} })
+    withWindow(page, () => deps.mountExplain({}, { onClosed() {} }))
+    assert.equal(made.audios[0].base, want, 'the microphone\'s origin')
+    assert.equal(made.explains[0][1].base, want, 'the band\'s origin')
+  }
+})
+
+test('mic: 8770 is written once in main.ts, and otherwise only at memoir.ts\'s own route', () => {
+  // Code only: a doc comment may name the port.
+  const hits = {}
+  const dir = ROOT + 'src/'
+  for (const name of readdirSync(dir).filter((f) => f.endsWith('.ts')).sort()) {
+    const sf = ts.createSourceFile(name, readFileSync(dir + name, 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TS)
+    let n = 0
+    const walk = (node) => {
+      if (node.kind >= ts.SyntaxKind.FirstLiteralToken && node.kind <= ts.SyntaxKind.LastTemplateToken &&
+        node.getText(sf).includes('8770')) n++
+      ts.forEachChild(node, walk)
+    }
+    walk(sf)
+    if (n) hits[name] = n
+  }
+  assert.deepEqual(hits, { 'main.ts': 1, 'memoir.ts': 1 })
 })

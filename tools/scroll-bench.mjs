@@ -958,17 +958,24 @@ export function generateFlatVault(dir, count, env, longLines = 4000) {
   return { dir, count, reused: false }
 }
 
-/** Cairn, on a debugging port, with a hermetic state directory. */
+/** Cairn, on a debugging port, with a hermetic state directory.  `--vault`
+ *  may hold a book, whose record button (§0.58 E111) must never reach the real
+ *  microphone: the fake capture device and permission UI, its own userData,
+ *  PulseAudio at a socket that does not exist and an empty ALSA config. */
 function launchCairn({ port, geom, vault, stateDir, extraArgs = [] }) {
   if (!fs.existsSync(ELECTRON)) throw new Error('no electron at ' + ELECTRON + ' -- run: npm ci')
+  const alsa = path.join(path.dirname(stateDir), 'empty-alsa.conf')
+  fs.writeFileSync(alsa, '')
   const child = spawn(ELECTRON, [
     path.join(REPO, 'electron-shell', 'app-main.mjs'),
     '--remote-debugging-port=' + port,
+    '--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream', '--user-data-dir=' + stateDir,
     ...extraArgs,
   ], {
     cwd: REPO,
     env: { ...process.env, CAIRN_VAULT: vault, CAIRN_STATE_DIR: stateDir, CAIRN_ELECTRON_GEOM: geom,
-           CAIRN_HEADLESS: '', CAIRN_PIXELTEST: '' },
+           CAIRN_HEADLESS: '', CAIRN_PIXELTEST: '',
+           PULSE_SERVER: 'unix:' + path.join(path.dirname(stateDir), 'no-pulse'), ALSA_CONFIG_PATH: alsa },
     stdio: ['ignore', 'pipe', 'pipe'],
     // F64: its own process group, so cleanup kills exactly this child.
     detached: true,

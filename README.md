@@ -29,7 +29,9 @@ It works end to end: tree, editor with live preview, Properties, the Memoir jour
 secrets viewer with live TOTP codes, the EPUB reader (import or copy an `.epub` into the vault;
 continuous read, Mod-F in-book search and per-book resume; a click on a word explains it in a band
 under the book, through the local ai-service, and a click on a second word can replace the answer
-or split the band into two halves), search, vault switching, and autosave to disk.
+or split the band into two halves; on Debian, a microphone button over the book records, transcribes
+through the same ai-service and shows the transcript in a card with a player and Copy), search,
+vault switching, and autosave to disk.
 
 Verified numbers move. **Re-run rather than trusting a count quoted here.** The current ones:
 
@@ -37,13 +39,14 @@ Verified numbers move. **Re-run rather than trusting a count quoted here.** The 
 cd core && cargo test --no-fail-fast       332 passed, 0 failed, 17 ignored (all targets)
 cd core && cargo clippy --all-targets -- -D warnings   clean
 npx tsc --noEmit                            clean
-npm test                                    970 tests: 970 pass, 0 fail, 0 todo
+npm test                                    1233 tests: 1233 pass, 0 fail, 0 todo
 node --test electron-shell/explain.test.mjs        63 pass (fake ai-service; live leg gated; dpr 1.25)
 node --test electron-shell/explain-badge.test.mjs  21 pass: 0 differing badge pixels, dpr 1/1.25/1.5/2
+node --test electron-shell/mic.test.mjs            29 pass (fake ai-service WebSocket; fake capture device; X11, dpr 2)
 node electron-shell/build-native.mjs        BUILD-NATIVE result=PASS tauri_crates=0
-node electron-shell/build-app.mjs           BUILD-APP result=PASS modules=38
+node electron-shell/build-app.mjs           BUILD-APP result=PASS modules=46 (js=18681393 B, vad=18123768 B)
 npm run selftest:geometry                   50 identities, 50 pass
-./tools/run-g9-electron.sh                  137/137, ok=True, 1920x964, dpr=1.25
+./tools/run-g9-electron.sh                  137/137, ok=True, 1920x964, dpr=1.25 (10 of 10 runs)
 node tools/scroll-bench.mjs --self-test     67 passed, 0 failed
 ```
 
@@ -58,7 +61,10 @@ macOS a packaged `.app` additionally needs `bash tools/sign-macos.sh out/darwin-
 
 State lives at `<appData>/com.cairn.app/state.json` — `~/.config/` on Debian,
 `~/Library/Application Support/` on macOS. Every harness run sets `CAIRN_STATE_DIR` and a temp vault,
-so it never touches the real one.
+so it never touches the real one. Every harness launch that can show a book also carries
+`electron-shell/cdp-drive.mjs`'s `deviceLocks` (Chromium's fake capture device and permission UI,
+its own userData, no reachable PulseAudio or ALSA), so the reader's record button can never reach
+the real microphone.
 
 ---
 
@@ -73,7 +79,14 @@ so it never touches the real one.
   Click-to-explain is `src/bookpick.ts` (the word and the passage), `src/explain.ts` (the band),
   `src/explain-thread.ts` (one half of the band), `src/explain-render.ts` (its DOM) and
   `src/styles/explain.css`; `src/styles/fonts/` holds the only font files shipped (Lora, for the
-  pronunciation badge — see `THIRD-PARTY-NOTICES.md`).
+  pronunciation badge — see `THIRD-PARTY-NOTICES.md`). The reader's microphone (Debian only) is
+  `src/mic.ts` (the button and its card), `src/mic-types.ts` (its seams), `src/mic-take.ts` (one
+  take), `src/mic-recorder.ts`, `src/mic-webm.ts` and `src/mic-wire.ts` (capture, Opus, the live
+  WebM and the socket to ai-service), `src/mic-trim.ts` and `src/mic-clip.ts` (the playback trim
+  and the player), `src/vad.ts` and `src/vad-worker.ts` (the Silero VAD in a per-take Worker), and
+  `src/styles/mic.css`.
+- `vendor/` — the VAD runtime (onnxruntime-web 1.22.0 and Silero VAD v6), byte for byte and
+  SHA-256 pinned; `build-app.mjs` carries it inside `app.js`, so the page still loads nothing else.
 - `docs/CONTRACT.md` — **normative**; `§0` is the ruling index.
 - `docs/KNOWN-ISSUES.md` — the register of what is wrong or missing in the code. Read it before
   "fixing" anything that looks broken.
