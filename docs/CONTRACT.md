@@ -19,7 +19,7 @@ remain: every escalation is settled in §9.**
 One row per ruling id, with the rule as it stands and where it lives. **Section numbers and ids are
 never renumbered or reused** — code cites them (ids like `E14` and section numbers like `§7.3`), so a
 superseded id points at the rule that replaced it or at its own tombstone rather than disappearing.
-Sections are numbered in the order below: §0's passes are §0.1–§0.58, then the body is §1–§10.
+Sections are numbered in the order below: §0's passes are §0.1–§0.57, then the body is §1–§10.
 
 | Id | Current rule | Where |
 |---|---|---|
@@ -78,7 +78,7 @@ Sections are numbered in the order below: §0's passes are §0.1–§0.58, then 
 | M56 | The tab strip, owner 03 — now two fixed tabs | §7.4 |
 | M57 | `nc://vault-lost` has a handler; there is no refresh affordance | §7.3 case 8, §0.12.2 |
 | M58 | **Removed** — the Linux target block | §6.2 |
-| M59 | Rule 5: no transitions anywhere, with six named exemptions | §5.1, §0.24.5 E53, §0.44 E90, §0.56 E109, §0.58 E111 |
+| M59 | Rule 5: no transitions anywhere, with five named exemptions | §5.1, §0.24.5 E53, §0.44 E90, §0.56 E109 |
 | M60 | **Struck by E9** — the sidebar resizes, and `sidebar_w` is a global field | §0.7, §7.6 |
 | M61 | **Overturned by E19** — every folder draws a chevron | §0.17, §5.2 |
 | M62 | **Removed** — the retired memory composition | §8 |
@@ -233,7 +233,6 @@ Sections are numbered in the order below: §0's passes are §0.1–§0.58, then 
 | E108 | EPUB files are first-class tree entries (OS copy or Import move) with an in-house reader, commands 28/29, and per-vault bookmarks | §0.55 |
 | E109 | Click-to-explain in the reader: a press (or a drag of ≤ 8 words) on a book word asks the local ai-service; the answer streams into a bottom band with comart's frozen pronunciation badges; book text is not selectable | §0.56 |
 | E110 | The band's answer fills its width; a pick on a band that holds an answer is STAGED, then placed over the whole band or in a half (comart §3h); the split lasts until the band closes or both halves have ended empty | §0.57 |
-| E111 | The book reader's microphone, Debian only: comart's button, 16px in from the reader pane's bottom-right corner, records; voice-typing's chain streams the take to ai-service's `/api/transcribe/ws` with word timings; comart's PLAIN transcript card (transcript, player, Copy) opens on the pane's middle line, trimmed by comart's Silero VAD, whose runtime rides inside `app.js`; while the card is open the first outside click closes only the card; the sixth rule-5 exemption | §0.58 |
 
 ### §0.1 — DELETED (the errata changelog; the X/Y/Z ids it alone defined are folded into §0's index).
 
@@ -529,8 +528,7 @@ Each cost time and none produced an error message.
 `tools/package-electron.mjs` builds the artefact with no `electron-builder` and no dependency. It
 REFUSES to build anything unless the addon and the bundle already exist and are current, and says
 which is missing rather than packaging a stale one. The stylesheet is INLINED into the page
-(`build-app.mjs`), so a package cannot render unstyled, and so is the VAD runtime, as one string in
-`app.js` (§0.58 E111), so a package cannot lose it; Electron's `default_app.asar` is removed so
+(`build-app.mjs`), so a package cannot render unstyled; Electron's `default_app.asar` is removed so
 a packaging mistake cannot fall back to the welcome screen. `electron-shell/package.test.mjs` runs
 the shipped binary through a real tree-row click and a real contenteditable insertion and then reads
 the bytes on disk. There is no `Depends:` line in the control file — a dependency list is a promise
@@ -1404,7 +1402,7 @@ are deliberately NOT shared across §6.4's owner seam.
 fast scroll through mixed folders would spin arrows all over the sidebar. The duration is therefore
 `var(--chev-ms, 0ms)`, `0ms` everywhere but the one row `tree.ts` arms for ~100ms. The chevron is an
 inline `<svg>` (§0.50 E98), so the custom property reaches it by inheritance, and the transition is
-`!important` because `base.css`'s `*, *::before, *::after` rule is §5.1 rule 5's blanket — **the third exemption to rule 5 and
+`!important` because `base.css:51` is §5.1 rule 5's blanket — **the third exemption to rule 5 and
 the first outside the Properties block.** Cairn's glyph rotates **+90°** where Obsidian's rotates
 −90°, because the two base glyphs point different ways; do not "fix" the sign to match the
 declaration.
@@ -1880,8 +1878,7 @@ button — the shortcut is the entry point.
 - **Scrollers.** Reader mode replaces the note viewer in the same band: the sidebar scroller plus
   the book scroller is **two rendered scrollers** (§5.12.4); the find bar overlays and adds none.
   The explanation band adds a **third, only while it is open** (§0.56 E109), and a **fourth** only
-  while it is split or previews the split (§0.57 E110). The microphone's transcript card adds one
-  more, `.mc-body`, only while it is open (§0.58 E111).
+  while it is split or previews the split (§0.57 E110).
 - **A note takes the pane back from the reader, whatever it shows.** `cancelOpen()`, which every
   other surface calls first, gives the pane back at once when an open has taken it with nothing on
   it yet: a first open's blank page, or a replacement between dropping the old book and rendering
@@ -2044,9 +2041,6 @@ modes"; that is STRUCK by §0.57 E110, which ports them.
   consumed). Some clicks do not close it: a click inside the band, inside an open menu
   (`.ctx-menu`), the modal (`.nc-modal-back`) or the reader's find bar (`.find-bar`), and the click
   that trails a pick. comart's find bar is the browser's, so the page never sees a click on it.
-  Nor does a click on the reader's microphone or its card layer (`.ep-mic`, `.ep-mic-layer`), and
-  no click closes the band while the microphone's transcript card is open: the card's shield closes
-  the card, and only the next click is the band's (amended by §0.58 E111).
   Since §0.57 E110, a click whose trusted left press began inside the band, or inside one of those
   layers, does not close it either, wherever it is released. The engine aims a press-drag-release's
   click at the common ancestor, so a press on the band's padding released over the book clicks
@@ -2280,10 +2274,8 @@ the stream, the error lines, the badges, the follow-up and the close rules.
 - **Esc, the outside click and focus.** The reader owns both, as in §0.56; the band never
   dismisses itself. Esc on `#reader` acts on ONE layer per press, in this order: the find bar, the
   staged pick (`cancelStaged()`: nothing is spent, and the mark goes back to the last placed word,
-  D1), then the band, both halves. The microphone's transcript card, while it is open, takes Esc
-  before all three, at window capture (amended by §0.58 E111). Esc never closes one half. A held
-  key's repeats do nothing. The mark goes back also when Esc comes during the held second press of
-  a double-click, which asks
+  D1), then the band, both halves. Esc never closes one half. A held key's repeats do nothing. The
+  mark goes back also when Esc comes during the held second press of a double-click, which asks
   nothing and never painted the mark; only a drag that will ask keeps the mark until its release.
   A trusted click outside the band closes it, as before: both threads, the stage, and back to one
   panel (comart's `panel-hidden`, `panel.js:426-430`). A press on a book word while a pick is
@@ -2349,7 +2341,7 @@ the stream, the error lines, the badges, the follow-up and the close rules.
   beats the browser's `[hidden]` rule. `.ex-scroll` is still the sheet's ONLY scroller
   declaration. **No new motion:** the wash, the reflow and the lines are instant. comart's
   `.explain-place-half` transition animates a background that no rule sets, so it is not ported,
-  and §5.1 rule 5 keeps exactly five exemptions (§0.58 E111 adds a sixth).
+  and §5.1 rule 5 keeps exactly five exemptions.
 - **Scrollers.** Reader mode has a **fourth** rendered scroller, the second `.ex-scroll`, while the
   band is split and while one panel previews the right half. Leaving the preview or closing the
   band takes it away again (`display: none`). All of this is measured in the engine (Tests below).
@@ -2394,619 +2386,6 @@ the stream, the error lines, the badges, the follow-up and the close rules.
   tests fail alone on that fix's pre-fix code. On the code before the press was recorded on
   `pointerdown` it gives `ℹ pass 60`, `ℹ fail 1`: the press step, with all three of its legs
   wrong. What the engine does not reach yet is listed in KNOWN-ISSUES §5.
-
-### §0.58 — The book reader's microphone (E111)
-
-**User rulings (2026-11-19).** A microphone button over the book records a take, sends it to the
-local ai-service to be transcribed, and shows the transcript in a card with a player and Copy. The
-rulings, in substance:
-
-1. **Where:** the book reader only. Leaving the book discards the take.
-2. **OS:** Debian only. `tools/cairn.entitlements` and the packaged Info.plist are not touched; the
-   macOS gap is recorded (KNOWN-ISSUES §5).
-3. **Motion:** all of comart's motion for the button and the plain card: the Stop's blink, the dots,
-   the hover fades, the press shrink, the card's entrance, Copy's fade and the play button's press.
-   **There is no close motion**: comart removes its plain card at once (`endPlain`). Rule 5 gets one
-   new exemption, the sixth (§5.1), and its reduced-motion behaviour is comart's: only the Stop's
-   blink stops.
-4. **Timings:** ai-service's WebSocket route `/api/transcribe/ws` with word timings on, and comart's
-   exact trim with its Silero VAD. No new IPC: the table stays at 29.
-5. **The VAD runtime goes INSIDE `app.js`.** §6.3's "one `app.js`" and E34's self-contained page
-   stand unamended: nothing is shipped beside the page and nothing is loaded from `file://` at run
-   time. The boot cost and the memory below are accepted.
-6. **The project `CLAUDE.md`:** its file list (§1) and its "User features that are NOT Obsidian's"
-   row (§4) may name the new modules and this feature.
-7. **The real-engine Silero leg** reads real speech from `CAIRN_MIC_SPEECH_WAV`, default
-   `$HOME/voice-typing/tests/e2e/clip.wav`, in place. A missing file skips only that step, saying
-   why. The file is never copied into the repository, and every committed golden comes from a
-   synthetic signal.
-8. **The button over the band is exactly comart's.** It sits 16px in from the reader pane's
-   bottom-right corner and **never moves**. Its z-index is above the band's, so with the band open
-   it floats over the band's bottom-right corner, as comart's floats over its panel. The band gets
-   no padding and no reserved space for it. This is the design, not a gap.
-
-**§0.17's method does not apply here, as in §0.56.** Obsidian has nothing like it. The references are
-the user's own projects, read directly: **comart** at `7ec2379` (`~/comart`: `mic.js` and `mic.css` for
-the button and the plain card; `offscreen.js` for the take's sequencing, the trim, the sink wake and
-the clip player; `vendor/silero/vad.js` for the VAD), **voice-typing** at `c3910bf` (`~/voice-typing`:
-the audio chain and its wire, deadline and retry rules, which are the authority for quality and
-latency) and **ai-service**'s `/api/transcribe/ws` (`transcribe_stream.go`). Each is ported as it is,
-except where a divergence below says otherwise, with its reason. **Not ported:** comart's extra Stops
-(CHECK, Ask, the camera) and page Ask during a take; the full card (grip and drag, word spans, the
-explanation frame, CHECK, its 15vh frame and 80vh cap, its backdrop and its 240 ms close fade); zoom
-cancellation; fullscreen re-parenting; extension-context recovery; the woff2 fonts; "Already
-recording in another tab"; opening `setup.html` on a denial; `mic:clipgone`; bfcache `pageshow`;
-`navigator.clipboard`; and voice-typing's screen-lock cancel, which would need a new IPC event.
-
-- **The button.** `section.ep-mic` is a child of `<body>`, not of `#reader`: `main.editor` is
-  `contain: paint`, which clips every fixed descendant to the pane (measured: a fixed child of
-  `#reader` at z 2147483647 lays out at the pane's left edge, and the sidebar stays on top). It is
-  `position: fixed; right: 16px; bottom: 16px; z-index: 71`. `.app` reaches the window's right and
-  bottom edges, so that is the reader pane's corner. The button is comart's 40px target at `zoom:
-  1.4`: a 56px box around a 33.6px glyph, and arming, recording and transcribing keep the same box
-  and centre. It is `[hidden]` unless a book shows: `!root.hidden && mode === 'read' && rendered`.
-  So it is absent over a note, the Memoir tab, an error page, the blank page of an open in flight
-  and a replacement open whose old book is already gone. Measured by `electron-shell/mic.test.mjs`
-  E2 at dpr 2 (1200×800): `#reader` is 412..1200 × 40..800, and the button is 55.984375 square at
-  (1128.015625, 728.015625)–(1184, 784), 16.000 from the pane's right and bottom edges. Opening the
-  band does not move it, and `elementFromPoint` at its centre lands in `.mc-btn` with the band open.
-- **Its states** (`data-state`, the `aria-label`, and what the 56px box shows):
-
-  | State | `aria-label` | Shows | A trusted click |
-  |---|---|---|---|
-  | idle | `Record` | the bare mic glyph with its halo | closes an open card at once (its clip released), then arming, `MicAudio.start()` |
-  | idle + a status | `Record` | a pill growing leftward: glyph + line (`.is-error` red) | as idle; on the cap's sticky line, only dismisses it |
-  | arming | `Starting` | a circle with three pulsing dots | cancels the take at once and silently (`take.cancel()`, V3) |
-  | recording | `Stop recording` | a circle with the red Stop, blinking | transcribing, `take.stop()`; a refused stop cancels and goes back to idle |
-  | transcribing | `Transcribing` | a circle with the dots, `cursor: progress` | nothing |
-
-  The red Stop shows only once captured audio arrives (`recording()`), never at the click. Every
-  listener refuses an untrusted event. Keyboard activation (`detail` 0) records and stops (V4). The
-  button's `mousedown` is `preventDefault`ed, so a press never takes focus out of `#reader` (V5); a
-  pointer click then calls `restoreFocus()`. A keyboard click leaves focus on the button, so the
-  next Enter or Space stops the take. **A held Enter is one click:** the engine clicks a focused
-  button on every Enter keydown, auto-repeats included, so the button cancels the repeats
-  (`keydown` with `e.repeat`, `preventDefault()`) and only the first press clicks. Space needs no
-  guard, because it clicks on `keyup` only (measured: a held Space made one click). E21 holds Enter
-  through four repeats and asserts one take; without the guard the button went `arming`, `idle`,
-  `arming`, `idle`, `arming`, `recording`.
-- **Every line it prints, word for word.** The microphone's failures arrive as codes (`MicError`) and
-  the UI owns their words. The audio side words only the `Transcription failed — …` lines.
-
-  | When | Line | How it shows |
-  |---|---|---|
-  | `micFailed('denied')` | `Microphone access denied` (V10) | red, until the next click |
-  | `micFailed('unavailable')`, or `start()` threw | `Microphone unavailable` | red, until the next click |
-  | `cancelled('over')`: the 119 s cap | `Recording cancelled — over 2 minutes` | not red, sticky; the click that reads it only dismisses it |
-  | `cancelled('short')`: under the floors | `Too short — try again` | not red, 1,800 ms |
-  | `failed(message)` | the message verbatim, `Transcription failed` when empty | red, until the next click |
-  | the clip will not play | `Couldn't play the recording.` / `Couldn't play the recording (unsupported format).` | red, 1,800 ms |
-  | an empty transcript | `No speech detected` in the card, muted italic | Copy hidden, the player shown |
-
-  The status line is capped at `52vw` and ellipsised. comart's quirk is kept: a status does not
-  cancel a pending flash's timer, so an error set within 1.8 s of a flash is cleared when that
-  timer fires at idle.
-- **The plain card** (comart `showPlainOnMicCard` / `endPlain`). It is built fresh on each `done`, in
-  `div.ep-mic-layer`, a second body child that exists only while the card is open and is removed on
-  close, never hidden. It holds the transcript (selectable text), the player (play/pause, a seek
-  track and an `m:ss / m:ss` clock) and Copy. **There is no grip, no CHECK, no word chips, no
-  explanation, no header and no ×.** It hangs on `#reader`'s middle line at the pane's left edge
-  and width (`top`, `left`, `right: auto` and `width` written from `#reader`'s rect), by
-  `transform: translateY(-50%)` of its own height, so a reflow needs no measurement. It is capped
-  at `33vh`, and its body scrolls. It is placed again on a window `resize` and, while it is open, by
-  a `ResizeObserver` on `#reader` (the sidebar's drag resizes the pane without one). It autoplays
-  (`clip.play(true)`). The entrance class is added on the next frame, after the rect read has
-  flushed the card's first style. Copy goes through command 23 (`copy_text`; V6), and the check
-  shows only after the copy resolved, for 1,500 ms; a rejection is reported (`mic-copy`). Recording
-  again closes the open card at once. Closing is instant and releases the clip. Measured (E5, dpr
-  2, 1200×800): the card is 788×264 at y 288..552, its middle 420 is `#reader`'s middle 420, 264 is
-  0.33 × 800, and a long transcript scrolls inside it (`scrollHeight` 480 > `clientHeight` 263).
-  E6: opacity 0 at 1.9 ms after the layer was inserted, 0.357 at 48.7 ms, 0.932 at 148.9 ms and 1
-  at 232.1 ms. E4: at the card's first frame the button's background is `rgba(0, 0, 0, 0)` and its
-  transition has no `background`, so the black circle leaves at once.
-- **Rule 3: while the card is open, the first click outside it closes only the card.**
-  - `.mc-shield`, the layer's first child, covers the window below the title bar (`inset:
-    var(--titlebar-h) 0 0 0`): the sidebar, the book, the band, its grip and staging overlay, and
-    the find bar. A trusted click on it closes the card, then calls `restoreFocus()`. It listens at
-    TARGET phase, never capture, so the reader's document-capture click listener still sees the card
-    open.
-  - **The reader stands down.** `onDocClick` returns while `cardOpen()`, after its swallow block (a
-    pick that began before the card opened still owns its trailing click), so the click that closes
-    the card never closes the band. The next click is the band's, by §0.56's rules. `LAYERS` gains
-    `.ep-mic, .ep-mic-layer`: a click on the button, or a press that began on the button or the
-    layer, never closes the band either (comart exempts its whole widget from the panel's outside
-    click).
-  - **No book pick starts while the card is open.** The guard is in `onContentDown` only, not in
-    `canPick()`, so the band's reveal still follows its mark when the window is resized. The shield
-    takes such a press anyway; the guard holds it without layout.
-  - **The title bar stays live.** It is not shielded, so a tab or a window control works, and a click
-    there closes neither the card nor the band (E11, which clicks the active tab's label and asserts
-    that a document-capture counter saw the click; it fails with the stand-down removed).
-  - **The find bar survives.** No press on the button, the card or the shield closes the reader's
-    find bar or wipes its query. `find.ts` hides the bar (and clears its field) on any `pointerdown`
-    outside it, heard at document BUBBLE, so `section.ep-mic` and `div.ep-mic-layer` stop
-    `pointerdown` from propagating past themselves. Capture listeners still see every press: the
-    reader's `onDocDown` (the band's outside-press rule) and the menu's. comart has no such case,
-    because its find bar is the browser's. E23 types a query, presses Record, then clicks the
-    shield, and asserts the bar and its query both times; without the stop, the press on Record
-    closed the bar.
-  - A press in the card released on the shield, or the reverse, clicks the common ancestor
-    `.ep-mic-layer`, and nothing happens (comart is the same).
-  - **The wheel scrolls what is behind.** comart's page scrolls under its shield because the
-    document is the scroller there. Cairn's book and band are inner scrollers that are not
-    ancestors of the shield, so the engine's chaining never reaches them: a wheel over the shield,
-    the card or the button (`passWheel` in `mic.ts`) goes to the card's own text while it has room
-    in that direction (the engine scrolls it), else to the first scroller under the pointer outside
-    the mic (`elementsFromPoint`) that has room, by `deltaY` (lines 40px, pages its height, as
-    explain.ts's staged-pick overlay), and the event is cancelled. Ctrl+wheel is the zoom and is
-    left alone; nothing with room means nothing moves. E24 wheels over the shield, the long card's
-    text, the text at its end and the button.
-- **Esc.** The mic listens for `keydown` at WINDOW capture, the first keydown listener in the page.
-  A trusted, non-repeat Esc with the card open closes the card, stops propagation and calls
-  `restoreFocus()`. It steps aside while a modal or a menu is open (`layerAbove()`; V8), whose own
-  Esc then runs. After it has closed the card it swallows that key's repeats until the Escape
-  `keyup`; a fresh non-repeat Esc also ends the hold, in case a `keyup` was lost. Without it, a held
-  Esc with focus in the find field would close the card and then the find bar, because the find
-  field's Esc has no repeat check (read from the code); comart has the same hole. So the order is
-  one layer per press:
-  the card, then the find bar, the staged pick and the band (§0.57).
-  With NO card, a trusted, non-repeat Esc while focus is on the button (after a keyboard click) and
-  no modal or menu is above calls `restoreFocus()` and does not stop propagation. The button is a
-  body child, so no reader layer would hear that Esc: one press gives focus back to `#reader`, and
-  the next Esc is the reader's. The take, if one is live, goes on. E22 ends a keyboard take on
-  "Too short", presses Esc and asserts focus inside `#reader` with the band still open, then a
-  second Esc closes the band; without it, focus stayed on the button.
-- **Focus.** `restoreFocus` is the reader's `focusReader()`: nothing when the reader is hidden or
-  focus is already inside `#reader` (the find field keeps it); otherwise the band root if the band
-  is open, else the book's scroller. It runs after a pointer click on the button, after the cap's
-  dismissal, after a shield click that closed the card, after an Esc that closed it, and after a
-  non-repeat Esc on the focused button with no card; never from `leave()` or `destroy()`. This is
-  §0.57 D4's rule: focus stays where the reader's Esc is heard.
-- **Leaving the book** (ruling 1). `mic.leave()` runs right after both `closeExplain()` calls, in
-  `clearBook()` and `hide()`. That covers close and reset, another book, the Memoir tab, another
-  note, a vault switch and `cancelOpen`. It discards any take silently (no `"stop"`), closes the
-  card and releases its clip, clears the status and its timer, and goes back to idle, with no
-  message and no `restoreFocus()`. It is idempotent. `destroy()` is `leave()`, then the three
-  window listeners go, the `ResizeObserver` disconnects, the root is removed and `audio.destroy()`
-  runs. The mic holds **exactly THREE window listeners** for the life of the mount: `keydown` and
-  `keyup` at capture (Esc and its held repeats), and `resize`.
-- **Debian only** (ruling 2). `main.ts` binds `mountMic` only when the preload's `__CAIRN_OS__` is
-  `'linux'`. On macOS the reader mounts nothing and no `.ep-mic` exists: the hardened runtime would
-  need `com.apple.security.device.audio-input`, and the package `NSMicrophoneUsageDescription`.
-  `app.js` still carries the VAD payload there (size goals are retired, §0.47 E95). `main.ts` reads
-  `__CAIRN_OS__` and `__CAIRN_AI_BASE__` off `document.defaultView` once at boot, not off the
-  `window` global, because three of its harnesses boot it with a stub document and no `window`. It
-  spreads `mountMic` in only on Linux (`...(linux ? { mountMic } : {})`), so
-  `exactOptionalPropertyTypes` needs no `| undefined` on `ReaderDeps`.
-- **The seams** (`src/mic-types.ts`, types only, like `explain-types.ts`). **Reader ↔ mic:** the
-  reader supplies `MicHooks { restoreFocus }`; the mic is a `MicView { setShown, leave, cardOpen,
-  destroy }`; `main.ts` hands the reader a `MountMic = (host, hooks) => MicView`, and the reader
-  never imports the mic. **Shell:** `MicShellDeps { audio, copyText, layerAbove, onError }`, bound in
-  `main.ts`: `createMicAudio({ base: aiBase, onError })`, command 23, `modalIsOpen() ||
-  isMenuOpen()`, and `reportError`. Nothing opens until the first take: no device, no socket, no
-  wasm, no worker. **UI ↔ audio:** `MicAudio.start(events) → MicTake { stop, cancel }`, one take at a
-  time. `MicTakeEvents` are `recording`, `micFailed(MicError)`, `transcribing`, `done({ text, clip })`,
-  `failed(message)` and `cancelled('over' | 'short')`. Exactly one ending arrives (`micFailed`,
-  `done`, `failed` or `cancelled`), and nothing at all after it or after `cancel()`. `stop()` is true
-  only while the take is recording; otherwise it is false and does nothing. `cancel()` discards
-  silently from any state. `done` comes only once its clip is ready. `MicClip` is comart's player
-  (`play`, `seek`, `state`, `watch`, `release`). The UI also guards every event with the take's own
-  token, and a stale `done` has its clip released.
-- **One ai-service origin.** `main.ts` writes `const aiBase = __CAIRN_AI_BASE__ ??
-  'http://127.0.0.1:8770'` once, and the band and the microphone both use it. `8770` appears in
-  `src/*.ts` only there and at `memoir.ts`'s own site; `main-flows.test.mjs` pins that with a
-  TypeScript-AST literal scan. `createMicAudio` requires `base` and has no fallback. A missing or
-  non-`http(s)` base never constructs a WebSocket: the take records and passes the floors, and then
-  ends `Transcription failed — transcription connection failed`, exactly like a refused base.
-  §0.56's `CAIRN_AI_BASE` seam fails closed for the microphone too. Measured (E20):
-  `CAIRN_AI_BASE=http://example.com` gives the page `http://127.0.0.1:9`, the take ends on that
-  red line, and the fake ai-service saw 0 connections.
-- **The audio chain** (`src/mic-recorder.ts`, `mic-webm.ts`, `mic-wire.ts`). voice-typing's
-  implementation is the authority for quality and latency, so its parameters are carried as they
-  are: getUserMedia (raw) → `MediaStreamTrackProcessor` on the page → the average of the planes →
-  WebCodecs Opus at voice-typing's opusenc settings → a live WebM written by hand → a WebSocket to
-  `/api/transcribe/ws`, under voice-typing's wire, deadline and retry rules. One take, in order:
-  1. `start()`: arming; the cap poll starts at once, so arming is bounded from the click. Then
-     getUserMedia with `RAW_CONSTRAINTS`, and `new MediaStreamTrackProcessor({ track,
-     maxBufferSize: 300 })`. `armed` fires once the processor exists, before the first read.
-  2. The first buffer: recording, `first-audio` (the UI's `recording()`), and the socket opens now:
-     the base with `http` turned into `ws`, then
-     `/api/transcribe/ws?type=audio%2Fwebm%3Bcodecs%3Dopus%3Bclient%3Dcairn`. The encoder is
-     configured at that buffer's sample rate.
-  3. Every buffer is downmixed and encoded. Every packet is written as `k × 60 ms`, sent at once and
-     kept (the WebM header goes in front of packet 0). Bytes queue in order while the socket
-     connects.
-  4. `stop()` (recording only): `stopping` fires synchronously (the UI's `transcribing()`). The
-     capture is read up to the buffer that holds the click (at most 50 ms), then `track.stop()`; the
-     encoder is flushed, raced against 3 s; the held last packet gets its `DiscardPadding`. Under
-     350 ms since the first buffer, or under 1,200 B, the socket closes without `"stop"` and the
-     take is `cancelled('short')`. Otherwise `"stop"` goes out and **`sent { clip, audioMs, answer }`
-     fires in the same tick**: the kept bytes as a Blob, the captured length, and a promise of the
-     final answer (`{ text, first_word_ms?, last_word_ms? }` after any retry, or null on any other
-     ending; it never rejects).
-  5. One reply within 30 s. `classifyReply` gives text, empty, retry or fail (the mapping below). A
-     retry sends every kept byte on a new socket, in frames of at most 256 KiB, then `"stop"`,
-     under the same deadline; a second retry is a failure. Once an attempt's outcome is in, the
-     client closes that socket, as voice-typing closes its connection after reading.
-  6. `cancel()` from any state: `track.stop()`, the encoder closed, the socket closed without
-     `"stop"`, the bytes dropped; a late reply is ignored.
-  7. The 119 s cap is checked on the 200 ms poll and on the audio clock of each captured buffer, so
-     a throttled timer cannot let a take run to AssemblyAI's 120 s limit.
-
-  A failed or lost device (`NotAllowedError`/`SecurityError` → `'denied'`, anything else →
-  `'unavailable'`, also mid-take) is a `mic-failed { error, detail }` ending; if the processor
-  cannot be built, the opened tracks are stopped first. A failure in the capture pump or anywhere
-  in the stop path ends the take once (`mic-failed 'unavailable'`, or `Transcription failed — no
-  answer`) instead of hanging it.
-- **The parameters: voice-typing → Cairn** (vt = `~/voice-typing`, ai = `~/ai-service/internal/server`;
-  **exact**, **equivalent** = the same effect by another mechanism, **differs** = with its reason).
-  Every value is `mic-recorder.ts`'s `DEFAULTS`, `RAW_CONSTRAINTS` or `opusConfig()`, or
-  `mic-webm.ts`'s writer, unless the row says otherwise.
-
-  | # | voice-typing | Cairn | Verdict and reason |
-  |---|---|---|---|
-  | 1 | `pulsesrc`, the default source (vt SPEC.md:136) | getUserMedia with no deviceId | **equivalent**: the same selection rule, through Chromium's audio client |
-  | 2 | `client-name="Voice Typing"` (config.py:55,61) | not settable | **differs**: cosmetic, and there is no API |
-  | 3 | `application.id=org.gnome.VolumeControl` (config.py:62-68) | none | **differs**: no API; its reason (the indicator moved voice-typing's own top-bar button) does not apply to an in-window button |
-  | 4 | `latency-time=10000`, 10 ms segments (config.py:69) | Chromium's capture buffers | **equivalent** on the fake device: 441 frames at 44.1 kHz, 10 ms steps. The real device was never measured |
-  | 5 | `buffer-time=200000`, 200 ms of overrun headroom (config.py:70) | `maxBufferSize: 300` (3 s) | **differs**: capture runs on Cairn's UI thread, and the default 10-buffer queue lost 20 ms of audio on a 120 ms stall; 300 lost nothing up to a 2 s stall |
-  | 6 | `format=S16LE` (config.py:56) | AudioData `f32-planar` | **equivalent**: the web exposes only float; lossless, but the s16 → float scale is not libopus's, so the bytes differ |
-  | 7 | `rate=48000`; PipeWire/Pulse resamples the device (config.py:56) | the encoder at the delivered rate; Chromium resamples to 48 kHz inside the encoder | **48 kHz device: exact** (OpusHead byte-identical). **44.1 kHz: differs**: Chromium's resampler adds 10–31 ms during the take, OpusHead says 44100, and 0.73 ms comes off the end (KNOWN-ISSUES §5) |
-  | 8 | `channels=1`: PipeWire's and PulseAudio's stereo → mono average | `toMono`: `(L+R)*0.5`, n > 2: sum/n | **exact**: bit-identical to the f32 average on 20,000,000 random pairs |
-  | 9 | no EC/NS/AGC (SPEC.md:138) | `echoCancellation`, `noiseSuppression`, `autoGainControl` false | **exact**: the settings echo all three false. `channelCount: 1` is ignored on the raw path, which row 8 handles |
-  | 10 | the first buffer → recording, opens the stream (SPEC.md:152-154) | the first AudioData → `first-audio`, the socket opens | **equivalent**. Click → first buffer on the fake device: 98.1–124.1 ms on a page's first take (the payload's arm cost, below), 3.5–29.8 ms after; `start()` → getUserMedia 0.5–1.3 ms on the first take, 0.0–0.4 ms after |
-  | 11 | pipeline parked in READY between takes (SPEC.md:133) | getUserMedia per take | **differs**: there is no "connected but not capturing" API, and the microphone opens per take |
-  | 12 | Stop = EOS; at most one unread 10 ms segment dropped | read until the buffer holding the click (≤ 50 ms), then `track.stop()` | **equivalent or better**: `track.stop()` drops whatever is queued, so the wait keeps everything before the click; nothing was lost with a 300 ms stall at the click |
-  | 13 | `DRAIN_TIMEOUT_MS = 3000` (config.py:53) | the flush raced against 3 s | **equivalent** |
-  | 14 | `audio-type=generic` (config.py:73) | `opus.application: 'audio'` | **exact** (echoed back) |
-  | 15 | `bitrate=128000` (config.py:74) | `bitrate: 128000` | **exact** (echoed back) |
-  | 16 | `bitrate-type=constrained-vbr` (config.py:75) | `bitrateMode: 'variable'` | **exact in configuration**: Chromium sets `OPUS_SET_VBR(1)` and leaves libopus's constraint on; packet sizes equal GStreamer's constrained VBR 142/142 on the same speech |
-  | 17 | `complexity=9` (config.py:76) | `opus.complexity: 9` | **exact** |
-  | 18 | `frame-size=60` (config.py:77) | `opus.frameDuration: 60000` | **exact** |
-  | 19 | `bandwidth=auto` (config.py:78) | no knob; libopus's default is auto | **equivalent** (fullband in both) |
-  | 20 | `dtx=false` (config.py:79) | `opus.usedtx: false` | **exact** |
-  | 21 | `inband-fec=false` (config.py:80) | `opus.useinbandfec: false`, `packetlossperc: 0` | **exact** |
-  | 22 | `max-payload-size=4000` (config.py:81) | no knob | **equivalent**: packets stay under 1,000 B |
-  | 23 | Debian's libopus 1.5.2 | Chromium's bundled libopus | **differs**: on identical PCM, sizes 142/142 equal, bytes 88/142 |
-  | 24 | EOS: the last frame padded, a BlockGroup with DiscardPadding | `flush()` gives ceil((N + preSkip)/2880) packets; the writer adds the DiscardPadding | **exact**: decoded length = input length on 7 of 7 lengths |
-  | 25 | OpusHead preSkip 312, CodecDelay 6.5 ms, SeekPreRoll 80 ms | the same (preSkip read from Chromium's description) | **exact** |
-  | 26 | `webmmux streamable=true` (config.py:84) | `LiveWebmWriter` | **exact**: byte-identical to GStreamer's output given the same payloads, UID, date and app strings (`mic-webm.test.mjs`, a synthetic golden) |
-  | 27 | `min-cluster-duration=100000000` (config.py:85) | a new cluster when t − clusterStart ≥ 100 ms | **exact** |
-  | 28 | MuxingApp/WritingApp GStreamer's strings | `Cairn` / `Cairn` | **differs**: identity metadata nothing reads |
-  | 29 | Tags BITSPS=128000, Name "Audio", DefaultDuration 60 ms, SamplingFrequency 48000, NUL-terminated strings | the same | **exact** |
-  | 30 | block timestamps from opusenc's sample count | k × 60 ms | **exact**; Chromium's own chunk timestamps step 59999/60000/60001 µs and are not used |
-  | 31 | appsink `sync=false max-buffers=0 drop=false` (config.py:87-92) | written and sent in the encoder's output callback, never dropped | **equivalent** |
-  | 32 | chunked `POST /api/transcribe/stream` (SPEC.md:167-170) | `GET /api/transcribe/ws?type=…` | **differs, by ruling 4**: a renderer cannot stream an upload over http://, and the IPC table stays at 29 |
-  | 33 | `?timestamps=0` | timings on (the WS route forwards no query) | **differs, by ruling 4**: the trim needs them |
-  | 34 | one new connection per take to an IPv4 literal (SPEC.md:167) | one socket per take to `aiBase`, required | **equivalent**; a missing or bad base fails closed, never dials |
-  | 35 | `Content-Type: audio/webm;codecs=opus;client=voice-typing` (config.py:107) | wire type `audio/webm;codecs=opus;client=cairn` (`WIRE_TYPE`) | **exact in kind**: the tag only labels ai-service's log, and passes both of its type checks. The clip Blob keeps comart's `audio/webm;codecs=opus` (the card's `<audio>`: `canPlayType` "probably") |
-  | 36 | headers sent at once; the provider dials now (stream.py:339-344) | the socket opens at the first buffer | **equivalent**: the upgrade completes before packet 0 exists |
-  | 37 | coalesce what is queued into one chunk (stream.py:349-373) | one binary frame per packet (the header with packet 0); queued frames flushed in order on open | **equivalent**: each frame becomes one inner chunk |
-  | 38 | never a zero-length chunk (stream.py:51-55) | `send()` ignores empty buffers | **exact**: 0 empty frames in every run |
-  | 39 | TCP_NODELAY (stream.py:329) | Chromium's socket | **equivalent**: `ws.send` → server p50 0.5–0.68 ms |
-  | 40 | the terminator only after EOS and after the mic is released (SPEC.md:157,173) | `"stop"` after `track.stop()`, the flush and the last packet | **exact**: click → the server has `"stop"` in 9.3–15.3 ms (307 ms under an injected 300 ms stall) |
-  | 41 | never half-close (SPEC.md:174) | no close before the reply or the deadline; closed once the outcome is in | **equivalent** |
-  | 42 | cancel = close without the terminator (SPEC.md:175) | close without `"stop"` | **exact** |
-  | 43 | connect timeout 5 s (config.py:109) | the socket's open, upgrade included, within 5 s | **equivalent** |
-  | 44 | no timeout while recording; 30 s after the terminator (config.py:108) | the same | **exact** |
-  | 45 | a body watchdog at 32 s (stream.py:214-224) | none | **equivalent**: `ws.send` never blocks, and the 30 s deadline covers a stuck socket |
-  | 46 | an HTTP parser: status + body (stream.py:421-440) | one text frame = the inner body; the status is dropped by ai-service | **differs**: classification is by error string (below) |
-  | 47 | retry once with Content-Length and the kept bytes (stream.py:394-419) | retry once: a new socket, every kept byte in frames ≤ 256 KiB, `"stop"` | **equivalent**: the WS handler always pipes into a chunked inner POST |
-  | 48 | floors: < 350 ms since the first buffer or < 1,200 B → a quiet cancel (config.py:51-52) | the same | **exact** |
-  | 49 | cap 119 s, 200 ms poll, discard (config.py:49-50) | the same, plus the audio-clock check | **equivalent** |
-  | 50 | a toggle during arming = cancel (recorder.py:132-133) | the UI's arming click calls `take.cancel()`; `stop()` in arming does nothing | **exact** as the feature behaves |
-  | 51 | takes may overlap a transcription (SPEC.md:52-54) | a click while transcribing is ignored | **differs**: comart's one-take-at-a-time |
-  | 52 | a screen lock cancels (SPEC.md:270-273) | not ported | **differs**: it needs a main-process `powerMonitor` event, so new IPC |
-  | 53 | a per-take log, never the text (SPEC.md:183-184) | per-take `stats` on the events; nothing logged | n/a |
-- **What an answer means** (`classifyReply`): voice-typing's classify (vt `stream.py:70-115`), mapped
-  through ai-service's error strings onto the WebSocket route (`transcribe_stream.go:185-263`).
-
-  | voice-typing's signal | over the WebSocket | Cairn | Line when it ends the take |
-  |---|---|---|---|
-  | connect refused → retry | `error`, close 1006, never opened | retry | `transcription connection failed` |
-  | EPIPE/ECONNRESET mid-body → retry | close 1006 before `"stop"` | remembered; recording goes on; retry at stop | `transcription connection failed` / `… closed` |
-  | 30 s response timeout → retry | no frame 30 s after `"stop"` | close, retry | `no transcription response` |
-  | a malformed or non-object 200 → retry | a frame that is not a JSON object, or binary | retry | `no answer` |
-  | 200 `{"text"}` → text, or empty | the same body | text with its word timings; blank → empty → `No speech detected` | — |
-  | 502 `deepgram returned no transcript` → empty | `{"error": …}` | empty → `No speech detected` | — |
-  | 502 `could not reach …`, `assemblyai returned N`, `… unparseable JSON` → retry | `{"error": …}` | retry: every string not on the final list | the server's string |
-  | (WS only) `could not reach the transcription service` | `{"error": …}` | retry | the server's string |
-  | 413 `recording too long`, 500 `server not configured…` / `internal`, `Forbidden.` → fail | `{"error": …}` | fail, no retry | the server's string |
-  | 415 → fail | close 1008 `Content-Type must be an audio type` | fail | the close reason |
-  | 403 (loopback only) → fail | HTTP 403 before the upgrade: `error` + 1006 | **retry** (it looks like refused; never billed) | `transcription connection failed` |
-  | an early inner answer | ai-service's pipe write fails: close 1011, the answer lost | retry | `transcription connection closed` |
-  | — | close 1009 (a frame over 1 MiB) | fail (it would repeat; frames stay ≤ 256 KiB) | the close reason |
-
-  Every line reaches the UI as `Transcription failed — <line>`. A cancel, the cap and the floors
-  never retry and never answer.
-- **The take** (`src/mic-take.ts`, `createMicAudio`). It implements `MicAudio` over the recorder,
-  the trim, the VAD worker and the clip player, in comart's `offscreen.js` order:
-  - **start** (`:688-695`): `stopWarmSink()`, a NEW VAD worker host (lazy: no Worker yet), the
-    last clip it handed out released, `recorder.start()` (which calls getUserMedia synchronously),
-    and only then the host's `warm()`, called and not awaited (a failure is logged,
-    `mic-vad-warm`). comart calls `warm()` before getUserMedia, but there it is an async fetch;
-    here the first call builds the Worker from `app.js`'s payload on the page's thread, so it must
-    not stand between the click and getUserMedia. A refused start makes no Worker: its bounded
-    `warm()` rejects at once. One recorder is made at the first start and reused; the take hears
-    it only until its own ending.
-  - `first-audio` → `recording()`; `stopping` → `transcribing()`.
-  - **sent** (`:848-870`): `warmSink()`, then at once `trimClip(clip, wordHint(answer), vad, vad)`,
-    where `vad` is the bounded host, as the VAD and as the sample work (`TrimWork`). The trim runs
-    while ai-service transcribes, and one trim serves a retry, which sends the same bytes.
-  - **done** (`:894-896`): the trim is awaited, then the clip is `createMicClip(trim ? trim.blob :
-    clip, trim ? trim.ms : audioMs)` and `done({ text, clip })`. The worker is terminated as soon as
-    the trim settles; the sink wake keeps running for the card's autoplay.
-  - **failed, mic-failed, cancelled** (`:828-835`): `stopWarmSink()`, the worker terminated, then
-    the event. `'cap'` → `'over'`, `'short'` → `'short'`; `'user'` and `'left'` never reach the UI.
-  - `take.cancel()`: `recorder.cancel('user')` (its synchronous `cancelled` is not heard),
-    `stopWarmSink()`, the worker terminated, every bound timer cleared. A trim that settles later
-    never becomes a clip. `cancel()` after `done` does nothing: the card keeps its clip.
-  - `destroy()` discards a live take, releases the last clip and stops the sink; a later `start()`
-    throws.
-  - `onError` contexts: `mic-take`, `mic-take <event>` (a UI handler threw; the take still ends
-    once), `mic-vad`, `mic-vad-warm`, `mic-vad-bound`, `mic-trim`, `mic-clip`, `mic-warm-sink` and the
-    recorder's `mic-recorder …`; the UI adds `mic-start` and `mic-copy`, the reader `mic-mount`.
-- **The trim** (`src/mic-trim.ts`: comart's `offscreen.js:353-678`, verbatim). The card autoplays
-  the whole clip, so the trim cuts it from just before the first word to just after the last and
-  re-encodes it as a 16-bit mono WAV at the decode rate (48 kHz), which has a real duration. The
-  start, in order of trust: (1) the recognizer's `first_word_ms` chooses WHICH Silero segment holds
-  it, and the cut is that segment's edge less `TRIM_LEAD_SECS` 0.010, unless that edge is more
-  than 50 ms after the word (the VAD missed a soft onset), when rule 2 applies; (2) no usable VAD
-  answer: the word less `TRIM_HINT_PAD_SECS` 0.150; (3) no timings either: the VAD's first segment,
-  pulled back to the energy detector's onset (`voicedBounds`) when that is at most 0.5 s earlier, or
-  the energy onset alone without a VAD. The end is the last word plus `TRIM_WORD_TAIL_SECS` 0.150,
-  else the VAD/energy end plus `TRIM_TAIL_SECS` 0.250, clamped to the duration. Every other
-  constant (`TRIM_FRAME_SECS` 0.020 … `TRIM_SILENCE` 1e-5) is comart's.
-  `trimClip` never throws: null means the recording plays as recorded, at `audioMs` (a live WebM
-  reports `duration` Infinity, measured). comart's quirk `Number(null) = 0` is kept: a missing hint
-  is an anchor at 0 s. `wordHint` reads `first_word_ms`/`last_word_ms` off the answer itself; a
-  null answer or a rejection gives NaN. The sink wake (`:86-145`) is comart's: 1 s of 16 kHz
-  zeros, looped at volume 0.01, stopped by the clip's first play or after 8 s.
-- **The VAD** (`src/vad.ts`, `src/vad-worker.ts`: comart's `vendor/silero/vad.js`). Silero VAD v6 on
-  onnxruntime-web 1.22.0, comart's numbers: 512-sample frames with 64 samples of context at 16 kHz,
-  thresholds 0.5 / 0.35, 100 ms minimum silence and speech. `segments` and `pick` stay on the page,
-  synchronous. `warm` and `probabilities` run in **a dedicated Worker, one per take**: created
-  lazily at Start, and terminated when the trim settles, on `cancel`, `leave`, `destroy`, the bound
-  and every ending that is not `done`. The page decodes with `OfflineAudioContext` (a worker has
-  none) and TRANSFERS the 16 kHz samples. On a worker `error` (default prevented) or `messageerror`
-  every pending call rejects, and that host stays dead. The trim's sample work (`monoMix`,
-  `voicedBounds`, `wavBlob`) runs in the same worker, because the whole 119 s trim on the page had
-  a longest task of 62–70 ms (99–104 ms under load), over the design's 50 ms line; in the worker the
-  page's longest gap is 9.6–13.6 ms, with no long task, and the output is identical (117,794 ms,
-  11,308,268 B). The channels are posted as COPIES, so a dead worker falls back to the same
-  functions on the page and the trim keeps its rules. The WAV a worker made outlives its
-  `terminate()` (measured: an `<audio>` reads 117.794 s after dispose).
-- **The VAD bound** (a divergence: comart has none). Every `warm()` and `probabilities()` is raced
-  against `VAD_BOUND_MS = 10000`. At the bound the call rejects even if the worker never would, the
-  worker is terminated, every other pending call fails, and it is reported once (`mic-vad-bound`);
-  `trimClip` then falls back to rule 2 or 3. `bounds()` and `wav()` are watched by the same bound,
-  and when it fires the host does that work on the page. Reason: the inline carriers belong to the
-  family that hung `warm()` forever in the prototype, and the card waits on the trim. When the VAD
-  answers, nothing changes. Measured with a hung VAD and a 3 s take: the bound fired 10,000.7 ms
-  after `start()`, the card opened 7,003.8 ms after the click with a rule-2 WAV of 2,770 ms, and
-  `onError` fired once.
-- **The inline payload** (ruling 5; §6.3). `vendor/onnxruntime/` and `vendor/silero/` hold comart's
-  files byte for byte (`ort.wasm.min.js`, `ort-wasm-simd-threaded.mjs`, `ort-wasm-simd-threaded.wasm`,
-  `silero_vad_v6.onnx` and the three licence files; THIRD-PARTY-NOTICES.md has every SHA-256), and
-  `.gitattributes` marks `vendor/**` binary. `build-app.mjs`'s `buildVadWorker()` bundles
-  `src/vad-worker.ts` on its own, with the ort script and the `.mjs` as strings and the wasm and the
-  model as base64, each a define read exactly once, after `readVadVendor()` has checked all four
-  hashes. A missing file or a mismatch fails the build (`BUILD-APP result=FAIL reason=vendor-hash
-  file=…`). `app.js` carries the result as ONE string, `__CAIRN_VAD_WORKER__`, and the build fails
-  unless it holds exactly one copy when `src/vad.ts` is in the graph and none otherwise
-  (`reason=vad-payload`). Inside the worker, `importScripts(blob:)` loads ort; `wasmPaths = { mjs:
-  blob:, wasm: blob: application/wasm }`; the model goes to `InferenceSession.create` as bytes;
-  `numThreads = 1`, `proxy = false`. **Never `wasmBinary` with a `blob:` or `data:` `.mjs`**: ort
-  computes the wasm URL against `import.meta.url` even then, the URL constructor throws inside the
-  factory, and `warm()` never settles (measured, three carriers, 300 s). The page makes the
-  payload's Blob ONCE, lazily at its first take, and keeps it for the session (one ~18 MB Blob in
-  Chromium's blob storage; its memory was not measured), because a Blob made per take put
-  24.7–99.4 ms of the page's thread between the click and getUserMedia on every later take too. Each
-  take still makes its own `blob:` URL from that Blob, constructs its own Worker, and revokes the
-  URL right after the Worker is constructed. A unit-test bundle has no define, and its `warm()`
-  rejects. Measured in a renderer set up like Cairn's (sandbox, contextIsolation, `loadFile`): warm
-  231.5 ms inside the worker, `ort.env.versions` 1.22.0, and segments identical to the prototype's
-  on all four test inputs (clip.wav [0.096–8.512] s; the padded file [1.216–9.760] s).
-- **The cost of the payload, measured and accepted** (ruling 5). The real built Cairn, hermetic,
-  X11 at dpr 2, screen unlocked, n = 10 medians: `app.js` starts executing 242.9 ms after
-  navigation with the payload against 158.9 ms without (+84 ms), `domInteractive` +81 ms, the first
-  frame about +100 ms. The renderer at idle: RSS 149.8–152.1 MB against 115.5–116.9 MB (+35 MB). A
-  take's worker: +165 MB after warm, about +230 MB during a 119 s trim; after it is terminated and
-  the clip dropped, the renderer settles about +35 MB above idle (KNOWN-ISSUES §5; measured before
-  the Blob was kept for the page). The first take's warm is 413–554 ms; on a page that had already
-  taken six, three more workers built one after another from the kept Blob warmed in 342.5, 344.4
-  and 355.7 ms. **The arm cost, once per page:**
-  a page's first take runs `start()` synchronously for 87.4–90.1 ms (V8 materialises the 18 MB
-  literal on its first read, and the one Blob copy). getUserMedia goes out 0.5–1.3 ms after the
-  click, but Chromium completes it on the page's thread, so the first buffer waits behind that
-  block: click → first buffer 98.1–124.1 ms. Later takes run `start()` in 0.7–9.0 ms. Measured in
-  Electron 39.8.3 (Chrome/142.0.7444.265), X11, sandbox, contextIsolation and `loadFile`, the
-  fake device, screen unlocked, 4 pages × 6 takes, the real take, recorder, VAD and payload.
-  **Accepted by user ruling as ruling 5's once-per-page cost**, a reasoned divergence from
-  voice-typing's arm: the button stays on "Starting" until the first buffer, so no speech is lost,
-  and building the Blob before the first click would charge the same block and memory to every book
-  opened, mic or not. The build: `buildVadWorker`
-  about 1 s.
-- **The clip** (`src/mic-clip.ts`: comart's `offscreen.js:280-352` as a `MicClip`). An `<audio>` on
-  `<body>` over an object URL of the trimmed WAV, or of the recorded WebM when the trim gave up. Its
-  length is the trim's, or the recorder's `audioMs`, until the element knows a real one. `play(true)`
-  plays and stops the sink wake; `play()` toggles, and playing at the end restarts from 0. `seek` is
-  clamped to 0..1. A media error says `Couldn't play the recording.`, or `… (unsupported format).`
-  for code 4; aborts say nothing. `release()` pauses, detaches the listener (nothing fires after it),
-  removes the element and revokes the URL.
-- **The divergences from comart, each with its reason.**
-  - **V1 — the card's frame.** The host is the reader pane (its middle line, edges and width, a 33vh
-    cap) instead of comart's host modal, and the shield stops at the title bar: it is the app's own
-    chrome, as the browser's is comart's.
-  - **V2 — body-level roots.** Paint containment (above). The button is anchored to the reader
-    pane's corner, which is the window's today; E2 pins the reader-relative form, so a future right
-    panel fails loudly.
-  - **V3 — an arming click cancels the take at once.** comart keeps the start pending because its
-    one shared recorder answers "busy" to a second start. Cairn's take has opened no socket yet.
-    Visibly identical: dots, then the bare glyph.
-  - **V4 — the keyboard may record and stop**, and a held Enter is one click (comart has no
-    keyboard path to copy). comart refuses `detail` 0 because a host page could
-    focus its button; Cairn owns its DOM.
-  - **V5 — focus.** A pointer press never moves focus (`mousedown` `preventDefault`; probed in the
-    engine first: `:active` still applies, `matrix(0.9, 0, 0, 0.9, 0, 0)`, and focus stays on the
-    book). The shield, Esc and the cap's dismissal end with `restoreFocus()` where comart blurs or
-    leaves focus on `<body>`, which the reader's Esc never hears; so does an Esc on the focused
-    button with no card, which comart, having no keyboard path, never meets.
-  - **V6 — Copy.** Command 23, not `navigator.clipboard` (UI-12); the check shows after the copy
-    resolved. The copied colour is `--accent`, as at rest, so the glyph swap is the whole signal
-    (comart's `#19F56B`).
-  - **V7 — colours.** E109/E110's token mapping plus three derived rows: X1, the surface `#111913`
-    (circle, pill, card) → `--bg-secondary`; X2, `rgba(241,234,216,.08)` (the play ring, the track)
-    → `--bg-modifier-hover`; X3, the idle glyph `#CBC3AD` → `--text-muted`, not `--text-normal`, so
-    the hover step survives. Focus rings are inset `box-shadow`s in `--accent`, never `outline`
-    (base.css removes outlines).
-  - **V8 — Esc steps aside for Cairn's modal and menus** (`layerAbove`), as comart's steps aside for
-    its image overlay.
-  - **V9 — what an answer means is voice-typing's classify** (the mapping above). comart shows
-    Deepgram's "deepgram returned no transcript" as a failure, an empty card for a garbage reply,
-    never retries, and has no deadline. Cairn says `No speech detected`, retries a garbage reply and
-    the 502 family once (then `no answer` / the server's string), and gives up 30 s after `"stop"`
-    (`no transcription response`). The WS route forces two gaps: a 403 is retried, and an early
-    inner error is lost as close 1011 (KNOWN-ISSUES §5).
-  - **V10 — `denied` says "Microphone access denied"**, comart's app-page wording. `mic.js`'s
-    "Allow the microphone in the tab that just opened" names a tab Cairn never opens.
-  - **Smaller ones, stated in the code.** (a) After the mic closes the card on an Esc, it swallows
-    that key's repeats until its `keyup` (comart has the hole). (b) Three window listeners, the
-    `keyup` for (a). (c) comart's `!important` armour is dropped except on motion, and so are its
-    zoom-cancelling variables: the button follows Cairn's zoom. (d) A `start()` that throws shows
-    `Microphone unavailable` and reports `mic-start`. (e) The six glyphs (mic, stop, play, pause,
-    copy, check) are comart's, built with `createElementNS` in `mic.ts`, not `icons.ts`, whose root
-    stroke would outline the filled shapes (`explain-render.ts`'s precedent). (f) The recorder's
-    `stop()` in arming does nothing (the UI cancels instead, V3); the client closes an attempt's
-    socket once its outcome is in; the clip and the answer promise arrive at `sent`, so the trim runs
-    in parallel with the transcription; a missing or bad base fails closed; the device is released
-    when the processor cannot be built. (g) The VAD runs in a per-take Worker, not on comart's
-    offscreen document's main thread: that document is closed when idle, which frees the WASM heap,
-    and Cairn's page lives all day (a terminated worker gave back 142.5 MB in the prototype; a
-    hidden window's timer throttling once stretched a main-thread 119 s VAD from 1 s to 52 s, and a
-    worker is not throttled). (h) The worker is terminated when the trim settles, not at clip
-    release: that frees 140–190 MB while the card is open. (i) `take.cancel()` also stops the sink
-    wake. (j) `start()` while a take is live discards the old take and reports it, where comart
-    answers "busy"; the UI never does it. (k) A clip that cannot be built ends the take `Transcription
-    failed — no answer`, and a trim that rejects plays the recording as is. (l) A failed ort init
-    poisons only its own take's worker. (m) There is no `mic:clipgone`: the next take's card releases
-    the clip first. (n) No press on the mic closes the reader's find bar: its two roots stop
-    `pointerdown` at bubble, because comart's find bar is the browser's and never hears a press
-    (rule 3 above).
-- **The sixth exemption to §5.1 rule 5** (ruling 3). All of comart's motion, at comart's numbers,
-  in `mic.css`, scoped to `.ep-mic` and `.ep-mic-layer` by the chevron's specificity mechanism
-  (§0.44 E90): the button's `transform`, `background` and `color` at 0.16s, with `background` left
-  out at idle so the black circle leaves at once; the press `scale(0.9)` riding that transform; the
-  arming dots' 1.15s pulse with their own `!important` delays 0.15s and 0.3s (the blanket shorthand
-  resets `animation-delay`); the red Stop's 1.2s blink; the card's 0.22s opacity and `translate`
-  entrance (`transform` holds the centring); the play button's 0.15s background and 0.12s press
-  `scale(0.93)`; Copy's 0.15s opacity and colour. **The card closes at once, with no motion.** The
-  one `prefers-reduced-motion` override is comart's: it stops the Stop's blink and sits AFTER the
-  exemption, so it wins on source order. The dots, the fades and the entrance run under reduced
-  motion, as comart's do. Measured in the engine: E19 (reduced motion: the Stop's
-  `animation-name` is `none`, the dots still `mc-dot`), and the UI probe's 0.16s transitions, the
-  dots' delays 0s / 0.15s / 0.3s and the blink at 1.2s.
-- **The card's scroller.** `.mc-body` is `overflow-y: auto`, `mic.css`'s only scroller rule, with
-  the band's 12px bar (`--scrollbar-w-editor`). It is a rendered scroller only while the card is
-  open: the layer is removed on close. It is not under `main.editor`, so §5.12.4.3's "chrome fits or
-  clips" does not apply; it is a content scroller, like the band's (§5.12.4's table). Measured (E5,
-  band closed): `ep-scroller`, `mc-body`, `tree-scroller`.
-- **Layers.** `.ep-mic-layer` is z 70 (the shield 2 and the wrapper 2 inside it, the card 1 inside
-  the wrapper), `.ep-mic` z 71, above the shield, so the button stays live while the card is open.
-  Both are above all of `main.editor` and the sidebar, and BELOW the modal and the name prompt (80)
-  and the menus (100). `mic-css.test.mjs` pins the order against `modal.ts` and `chrome.css`.
-- **Billing.** Every take that passes the floors is a billed transcription, through whichever
-  provider ai-service's tray picker chose. A retry after a lost answer can bill twice (voice-typing
-  accepts that). A take cancelled, capped, left or under the floors was already streamed while it
-  recorded; closing the socket cancels ai-service's inner request, and whether the provider bills
-  an aborted session is unverified. An arming click bills nothing: no socket exists before the
-  first buffer. Nothing is sent on hover, and an untrusted event starts nothing.
-- **The DOM contract** (body children; every word is `textContent`, no HTML string, §6.1):
-
-  ```
-  section.ep-mic[aria-label="Voice transcription"][data-state=idle|arming|recording|transcribing]
-                [data-msg="1" while a status shows][hidden unless a book shows]
-    button.mc-btn[type=button][aria-label=Record|Starting|Stop recording|Transcribing](.is-error)
-      svg.mc-ico.mc-ico-mic   svg.mc-ico.mc-ico-stop   span.mc-dots > i×3   span.mc-label[aria-live=polite]
-  div.ep-mic-layer                                     only while the card is open
-    div.mc-shield
-    div.mc-wrap[style=top/left/right:auto/width]
-      section.mc-card[role=dialog][aria-modal=true][aria-label=Transcript](.is-shown)
-        div.mc-body
-          p.mc-text(.is-empty)
-          div.mc-player(.is-playing) > button.mc-pp[aria-label=Play|Pause], div.mc-track > div.mc-fill, span.mc-time
-          div.mc-actions > button.mc-copy[aria-label=Copy|Copied](.is-copied)[hidden when empty]
-  ```
-- **The CSS** (`src/styles/mic.css`, the eleventh sheet in `CSS_ORDER`, straight after
-  `explain.css`). Every rule is under `.ep-mic` or `.ep-mic-layer`, so nothing reaches the note view
-  and G9 cannot move. Each rule carries its comart line. It declares no custom property (§5.1). The
-  transcript takes the band's typography (`--font-text`, `--fs-text`, `--lh-text`); the card's top
-  edge is the band's hairline in `--divider-color`; the black shadows and the halo stay comart's
-  literals.
-- **Files and owners.** Owner 03 unless marked. `src/mic-types.ts` (the seams, types only);
-  `src/mic.ts` (the button, the card, the state machine; no audio code); `src/mic-take.ts`
-  (`MicAudio`: the take's sequencing and the VAD bound); `src/mic-recorder.ts` (capture, mono, the
-  encoder, the take's state machine, floors and cap); `src/mic-webm.ts` (the live WebM writer, pure
-  bytes); `src/mic-wire.ts` (the socket, `classifyReply`, `coalesce`, the failure lines);
-  `src/mic-trim.ts` (comart's trim and sink wake); `src/vad.ts` (the frame rules and the worker
-  host); `src/vad-worker.ts` (the worker: ort and Silero; not in `app.js`'s module graph);
-  `src/mic-clip.ts` (the player); `src/styles/mic.css`; `src/reader.ts` (the mount, `LAYERS`, the
-  stand-down, the pick guard, `syncMic`, `focusReader`, `leave` and `destroy`); `src/main.ts` (01:
-  one `aiBase`, the Linux-only `mountMic`, `copyText`, `layerAbove`); `src/globals.d.ts`
-  (`__CAIRN_VAD_WORKER__` and `MediaStreamTrackProcessor`); `src/styles/base.css` (01: rule 5's
-  comment); `electron-shell/build-app.mjs` (07: the payload and `mic.css`); `vendor/**` (07: the
-  vendored runtime) and `.gitattributes`; `electron-shell/fake-ai-ws.mjs` (07, the fake
-  ai-service); `electron-shell/cdp-drive.mjs` (07: `deviceLocks`, `assertLocked` and the page's
-  input guard, carried by every launch of the app that can show a book: `cdp-drive.mjs`'s own
-  `launch`, `explain.test.mjs` and `mic.test.mjs`; `tools/scroll-bench.mjs`, whose `--vault` may
-  hold a book, passes the same switches and env) and `electron-shell/mic.test.mjs` (the
-  real-engine suite). There is no new IPC
-  command (the table stays at 29), no new npm dependency, no new `state.json` field and no vault
-  write (G8).
-- **Tests.** Each new test was watched failing first, against a missing module or under mutation.
-  `tests/frontend/`: `mic-ui.test.mjs` (36, the real `mountMic` on a fake `MicAudio`),
-  `mic-css.test.mjs` (14, the sheet), `mic-webm.test.mjs` (9; byte-identical to a GStreamer golden
-  of a synthetic signal, `tests/fixtures/mic/gst-ticks.webm`, 6,787 B, regenerated by the
-  `gst-launch` line in its header), `mic-wire.test.mjs` (34, every row of the mapping above),
-  `mic-recorder.test.mjs` (45, the state machine on fake browser APIs), `mic-take.test.mjs` (39),
-  `mic-trim.test.mjs` (22, comart's decision table and its two edges), `mic-clip.test.mjs` (10),
-  `vad.test.mjs` (37),
-  9 `mic: …` tests in `reader.test.mjs`, and 4 in `main-flows.test.mjs` (the binding, one origin,
-  and the `8770` scan). Mutation runs: the take's 27 of 27 caught; the reader and wiring's 20 of
-  21 (the survivor is equivalent: `showMode('read')` follows at once); the UI's 10 of 10, one only
-  after a test was added; the recorder's 11 of 12 (the survivor is equivalent: there is no retry
-  loop); the writer's, the trim's and the VAD host's each caught; the floor counted from the click
-  instead of the first buffer, and rule 1's 50 ms and 500 ms edges moved either way, each caught.
-  **In the real engine**, `electron-shell/mic.test.mjs` gives `ℹ tests 29`, `ℹ pass 29`, `ℹ fail
-  0` (a self-test of `electron-shell/fake-ai-ws.mjs`, an RFC 6455 fake ai-service; two of the
-  device locks; E1–E24; the Silero leg), on build hash `ebfa68081ae7da09`, at dpr 2, 1200×800, X11,
-  with the fake capture device only: argv `--use-fake-device-for-media-stream
-  --use-fake-ui-for-media-stream --use-file-for-fake-audio-capture=<generated WAV>`, its own
-  `--user-data-dir`, an empty `XDG_RUNTIME_DIR`, an unreachable `PULSE_SERVER` and an empty
-  `ALSA_CONFIG_PATH`. A launch is refused before it is spawned unless its argv and env carry every
-  lock (`cdp-drive.mjs`'s `assertLocked`); in the page, the inputs are listed first, which opens
-  no device, and only when every one is "Fake …" is the default opened, and it must be "Fake
-  Default Audio Input", or the suite refuses to drive. E21, E22 and E23 (the held Enter, the Esc
-  on the button, the find bar) each failed on the `mic.ts` before its fix, built into a scratch
-  copy of the app. E3 checks that the upload is the device's audio: a 2.6 s take reached the fake as
-  44,218 B in 45 frames (`audio/webm;codecs=opus;client=cairn`, origin `file://`, EBML first,
-  `"stop"` after the last frame, no empty frame), ai-service's own ffmpeg command decodes it to
-  2,650–2,660 ms, and its correlation with the generated chords, per 250 ms window with tracked
-  lag, is 0.9606–0.9838 against at most 0.2440 for the wrong chords (threshold 0.9; one lag over
-  the whole take gave 0.82361, because the fake device shifts its looped file by about 2.9 ms at
-  each wrap). The Silero leg feeds clip.wav: one worker per take, ort 1.22.0, one `probabilities`
-  reply of 111–112 frames with a maximum of 0.9999951 and 105–106 voiced, the worker gone 22–40 ms
-  before the card showed, and a trimmed `audio/wav` of 3.064 s from a 3.5 s take. With the
-  stand-down removed from `reader.ts`, E11 fails. The UI's own probes (scratch, the real `mic.ts`
-  on a fake `MicAudio`) ran the geometry at dpr 1.25 (Wayland) and dpr 2 (X11) with the same
-  results. `explain.test.mjs` (63, now under the same locks, without the X11 and runtime-dir
-  ones: dpr 1.25, Wayland) and `explain-badge.test.mjs` (21) still pass with the button present.
-- **Known gaps, recorded rather than hidden** (KNOWN-ISSUES §5, "The reader's microphone"): macOS
-  has no button; the real device was never measured; UI stalls over 3 s drop audio; a 403 is
-  retried and an early inner error is lost; the 44.1 kHz path; the payload's residual memory; the
-  trim's decode is not bounded; the name prompt's Esc; a keyboard placement of a staged pick under
-  the card; Copy's 4,096-character cap; a page's first take blocks the
-  click for about 88 ms (accepted by ruling).
 
 ## 1. The IPC contract
 
@@ -3965,9 +3344,9 @@ was Obsidian's LIGHT-theme hover.
 time and drift sub-pixel; the number is measured, so it is written as a number.
 
 **Rule 5 — `*, *::before, *::after { transition: none !important; animation: none !important }` —
-is upheld everywhere (M59) with SIX exemptions**, each carrying `!important` because a stylesheet
+is upheld everywhere (M59) with FIVE exemptions**, each carrying `!important` because a stylesheet
 `!important` outranks a normal inline style. The fold slide is an inline `!important`; the other
-five are stylesheet `!important`s that win on specificity over `*`:
+four are stylesheet `!important`s that win on specificity over `*`:
 
 1. the Properties fold slide and 2. the fold arrow's rotation (§0.24.5 E53), Obsidian's own numbers;
 3. the tree chevron's 100ms turn (§0.44 E90), Obsidian's own number;
@@ -3975,20 +3354,13 @@ five are stylesheet `!important`s that win on specificity over `*`:
    `#memoir`), exempted after the user reported it frozen. Memoir is a standing user feature with
    no E-number of its own (§9), and its numbers are its own design;
 5. the explanation band's badge fade and thinking dots (§0.56 E109), comart's numbers, scoped to
-   `.ep-explain`;
-6. the reader's microphone (§0.58 E111): all of comart's mic motion in `mic.css` — the button's
-   0.16s transform, background and colour (background left out at idle) and its press, the arming
-   dots' 1.15s pulse, the red Stop's 1.2s blink, the card's 0.22s entrance, the play button's press
-   and Copy's fade — comart's numbers, scoped to `.ep-mic` and `.ep-mic-layer`. The card closes
-   with no motion.
+   `.ep-explain`.
 
 The rule's original rationale was a WebKitGTK async-scrolling engine that was deleted, but whether
 a blanket ban still earns its keep is a user ruling and it has not been taken. Until it is, each new
 motion is its own ruling. The task checkbox's dead `box-shadow` transition is still dead and named
 (§0.24.5). The fourth and fifth exemptions each have a `prefers-reduced-motion` override placed
 AFTER the exemption, so the preference wins on source order (measured; KNOWN-ISSUES UI-14, closed).
-The sixth carries comart's one override, which stops only the Stop's blink and is placed the same
-way; its other motions run under reduced motion, as comart's do (measured, §0.58 E111).
 
 ### 5.2 The file-tree box model (B9)
 
@@ -4318,17 +3690,6 @@ does NOT maximize it, runs the probe in gate mode and prints the report as one J
 iff `ok`. **The persisted sidebar width is NEVER injected under `--pixeltest`** (§0.7 E9), because
 every x the gate asserts is a function of `--sidebar-w`.
 
-**The probe waits for the window to hold focus.** It runs on the first animation frame after
-`nc://vault-opened` once `document.hasFocus()` is true (`chrome.ts` `runGeometryProbe`). The shell
-shows and focuses the window on `ready-to-show`, and nothing orders that before `vault-opened`: a
-probe that won the race measured a hidden, unfocused window at dpr 1, where live preview reveals no
-marker (KNOWN-ISSUES LP-4) and `heading.marker.shown` failed five checks. The inline VAD payload
-(§0.58) made app.js boot later and the race common: 6 red runs in 25, against 0 in 24 on the build
-without it, and 2 in 10 with an inert string of the payload's length. The wait is bounded at
-`PROBE_FOCUS_WAIT_MS` (5 s), so a window that never gets focus still reports, red; the report's
-`focusWait` (`had-focus` / `focus` / `timeout`) says which way the run went, and the runner prints
-it.
-
 **Fixture required:** a folder at depth 0 expanded; a folder AND a file both visible at depth 1; a
 folder at depth 2; a file at depth 3; the open note containing a fenced `sh` block of at least 3
 lines, long enough to overflow vertically so the scrollbar gutter is real; its **first line is body
@@ -4416,9 +3777,9 @@ html, body                               overflow: hidden; height: 100%      (§
 the tree (§4.5) — so the ceiling is two scrollers, not three.
 
 **The other modes replace `.cm-scroller`, and their counts are these** (the rendered-box test
-below; the two band rows were measured by `electron-shell/explain.test.mjs`, the split's both
-while split and while one panel previews the right half, and the microphone card's first count by
-`electron-shell/mic.test.mjs`; the main frame never scrolls in any of them):
+below; every row was measured in the app, the two band rows by `electron-shell/explain.test.mjs`,
+the split's both while split and while one panel previews the right half; the main frame never
+scrolls in any of them):
 
 | Mode | Rendered scrollers | Status |
 |---|---|---|
@@ -4426,13 +3787,12 @@ while split and while one panel previews the right half, and the microphone card
 | reader (§0.55 E108) | the sidebar's, `.ep-scroller` — **2**; the find bar adds none | ruled |
 | reader, explanation band open | the sidebar's, `.ep-scroller`, `.ex-scroll` — **3** | ruled (§0.56 E109): only while open; closed is `display: none` |
 | reader, explanation band split | the sidebar's, `.ep-scroller`, two `.ex-scroll` — **4** | ruled (§0.57 E110): only while split, and while one panel previews the right half; otherwise the right column is `display: none` |
-| reader, microphone card open | the sidebar's, `.ep-scroller`, `.mc-body` — **3**; **4** with the band open, **5** with it split | ruled (§0.58 E111): only while the card is open, because its layer is removed on close, not hidden. The 3 is measured (`mic.test.mjs` E5) and so is the 4 (the UI's engine probe, band open); the 5 is derived. `.mc-body` is body-level, a content scroller like the band's, so §5.12.4.3's "chrome fits or clips" does not apply |
 | Memoir tab | the sidebar's, `textarea#mm-editor`, the check drawer's `.mm-scroll` — **3**, drawer open or closed | **measured, never ruled** (KNOWN-ISSUES X-14) |
 
 The Memoir drawer counts while it is closed because closed is `transform: translateX(100%)`, not
 `display: none`: the box is clipped by `.editor`'s paint containment (§0.52 E100) but still has
-client rects. No gate sees any of these third, fourth or fifth scrollers, because G9 runs in note
-mode only.
+client rects. No gate sees any of these third or fourth scrollers, because G9 runs in note mode
+only.
 
 1. **§5.2's scroller block and §5.3's `.cm-scroller` block stand exactly as written.** The 8px
    sidebar gutter, the 12px editor gutter, the 401px row width and the 1432px line box are not
@@ -4440,7 +3800,7 @@ mode only.
 2. **The `::-webkit-scrollbar` rules must be on `.cm-scroller`**, never on an ancestor: a rule on
    the ancestor does not reach CodeMirror's real scroller, which then inherits the **17px** legacy
    scrollbar and measures its own mistake.
-3. **No third scroller in note mode, and chrome never scrolls.** A third, fourth or fifth rendered
+3. **No third scroller in note mode, and chrome never scrolls.** A third or fourth rendered
    scroller exists only where the table above rules it. Menus, popovers, the tab strip, the vault bar and all three
    banners must **fit or clip** — single-line with `text-overflow: ellipsis`, or `overflow: hidden`,
    never a scrollbar. **"Scroller" here means a RENDERED box, and that qualifier is normative (Z6):** an
@@ -4554,12 +3914,11 @@ One builder: **`electron-shell/build-app.mjs`**, owner 07.
 | Decision | Ruling |
 |---|---|
 | bundler | **esbuild 0.28.2** directly. No Vite, no Rollup, no PostCSS, no framework. |
-| output format | **`iife`**, one `app.js` + a plain `<script>`. `app.js` also carries the VAD worker (§0.58 E111) as ONE string, so the page still loads nothing else |
+| output format | **`iife`**, one `app.js` + a plain `<script>` |
 | target | **`chrome142`** — the pinned Electron's Chrome, which is also the build being cloned |
-| CSS | esbuild the CSS in **`CSS_ORDER`**, eleven sheets (`tokens.css, base.css, chrome.css, tree.css, editor.css, search.css, find.css, memoir.css, reader.css, explain.css, mic.css`), then `electron-shell/app-chrome.css` (the Electron-only drag region, §5.7) LAST, in one pass, and **string-substitute it into the page as a `<style>` block**. `.ttf` is a **`dataurl`** loader (`data:font/ttf`), so `explain.css`'s two Lora faces (§0.56 E109) are inlined too, their bytes unchanged, and the page stays one self-contained file (E34) |
-| the VAD payload | §0.58 E111, ruling 5. `buildVadWorker()` bundles `src/vad-worker.ts` on its own (`iife`, `chrome142`, minified) with the four vendored runtime files as defines: `ort.wasm.min.js` and `ort-wasm-simd-threaded.mjs` as strings, the wasm and the Silero model as base64. `readVadVendor()` first checks each file's SHA-256 against `VAD_VENDOR`, and a missing file or a mismatch fails the build (`BUILD-APP result=FAIL reason=vendor-hash file=…`). The bundle reaches `app.js` as the define `__CAIRN_VAD_WORKER__`, which only `src/vad.ts` reads; the build fails unless `app.js` holds exactly one copy when `vad.ts` is in the graph and none otherwise (`reason=vad-payload`). At run time the page starts it as a Worker from a `blob:` URL |
-| importable | `build-app.mjs` exports `CSS_ORDER` and `bundleCss()` (the real stylesheet pass, returning the CSS without writing anything), and `VAD_VENDOR`, `readVadVendor()` and `buildVadWorker()`, and builds only when it is run as a script, so a unit test can check the real pass without rewriting `electron-shell/app/` |
-| size gates | **BOTH RETIRED** — CSS by §0.19 E26, JS by §0.47 E95. `build-app.mjs` still PRINTS `js=`, `css=` and `vad=` (the payload's length); none fails the build. Measured: `js=18680207 B css=648955 B vad=18123768 B` |
+| CSS | esbuild the CSS in **`CSS_ORDER`**, ten sheets (`tokens.css, base.css, chrome.css, tree.css, editor.css, search.css, find.css, memoir.css, reader.css, explain.css`), then `electron-shell/app-chrome.css` (the Electron-only drag region, §5.7) LAST, in one pass, and **string-substitute it into the page as a `<style>` block**. `.ttf` is a **`dataurl`** loader (`data:font/ttf`), so `explain.css`'s two Lora faces (§0.56 E109) are inlined too, their bytes unchanged, and the page stays one self-contained file (E34) |
+| importable | `build-app.mjs` exports `CSS_ORDER` and `bundleCss()` (the real stylesheet pass, returning the CSS without writing anything) and builds only when it is run as a script, so a unit test can check the real pass without rewriting `electron-shell/app/` |
+| size gates | **BOTH RETIRED** — CSS by §0.19 E26, JS by §0.47 E95. `build-app.mjs` still PRINTS `js=` and `css=`; neither fails the build |
 | pins | `electron` 39.8.3, `esbuild` 0.28.2, `typescript` 5.9.3; `@codemirror/state` 6.7.2, `@codemirror/view` 6.43.10, `@codemirror/commands` 6.11.0 |
 
 **M23 is a SOURCE RULE, restated:** no file in `src/` may import from `@codemirror/language`,
@@ -4600,16 +3959,6 @@ src/explain.ts           03  E109's explanation band, E110's controller: layout,
 src/explain-thread.ts    03  E110's one half of the band: its column, rounds, stream and ai-service I/O; no listener
 src/explain-render.ts    03  E109's DOM builders — comart's renderer, no HTML strings
 src/explain-types.ts     03  the reader/band seam, types only
-src/mic-types.ts         03  E111's two seams (reader ↔ mic, UI ↔ audio), types only
-src/mic.ts               03  E111's button, plain transcript card and state machine; no audio code
-src/mic-take.ts          03  E111's MicAudio: one take's sequencing, the trim in parallel, the VAD bound
-src/mic-recorder.ts      03  E111's capture, mono, Opus encoder, take state machine, floors and cap
-src/mic-webm.ts          03  E111's live WebM writer — pure bytes, byte-identical to webmmux
-src/mic-wire.ts          03  E111's socket to /api/transcribe/ws, classifyReply, the failure lines
-src/mic-trim.ts          03  E111's trim and sink wake — comart's offscreen.js, verbatim
-src/mic-clip.ts          03  E111's clip player (MicClip) — comart's offscreen.js, verbatim
-src/vad.ts               03  E111's VAD frame rules and the per-take worker host
-src/vad-worker.ts        03  E111's VAD worker (ort + Silero); built apart, carried in app.js as a string
 src/menu.ts              01  the one menu primitive
 src/vaultbar.ts          01  the switcher and its recents popover
 src/search.ts            05  the search panel
@@ -4621,8 +3970,6 @@ src/styles/tree.css      01  declares the grouped .tree-scroller/.search-scrolle
 src/styles/reader.css    03  the EPUB reader's one-band surface (E108)
 src/styles/explain.css   03  the explanation band, its two halves and comart's frozen badge (E109, E110)
 src/styles/fonts/*.ttf   03  Lora, regular and italic, Cyreal's unchanged files — the only font files shipped (E109)
-src/styles/mic.css       03  the microphone's button and card, and rule 5's sixth exemption (E111)
-vendor/**                07  comart's onnxruntime-web 1.22.0 and Silero v6 files, byte for byte, SHA-256 pinned by build-app.mjs (E111)
 src/styles/*             05  search.css; the rest are 01/03/04 by module
 core/src/*               02  fsops, tree, scan, watcher, search, prefs, note_frame, error, app
 core/napi/src/lib.rs     07  the binding layer — no logic, no wire types (§6.2)
@@ -4633,8 +3980,6 @@ electron-shell/native.mjs     07  the addon loader and the value envelope
 electron-shell/build-app.mjs  07  the frontend build (§6.3)
 electron-shell/build-native.mjs 07  core/cairn.node, release by default
 electron-shell/app-chrome.css 07  the drag region (§5.7)
-electron-shell/fake-ai-ws.mjs 07  the real-engine suites' fake ai-service: /api/transcribe/ws (RFC 6455), /api/explain
-electron-shell/cdp-drive.mjs  07  the engine suites' CDP launcher, and deviceLocks: no launch that can show a book reaches the real microphone (E111)
 electron-shell/*.test.mjs     07  the real-engine suites; `ls electron-shell/*.test.mjs` is the
                                   list, so this table cannot fall behind it
 tools/verify-geometry.js      01  the G9 probe (§5.11)

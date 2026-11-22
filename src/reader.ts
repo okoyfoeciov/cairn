@@ -25,13 +25,6 @@
  * the staged word meanwhile.  Esc drops the stage and the mark goes back to
  * the last placed word; the next Esc closes the band.
  *
- * THE MICROPHONE (§0.58 E111).  `main.ts` hands over `mountMic` on Linux only
- * (mic.ts; this file knows only its type).  The reader decides when its button
- * shows (a rendered book in read mode), discards a take whenever the book is
- * left, and stands its outside-click rule down while the transcript card is
- * open: the card's own shield closes the card, and only the next click is the
- * band's.
- *
  * NO `innerHTML` ASSIGNMENT (§6.1).  The EPUB's XHTML is parsed by `epub.ts`
  * into an inert tree, then walked through an allow-list here.  Scripts, forms,
  * embedded frames, remote images and every URL scheme except http(s)/mailto are
@@ -66,7 +59,6 @@ import {
   type PickWord,
 } from './bookpick'
 import type { ExplainHooks, ExplainPanel, MountExplain } from './explain-types'
-import type { MicView, MountMic } from './mic-types'
 
 interface LoadedImage {
   url: string
@@ -87,8 +79,6 @@ export interface ReaderDeps {
   /** §0.56 E109: the explanation band's factory, bound by `main.ts`.  Absent,
    *  the book has no word picking at all. */
   mountExplain?: MountExplain
-  /** §0.58 E111: the microphone's factory, bound by `main.ts` on Linux only. */
-  mountMic?: MountMic
   /** Test seam for the two layout questions a pick asks; defaults to the
    *  engine's own.  The minidom tests have no layout. */
   probe?: ReaderProbe
@@ -173,10 +163,8 @@ const NOTEREF = 'a.ep-noteref'
 /** Code is not prose: comart never picks it either. */
 const NOT_PROSE = 'pre, code, kbd, samp, var'
 /** A layer above the book owns its own clicks.  The find bar too: comart's is
- *  the browser's, which a page never sees clicked.  So do the microphone and
- *  its card layer: comart exempts its whole widget from the band's outside
- *  click. */
-const LAYERS = '.ctx-menu, .nc-modal-back, .find-bar, .ep-mic, .ep-mic-layer'
+ *  the browser's, which a page never sees clicked. */
+const LAYERS = '.ctx-menu, .nc-modal-back, .find-bar'
 /** px around a word's line boxes that still hit it; comart's chip reaches 2px
  *  past each side of the word. */
 const PICK_SLOP = 2
@@ -312,7 +300,6 @@ export function mountReader(pane: HTMLElement, deps: ReaderDeps): ReaderView {
    * The reveal follows `shown` only. */
   const probe = deps.probe ?? engineProbe(doc)
   let explain: ExplainPanel | null = null
-  let mic: MicView | null = null
   let drag: Drag | null = null
   /** This click sequence (detail 1, 2, 3…) has already asked. */
   let seqPicked = false
@@ -336,21 +323,6 @@ export function mountReader(pane: HTMLElement, deps: ReaderDeps): ReaderView {
     scroller.hidden = !read
     message.hidden = next !== 'error'
     if (read && takeFocus) scroller.focus()
-    syncMic()
-  }
-
-  /** The microphone shows over a book only: not over the blank page of an
-   *  open in flight, an error page, or a replacement whose old book is gone. */
-  function syncMic(): void {
-    mic?.setShown(!root.hidden && mode === 'read' && rendered)
-  }
-
-  /** The mic's restoreFocus: focus goes back inside #reader, where its Esc
-   *  listens (the band while it is open, else the book).  Focus already inside
-   *  (the find field) stays. */
-  function focusReader(): void {
-    if (root.hidden || root.contains(doc.activeElement)) return
-    ;(explain?.isOpen() ? explain.element() : scroller).focus({ preventScroll: true })
   }
 
   /* ── resources ────────────────────────────────────────────────────────── */
@@ -1349,9 +1321,6 @@ export function mountReader(pane: HTMLElement, deps: ReaderDeps): ReaderView {
     // press that picked, so a re-click after a miss still asks.
     if (e.detail < 2) seqPicked = false
     if (!canPick()) return
-    // The card's shield takes such a press anyway; this holds it without
-    // layout.  Not in canPick(): the band's reveal still follows its mark.
-    if (mic?.cardOpen()) return
     const hit = wordUnder(e.clientX, e.clientY)
     if (!hit) return
     // No native selection and no focus move; the book keeps the keyboard.
@@ -1488,9 +1457,6 @@ export function mountReader(pane: HTMLElement, deps: ReaderDeps): ReaderView {
       e.stopPropagation()
       return
     }
-    // The card's shield closes the card at target phase, after this listener,
-    // so the click that closes the card never closes the band (rule 3).
-    if (mic?.cardOpen()) return
     if (!explain || !explain.isOpen() || e.defaultPrevented || keeps) return
     const target = e.target as Node | null
     if (target && explain.element().contains(target)) return
@@ -1654,9 +1620,8 @@ export function mountReader(pane: HTMLElement, deps: ReaderDeps): ReaderView {
 
   function clearBook(): void {
     // Leaving the book forgets its explanation; the pick's Ranges point into
-    // DOM that is about to go.  A take of it is discarded.
+    // DOM that is about to go.
     closeExplain()
-    mic?.leave()
     revokeResources()
     if (book) book.destroy()
     book = null
@@ -1680,7 +1645,6 @@ export function mountReader(pane: HTMLElement, deps: ReaderDeps): ReaderView {
       clearTimeout(saveTimer)
       saveTimer = null
     }
-    syncMic()
   }
 
   async function open(path: string, position: EpubBookmark | null): Promise<boolean> {
@@ -1771,7 +1735,6 @@ export function mountReader(pane: HTMLElement, deps: ReaderDeps): ReaderView {
       }
       renderBook()
       rendered = true
-      syncMic()
       buildSearchIndex()
       scroller.classList.add('ep-restoring')
       showMode('read')
@@ -1808,10 +1771,8 @@ export function mountReader(pane: HTMLElement, deps: ReaderDeps): ReaderView {
     // Before the band closes: its height changes the box the position is read in.
     saveProgress()
     closeExplain()
-    mic?.leave()
     root.hidden = true
     pane.classList.remove('is-reader')
-    syncMic()
     if (mode !== 'read') showMode('read')
   }
 
@@ -1966,13 +1927,6 @@ export function mountReader(pane: HTMLElement, deps: ReaderDeps): ReaderView {
     doc.addEventListener('pointerdown', onDocDown, true)
     doc.addEventListener('click', onDocClick, true)
   }
-  // Its roots are body-level (main.editor's paint containment would clip a
-  // child of #reader); #reader is its anchor and its focus target.
-  try {
-    mic = deps.mountMic ? deps.mountMic(root, { restoreFocus: focusReader }) : null
-  } catch (err) {
-    deps.onError(err, 'mic-mount')
-  }
 
   find = mountFind(root, {
     placeholder: 'Find in book',
@@ -2061,8 +2015,6 @@ export function mountReader(pane: HTMLElement, deps: ReaderDeps): ReaderView {
       swallowTimer = null
       swallowing = false
       moveFrame = 0
-      mic?.destroy()
-      mic = null
       root.remove()
     },
   }

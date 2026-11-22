@@ -40,19 +40,12 @@ cross-module flows, owns nothing else. `editor.ts`, `livepreview.ts`, `propertie
 `totp.ts`, `secrets.ts`, `memoir.ts` are the editor surface; `epub.ts` is the EPUB container and
 `reader.ts` its surface; `explain.ts` is the reader's click-to-explain band, with `explain-thread.ts`
 (one half of the band), `explain-render.ts` (its DOM) and `bookpick.ts` (the word and the passage).
-`mic.ts` is the reader's microphone (Debian only: the button and its transcript card), with
-`mic-types.ts` (its seams), `mic-take.ts` (one take), `mic-recorder.ts` / `mic-webm.ts` /
-`mic-wire.ts` (capture, Opus, the live WebM, the socket to ai-service), `mic-trim.ts` / `mic-clip.ts`
-(the playback trim and the player) and `vad.ts` / `vad-worker.ts` (Silero in a per-take Worker).
 `tree.ts` / `treeblob.ts`, `search.ts`, `chrome.ts`, `tabstrip.ts`, `vaultbar.ts`, `menu.ts`,
 `modal.ts`, `inline-edit.ts`, `icons.ts`, `state.ts`, `note_frame.js` (the §2 decoder).
 
 `src/styles/tokens.css` is the only file that declares custom properties. `src/icons.ts` is the
 only innerHTML sink. `src/main.ts` boots; if you are adding behaviour there, it probably belongs
 elsewhere.
-
-**Vendored** (`vendor/`) — comart's onnxruntime-web 1.22.0 and Silero VAD v6 files, byte for byte.
-`build-app.mjs` checks their SHA-256s and carries them inside `app.js` as one string.
 
 **Docs** (`docs/`) — `CONTRACT.md` is NORMATIVE and `§0` is the ruling index. The `spec-0N-*.md`
 files are design detail only. `KNOWN-ISSUES.md` is the live register of what is wrong or missing —
@@ -112,7 +105,7 @@ emulation is not a rasterisation scale.
 | IPC table closed at 29 | The six shell-owned commands are `pick_vault`, `open_external`, `copy_text`, `read_text`, `copy_image`, `import_epub`. `open_external`'s http/https/mailto allowlist is enforced in the MAIN process and is a ruling, not an accident. |
 | No inert controls | §9 E4. The one recorded exception: `Show in Finder` on Linux errors by ruling, because the fix was cancelled. |
 | Deliberate behaviours | Fixed non-closable tabs (Mod-1/Mod-2); maximized launch except under `--pixeltest`/headless; global transition ban with named exemptions; collapse-all removed; a network vault has no refresh (never draw its banner while `watching` is true); a clicked bare url does not navigate; a wikilink to a missing note does nothing. |
-| User features that are NOT Obsidian's | The `totp` block, secret files (`cairn-type: secrets`), the Memoir journal page over the local ai-service at `127.0.0.1:8770`, EPUB entries with the in-house reader / Import EPUB move (`docs/CONTRACT.md §0.55 E108`), the reader's click-to-explain band over the same ai-service, whose pronunciation badge is comart's, pixel for pixel (`§0.56 E109`), and the reader's microphone (record → transcribe → a transcript card with a player and Copy) over the same ai-service, Debian only: comart's button and card, voice-typing's audio chain (`§0.58 E111`). These are design, not transcription. |
+| User features that are NOT Obsidian's | The `totp` block, secret files (`cairn-type: secrets`), the Memoir journal page over the local ai-service at `127.0.0.1:8770`, EPUB entries with the in-house reader / Import EPUB move (`docs/CONTRACT.md §0.55 E108`), and the reader's click-to-explain band over the same ai-service, whose pronunciation badge is comart's, pixel for pixel (`§0.56 E109`). These are design, not transcription. |
 
 ---
 
@@ -123,9 +116,6 @@ emulation is not a rasterisation scale.
   vault.** A launch with `CAIRN_VAULT` set is hermetic (its own temp state dir); so is anything with
   `CAIRN_STATE_DIR`. Every Electron launch invented for a test gets
   `CAIRN_STATE_DIR=$(mktemp -d)` and a temp vault.
-- Every Electron test launch that can show a book also gets `electron-shell/cdp-drive.mjs`'s
-  `deviceLocks` (the fake capture device and permission prompt, its own `--user-data-dir`, an
-  unreachable `PULSE_SERVER`, an empty `ALSA_CONFIG_PATH`), so no test reaches the real microphone.
 - **Never kill processes by name** (`pkill -f cairn`, `killall electron`, …). Kill only PIDs you
   started, on the error path too.
 - Automate everything — launching windows for gates and benches is allowed.

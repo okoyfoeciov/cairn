@@ -81,7 +81,7 @@ import {
   messageOf,
   parentOf,
 } from './inline-edit'
-import { bookRowMenu, emptySpaceMenu, fileRowMenu, folderRowMenu, isMenuOpen, openMenu } from './menu'
+import { bookRowMenu, emptySpaceMenu, fileRowMenu, folderRowMenu, openMenu } from './menu'
 import {
   confirmClose,
   createFolder,
@@ -130,10 +130,7 @@ import { configurePersist, discardPendingUi, flushUi, patchUi } from './state'
 import { createTabStrip, type TabId, type TabStrip } from './tabstrip'
 import { mountMemoir, type MemoirView } from './memoir'
 import { mountReader, type ReaderView } from './reader'
-import type { MicHooks } from './mic-types'
 import { mountExplain } from './explain'
-import { mountMic } from './mic'
-import { createMicAudio } from './mic-take'
 import { createTree, MEMOIR_PATH, type TreeController } from './tree'
 import { registerLinkHost } from './livepreview'
 import { registerTotpHost } from './totp'
@@ -1647,8 +1644,7 @@ async function applyVaultInfo(info: VaultInfo): Promise<void> {
   if (openDocumentPath() === null) tabs.setNote(null)
 
   // §5.11, "run it": on the first animation frame AFTER `nc://vault-opened`,
-  // and — per the fixture — after the note is OPEN.  chrome.ts also waits for
-  // the window to hold focus.  Running it in `boot()`,
+  // and — per the fixture — after the note is OPEN.  Running it in `boot()`,
   // as the scaffold did, measures a `.tab` that §7.4 correctly hides when no
   // note is open, which is four guaranteed FAILs in a gate whose whole
   // condition is `fail === 0 && skip === 0`.
@@ -1861,13 +1857,6 @@ function boot(): void {
       readClipboardText: readText,
       writeClipboardText: copyText,
     })
-    // The preload's values (`__CAIRN_OS__`, `__CAIRN_AI_BASE__`) are read off
-    // the document's window: main.ts's harnesses boot it with a stub document
-    // and no `window` global.
-    const page = document.defaultView
-    // One ai-service origin for the band and the microphone; 8770 is written
-    // here and nowhere else.
-    const aiBase = page?.__CAIRN_AI_BASE__ ?? 'http://127.0.0.1:8770'
     // §0.55 E108 — the EPUB reader, mounted beside the journal and the editor
     // in the same pane.  Its transport is `ipc.ts`'s own and never imported by
     // the module itself (§6.4).
@@ -1880,28 +1869,12 @@ function boot(): void {
       mountExplain: (host, hooks) =>
         mountExplain(host, {
           ...hooks,
-          base: aiBase,
+          base: window.__CAIRN_AI_BASE__ ?? 'http://127.0.0.1:8770',
           initialHeight: window.__CAIRN_EXPLAIN_H__ ?? null,
           saveHeight: (h: number) => patchUi({ explainH: h }),
           openExternal,
           onError: reportError,
         }),
-      // §0.58 E111 — the reader's microphone, Debian only: macOS has no
-      // audio-input entitlement (tools/cairn.entitlements) and no
-      // NSMicrophoneUsageDescription.  The recorder opens nothing until the
-      // first take.
-      ...(page?.__CAIRN_OS__ === 'linux'
-        ? {
-            mountMic: (host: HTMLElement, hooks: MicHooks) =>
-              mountMic(host, {
-                ...hooks,
-                audio: createMicAudio({ base: aiBase, onError: reportError }),
-                copyText: (text: string) => copyText(text),
-                layerAbove: () => modalIsOpen() || isMenuOpen(),
-                onError: reportError,
-              }),
-          }
-        : {}),
     })
   }
   // §0.38 E85.  AFTER `tree` exists?  No — the host reads `tree` lazily on each

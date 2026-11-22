@@ -70,7 +70,7 @@
 // a missing build reads as `skipped 1` instead of a row that silently vanishes
 // and takes one off the total.  Either way this file registers
 // `CSS_ORDER.length + extras + imported + 1 built + 1 static` rows —
-// 11 + 1 + 0 + 1 + 1 = 14 today, whatever else is lying in `src/styles`.
+// 10 + 1 + 0 + 1 + 1 = 13 today, whatever else is lying in `src/styles`.
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFileSync, existsSync } from 'node:fs'
