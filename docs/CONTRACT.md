@@ -19,7 +19,7 @@ remain: every escalation is settled in §9.**
 One row per ruling id, with the rule as it stands and where it lives. **Section numbers and ids are
 never renumbered or reused** — code cites them (ids like `E14` and section numbers like `§7.3`), so a
 superseded id points at the rule that replaced it or at its own tombstone rather than disappearing.
-Sections are numbered in the order below: §0's passes are §0.1–§0.57, then the body is §1–§10.
+Sections are numbered in the order below: §0's passes are §0.1–§0.58, then the body is §1–§10.
 
 | Id | Current rule | Where |
 |---|---|---|
@@ -233,6 +233,7 @@ Sections are numbered in the order below: §0's passes are §0.1–§0.57, then 
 | E108 | EPUB files are first-class tree entries (OS copy or Import move) with an in-house reader, commands 28/29, and per-vault bookmarks | §0.55 |
 | E109 | Click-to-explain in the reader: a press (or a drag of ≤ 8 words) on a book word asks the local ai-service; the answer streams into a bottom band with comart's frozen pronunciation badges; book text is not selectable | §0.56 |
 | E110 | The band's answer fills its width; a pick on a band that holds an answer is STAGED, then placed over the whole band or in a half (comart §3h); the split lasts until the band closes or both halves have ended empty | §0.57 |
+| E111 | **Removed** — the reader's microphone | §0.58 |
 
 ### §0.1 — DELETED (the errata changelog; the X/Y/Z ids it alone defined are folded into §0's index).
 
@@ -1402,7 +1403,7 @@ are deliberately NOT shared across §6.4's owner seam.
 fast scroll through mixed folders would spin arrows all over the sidebar. The duration is therefore
 `var(--chev-ms, 0ms)`, `0ms` everywhere but the one row `tree.ts` arms for ~100ms. The chevron is an
 inline `<svg>` (§0.50 E98), so the custom property reaches it by inheritance, and the transition is
-`!important` because `base.css:51` is §5.1 rule 5's blanket — **the third exemption to rule 5 and
+`!important` because `base.css`'s `*, *::before, *::after` rule is §5.1 rule 5's blanket — **the third exemption to rule 5 and
 the first outside the Properties block.** Cairn's glyph rotates **+90°** where Obsidian's rotates
 −90°, because the two base glyphs point different ways; do not "fix" the sign to match the
 declaration.
@@ -2386,6 +2387,8 @@ the stream, the error lines, the badges, the follow-up and the close rules.
   tests fail alone on that fix's pre-fix code. On the code before the press was recorded on
   `pointerdown` it gives `ℹ pass 60`, `ℹ fail 1`: the press step, with all three of its legs
   wrong. What the engine does not reach yet is listed in KNOWN-ISSUES §5.
+
+### §0.58 — DELETED (the reader's microphone, E111: removed by user ruling 2026-11-22, because the desktop app comart-native gives a microphone in the GNOME top bar everywhere).
 
 ## 1. The IPC contract
 

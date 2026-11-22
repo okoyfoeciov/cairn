@@ -3,14 +3,15 @@
 Cairn ships third-party work in four places: the `cairn.node` native addon
 (Rust crates, pinned in `core/Cargo.lock`), the `app.js` bundle (npm packages,
 bundled by `electron-shell/build-app.mjs` from `src/main.ts`), inline SVG
-path data (`src/icons.ts`), and two font files (`src/styles/fonts/`, inlined
-into `electron-shell/app/index.html` by the same build). The code below is
-permissive. The fonts are under the SIL Open Font License 1.1, which binds the
-font files themselves (a modified font must stay under the OFL) and not the
-software they are bundled with. `nucleo-matcher` (MPL-2.0) was removed,
-verified absent from `core/Cargo.toml` and `core/Cargo.lock`. This file
-travels inside both packages (`tools/package-electron.mjs` copies it next to
-the app), so every copy carries these notices.
+path data (`src/icons.ts`, `src/explain-render.ts`), and two font files
+(`src/styles/fonts/`, inlined into `electron-shell/app/index.html` by the same
+build). The code below is permissive. The fonts are under the SIL Open Font
+License 1.1, which binds the font files themselves (a modified font must stay
+under the OFL) and not the software they are bundled with. `nucleo-matcher`
+(MPL-2.0) was removed, verified absent from `core/Cargo.toml` and
+`core/Cargo.lock`. This file travels inside both packages
+(`tools/package-electron.mjs` copies it next to the app), so every copy
+carries these notices.
 
 ## Rust crates (compiled into `electron-shell/cairn.node`)
 
