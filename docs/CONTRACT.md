@@ -2388,7 +2388,7 @@ the stream, the error lines, the badges, the follow-up and the close rules.
   `pointerdown` it gives `ℹ pass 60`, `ℹ fail 1`: the press step, with all three of its legs
   wrong. What the engine does not reach yet is listed in KNOWN-ISSUES §5.
 
-### §0.58 — DELETED (the reader's microphone, E111: removed by user ruling 2026-11-22, because the desktop app comart-native gives a microphone in the GNOME top bar everywhere).
+### §0.58 — DELETED (the reader's microphone, E111: removed by user ruling 2026-11-22, because comart's desktop app gives a microphone in the GNOME top bar everywhere).
 
 ## 1. The IPC contract
 

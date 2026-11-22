@@ -100,7 +100,11 @@ const COMART_LORA = {
   'Lora-Latin.woff2': 'ddb8c66035104e233fc024669183aad3738b6daa16deee2ebb1241bd0f98ace1',
   'Lora-Latin-Italic.woff2': 'd824d807d4d832d12c87932d0b8ec1314dcfd502157a56dee6bb04cf8a3768ae',
 }
-const COMART = process.env.COMART_DIR || join(homedir(), 'comart')
+// comart's Chrome extension lives in ~/comart/chrome since 2026-11-22 (the fonts
+// moved with it); ~/comart itself held it until then.
+const COMART = process.env.COMART_DIR ||
+  [join(homedir(), 'comart', 'chrome'), join(homedir(), 'comart')].find((d) => existsSync(join(d, 'Lora-Latin.woff2'))) ||
+  join(homedir(), 'comart', 'chrome')
 const comartMissing = Object.keys(COMART_LORA).filter((n) => !existsSync(join(COMART, n)))
 
 const SKIP = !existsSync(BIN) ? `electron not installed at ${BIN} -- run npm install`
