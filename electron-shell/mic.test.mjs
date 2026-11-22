@@ -245,15 +245,14 @@ window.__MIC__ = (() => {
       }
       requestAnimationFrame(tick)
     }
-  }).observe(document.body, { childList: true, subtree: true })
+  }).observe(document.body, { childList: true })
   /** Clicks that reached document capture (E11). */
   let clicks = 0
   document.addEventListener('click', () => { clicks++ }, true)
   function mic() {
     const cs = getComputedStyle(btn)
     return {
-      count: document.querySelectorAll('.ep-mic').length, bodyChild: root.closest('.ep-mic-frame')?.parentElement === document.body,
-      frameRendered: (q('.ep-mic-frame')?.getClientRects().length ?? 0) > 0,
+      count: document.querySelectorAll('.ep-mic').length, bodyChild: root.parentElement === document.body,
       hidden: root.hidden, rendered: root.getClientRects().length > 0, state: root.getAttribute('data-state'),
       msg: root.hasAttribute('data-msg'), label: q('.ep-mic .mc-label').textContent, aria: btn.getAttribute('aria-label'),
       error: btn.classList.contains('is-error'), color: cs.color, bg: cs.backgroundColor,
@@ -272,7 +271,7 @@ window.__MIC__ = (() => {
     const copy = layer.querySelector('.mc-copy')
     const player = layer.querySelector('.mc-player')
     return {
-      layers: document.querySelectorAll('.ep-mic-layer').length, layerParent: layer.closest('.ep-mic-frame')?.parentElement === document.body,
+      layers: document.querySelectorAll('.ep-mic-layer').length, layerParent: layer.parentElement === document.body,
       text: text.textContent, empty: text.classList.contains('is-empty'), shown: c.classList.contains('is-shown'),
       copyHidden: copy.hidden, copied: copy.classList.contains('is-copied'), copyAria: copy.getAttribute('aria-label'),
       playerHidden: player.hidden, playing: player.classList.contains('is-playing'),
@@ -286,8 +285,7 @@ window.__MIC__ = (() => {
   function hit(x, y) { const e = document.elementFromPoint(x, y); return e ? { cls: String(e.className.baseVal ?? e.className), inBtn: !!e.closest('.ep-mic .mc-btn') } : null }
   function band() { const b = q('.ep-explain'); return b ? { open: !b.hidden } : null }
   function mark() { const h = CSS.highlights.get('cairn-explain-mark'); return h ? Array.from(h).map((r) => r.toString()).join('|') : null }
-  /** The word's box, after scrolling it to the fraction at of the book's height. */
-  function word(text, at = 0.3) {
+  function word(text) {
     const root = q('.ep-content')
     const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
     for (let t = walker.nextNode(); t; t = walker.nextNode()) {
@@ -299,7 +297,7 @@ window.__MIC__ = (() => {
       const sc = q('.ep-scroller')
       const first = r.getClientRects()[0]
       const sr = sc.getBoundingClientRect()
-      sc.scrollTop += first.top - (sr.top + at * sc.clientHeight)
+      sc.scrollTop += first.top - (sr.top + 0.3 * sc.clientHeight)
       return R(r.getClientRects()[0])
     }
     return null
@@ -365,10 +363,6 @@ async function launch({ vault, state, base, expect = base, wav, work, geom = '12
     `--use-file-for-fake-audio-capture=${wav}`,
     '--mute-audio',
     '--remote-debugging-port=0',
-    // The main process's inspector, for E24's wheel: only the main process can
-    // send the engine a mouse's wheel tick (non-precise, so animated); CDP's
-    // mouseWheel is precise and lands in one step.
-    '--inspect=127.0.0.1:0',
     join(HERE, 'app-main.mjs'),
   ]
   try {
@@ -383,13 +377,11 @@ async function launch({ vault, state, base, expect = base, wav, work, geom = '12
   child.stderr.on('data', (d) => { err += d })
   const exited = new Promise((r) => child.once('exit', r))
   let ws = null
-  let mws = null
   const consoleLines = []
   const exceptions = []
   const listeners = new Map()
   const close = async () => {
     try { ws && ws.close() } catch {}
-    try { mws && mws.close() } catch {}
     if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL')
     await exited
     locks.dispose()
@@ -450,29 +442,6 @@ async function launch({ vault, state, base, expect = base, wav, work, geom = '12
       return r.result.value
     }
     const M = (call) => ev('window.__MIC__.' + call)
-    /** One wheel tick of a mouse at `p`, through the main process: `dir` 1 is
-     *  down, -1 up.  Electron's sign is the engine's: a negative delta scrolls
-     *  down. */
-    const mainUrl = /Debugger listening on (ws:\/\/127\.0\.0\.1:\d+\/[\w-]+)/.exec(err)?.[1]
-    if (!mainUrl) throw new Error('no main-process inspector\n' + err)
-    mws = new WebSocket(mainUrl)
-    await new Promise((resolve, reject) => { mws.onopen = resolve; mws.onerror = reject })
-    let mid = 0
-    const mpending = new Map()
-    mws.onmessage = (e) => { const m = JSON.parse(e.data); const p = m.id && mpending.get(m.id); if (p) { mpending.delete(m.id); p(m) } }
-    const mainEval = (expression) => new Promise((resolve, reject) => {
-      const n = ++mid
-      const t = setTimeout(() => { mpending.delete(n); reject(new Error('main evaluate timed out')) }, 20_000)
-      mpending.set(n, (m) => {
-        clearTimeout(t)
-        if (m.error || m.result?.exceptionDetails) reject(new Error('main evaluate: ' + JSON.stringify(m.error ?? m.result.exceptionDetails).slice(0, 600)))
-        else resolve(m.result.result.value)
-      })
-      mws.send(JSON.stringify({ id: n, method: 'Runtime.evaluate', params: { expression, includeCommandLineAPI: true, returnByValue: true } }))
-    })
-    const tick = (p, dir) => mainEval(`(() => { const w = require('electron').webContents.getAllWebContents().find((c) => /index\\.html/.test(c.getURL()));
-      w.sendInputEvent({ type: 'mouseWheel', x: ${p.x}, y: ${p.y}, deltaX: 0, deltaY: ${-120 * dir}, wheelTicksX: 0, wheelTicksY: ${-dir},
-        accelerationRatioX: 1, accelerationRatioY: 1, hasPreciseScrollingDeltas: false, canScroll: true }); return 1 })()`)
     const frames = () => ev('new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r(1))))')
     const until = async (what, expr, ms = 5000) => {
       const t0 = Date.now()
@@ -522,7 +491,7 @@ async function launch({ vault, state, base, expect = base, wav, work, geom = '12
     const dev = await ev(`(${inputsGuard})(navigator, true)`)
     refuseRealInputs(dev)
     await frames()
-    return { send, on, ev, M, frames, until, click, key, hold, tick, close, consoleLines, exceptions, dev, pid: child.pid }
+    return { send, on, ev, M, frames, until, click, key, hold, close, consoleLines, exceptions, dev, pid: child.pid }
   } catch (e) {
     await close()
     throw e
@@ -708,7 +677,7 @@ describe('the device locks refuse before anything can open the real microphone',
 })
 
 describe('E111 the reader\'s microphone, real engine (fake ai-service, fake capture device)', { skip: SKIP }, () => {
-  test('E1 the page\'s base is the fake, every capture device is fake, the button is in one body-level frame over the book and none over a note', async (t) => {
+  test('E1 the page\'s base is the fake, every capture device is fake, the button is one body-level root over the book and none over a note', async (t) => {
     await setup()
     app = await launch({ vault, state: join(work, 'state'), base: fake.base, wav: TAKE_WAV, work })
     t.diagnostic(`device ${JSON.stringify(app.dev)}, dpr ${await app.ev('devicePixelRatio')}, ` +
@@ -723,8 +692,7 @@ describe('E111 the reader\'s microphone, real engine (fake ai-service, fake capt
     await app.click(await row('Note'))
     await app.until('the note', `document.getElementById('reader').hidden`)
     const onNote = await app.M('mic()')
-    assert.deepEqual({ hidden: onNote.hidden, rendered: onNote.rendered, frame: onNote.frameRendered }, { hidden: true, rendered: false, frame: false },
-      'a button, or the frame (a scroller G9 would count), over a note')
+    assert.deepEqual({ hidden: onNote.hidden, rendered: onNote.rendered }, { hidden: true, rendered: false }, 'a button over a note')
     await app.click(await row('Keeper'))
     await app.until('the book again', `!document.getElementById('reader').hidden && !document.querySelector('.ep-mic').hidden`)
     assert.deepEqual(fake.conns, [], 'the microphone dialled ai-service before any take')
@@ -792,19 +760,18 @@ describe('E111 the reader\'s microphone, real engine (fake ai-service, fake capt
     assert.equal(/background/.test(rec.first.transition), false, `the circle fades: ${rec.first.transition}`)
   })
 
-  test('E5 the card\'s top is 15% of the reader\'s height below the reader\'s top (comart\'s full card), at its width, capped at 33vh, and scrolls inside', async (t) => {
+  test('E5 the card hangs on the reader\'s middle line at its width, capped at 33vh, and scrolls inside', async (t) => {
     await app.until('the entrance to end', ENTERED)
     const c = await app.M('card()')
     const r = await app.M('reader()')
     const vh = await app.ev('innerHeight')
     t.diagnostic(`card ${JSON.stringify(c.box)}; #reader ${JSON.stringify(r)}; innerHeight ${vh}; body ${c.scrollH}/${c.clientH}`)
-    const want = r.top + 0.15 * r.h
-    assert.ok(Math.abs(c.box.top - want) <= 1, `card top ${c.box.top} is not 15% down the reader, ${want}`)
+    assert.ok(Math.abs(c.box.y - r.y) <= 1, `card middle ${c.box.y} is not the reader's ${r.y}`)
     assert.ok(Math.abs(c.box.left - r.left) <= 0.5 && Math.abs(c.box.w - r.w) <= 0.5, 'the card is not at the reader\'s edges and width')
     assert.ok(Math.abs(c.box.h - 0.33 * vh) <= 1, `the card is ${c.box.h}px, not 33vh`)
     assert.ok(c.scrollH > c.clientH, 'the long transcript does not scroll inside the card')
-    assert.deepEqual(await app.M('scrollers()'), ['ep-mic-frame', 'ep-scroller', 'mc-body', 'tree-scroller'])
-    assert.equal(c.layerParent, true, 'the card layer is not in the body-level frame')
+    assert.deepEqual(await app.M('scrollers()'), ['ep-scroller', 'mc-body', 'tree-scroller'])
+    assert.equal(c.layerParent, true, 'the card layer is not body-level')
   })
 
   test('E6 the entrance fades and slides in over .22s', async (t) => {
@@ -891,9 +858,7 @@ describe('E111 the reader\'s microphone, real engine (fake ai-service, fake capt
     const asks = fake.explains.length
     const mark = await app.M('mark()')
     assert.ok(mark, 'fixture: no mark')
-    // Above the card: its top is 15% down the reader, so the book shows there.
-    // A word deep in the book, so it can be scrolled that high.
-    const at = await app.M(`word('Filler a 20', 0.08)`)
+    const at = await app.M(`word('gulls')`)
     const hit = await app.M(`hit(${at.x}, ${at.y})`)
     assert.equal(hit.cls, 'mc-shield', `the book word is not under the shield: ${JSON.stringify(hit)}`)
     await app.click(at)
@@ -1124,32 +1089,15 @@ describe('E111 the reader\'s microphone, real engine (fake ai-service, fake capt
     assert.equal((await app.ev(FIND)).shown, false, 'the next Esc did not close the find bar')
   })
 
-  test('E24 the wheel over the shield, the card or the button scrolls the book with the engine\'s own motion; the card text scrolls first', async (t) => {
+  test('E24 the wheel over the shield, the card or the button scrolls the book behind; the card text scrolls first', async (t) => {
     const TOP = `document.querySelector('#reader .ep-scroller').scrollTop`
     const BODY = `document.querySelector('.ep-mic-layer .mc-body')`
-    /** The book's scrollTop on every frame for `ms`, from the wheel at `p`. */
-    const track = async (p, deltaY, ms = 700) => {
+    const wheelAt = async (p, deltaY) => {
       await app.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: p.x, y: p.y })
-      await app.ev(`(window.__wheelTrack = new Promise((done) => { const s = document.querySelector('#reader .ep-scroller'); const t0 = performance.now(); const out = [s.scrollTop];
-        const tick = () => { out.push(s.scrollTop); if (performance.now() - t0 < ${ms}) requestAnimationFrame(tick); else done(out) }; requestAnimationFrame(tick) }), 1)`)
-      await app.tick(p, Math.sign(deltaY))
-      const out = await app.ev('window.__wheelTrack')
-      const moved = out.map((v) => v - out[0])
-      // The motion from its first step: how many frames it moved on, and where it ended.
-      const first = moved.findIndex((v) => v !== 0)
-      const path = first < 0 ? [] : moved.slice(first)
-      return { end: moved.at(-1), steps: path.filter((v, i) => i === 0 || v !== path[i - 1]).length, path }
+      await app.send('Input.dispatchMouseEvent', { type: 'mouseWheel', x: p.x, y: p.y, deltaX: 0, deltaY })
+      await app.frames()
     }
-    const near = (got, want, what) => assert.ok(Math.abs(got - want) <= 0.5, `${what}: ${got}, want ${want}`)
-    const r = await app.M('reader()')
-    const off = { x: r.left + 40, y: r.top + 60 }
-
-    // The engine's own wheel over the book, with no card: the reference.
-    await app.ev(`(document.querySelector('#reader .ep-scroller').scrollTop = 200, 1)`)
-    const bare = await track(off, 120)
-    t.diagnostic(`no card: ${bare.steps} steps to ${bare.end}: ${bare.path.join(' ')}`)
-    assert.ok(bare.steps > 3, `fixture: the engine's wheel did not animate (${bare.steps} steps)`)
-    near(bare.end, 120, 'fixture: the engine\'s wheel over the book')
+    const near = (got, want, what) => assert.ok(Math.abs(got - want) <= 0.5, `${what}: scrollTop ${got}, want ${want}`)
 
     fake.script({ text: LONG, first_word_ms: 100, last_word_ms: 1200 })
     await app.click(await btn(app))
@@ -1160,43 +1108,35 @@ describe('E111 the reader\'s microphone, real engine (fake ai-service, fake capt
     await app.until('the entrance to end', ENTERED)
     const room = await app.ev(`(() => { const s = document.querySelector('#reader .ep-scroller'); s.scrollTop = 200; return s.scrollHeight - s.clientHeight })()`)
     assert.ok(room >= 700, `fixture: the book scrolls only ${room}px`)
+
+    // The shield, over the book.
+    const r = await app.M('reader()')
+    const off = { x: r.left + 40, y: r.top + 60 }
     const stack = await app.ev(`document.elementsFromPoint(${off.x}, ${off.y}).map((e) => String(e.className.baseVal ?? e.className).split(' ')[0])`)
     t.diagnostic(`under ${JSON.stringify(off)}: ${stack.join(' > ')}`)
     assert.equal(stack[0], 'mc-shield', 'fixture: the point is not on the shield')
     assert.ok(stack.includes('ep-scroller'), 'fixture: the book is not under the point')
-
-    // The same wheel over the shield: the same motion, frame for frame.
-    const shielded = await track(off, 120)
-    t.diagnostic(`over the shield: ${shielded.steps} steps to ${shielded.end}: ${shielded.path.join(' ')}`)
-    near(shielded.end, 120, 'a wheel over the shield did not scroll the book')
-    assert.ok(Math.abs(shielded.steps - bare.steps) <= 1, `the motion differs: ${shielded.steps} steps against the engine's ${bare.steps}`)
-    // The engine's own curve shifts with where the tick lands between frames:
-    // two wheels over the bare book differ by up to 7px on a frame here (60 Hz
-    // offscreen) and 8.8px windowed at 120 Hz.  A hand-made scroll is far off:
-    // the old jump was 117.5px off on its first frame.
-    const n = Math.min(bare.path.length, shielded.path.length)
-    const gap = Math.max(...Array.from({ length: n }, (_, i) => Math.abs(bare.path[i] - shielded.path[i])))
-    assert.ok(gap <= 12, `the motion differs from the engine's by ${gap}px on one frame`)
+    await wheelAt(off, 120)
+    near(await app.ev(TOP), 320, 'a wheel over the shield did not scroll the book')
     assert.equal(await app.ev(CARD), true, 'the wheel closed the card')
 
-    // The card text has room: it scrolls, and the book stays.
+    // The card text has room: it scrolls, natively, and the book stays.
     const text = await app.M(`box('.ep-mic-layer .mc-text')`)
     const onText = { x: text.x, y: Math.min(text.y, (await app.M('card()')).box.y) }
-    const inText = await track(onText, 120, 400)
-    assert.equal(inText.end, 0, 'the book moved while the card text had room')
+    await wheelAt(onText, 120)
     await app.until('the card text to scroll', `${BODY}.scrollTop > 0`, 2000)
+    near(await app.ev(TOP), 320, 'the book moved while the card text had room')
 
-    // At its end the card text chains to the frame, and the book moves.  A new
-    // wheel sequence: within one, the engine stays latched to the text, as it
-    // does to any inner scroller on any page.
+    // At its end the card text hands the wheel to the book.
     await app.ev(`(${BODY}.scrollTop = ${BODY}.scrollHeight, 1)`)
-    await sleep(1000)
-    near((await track(onText, 120)).end, 120, 'a wheel over the card text at its end did not scroll the book')
+    await wheelAt(onText, 120)
+    near(await app.ev(TOP), 440, 'a wheel over the card text at its end did not scroll the book')
 
     // The record button, with the card gone.
     await app.key('Escape', 'Escape', 27)
     await app.until('the card to close', NO_CARD)
-    near((await track(await btn(app), -120)).end, -120, 'a wheel over the record button did not scroll the book')
+    await wheelAt(await btn(app), -120)
+    near(await app.ev(TOP), 320, 'a wheel over the record button did not scroll the book')
   })
 
   test('the page threw nothing, logged no microphone error, and asked the fake for nothing unexpected', () => {

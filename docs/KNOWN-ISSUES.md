@@ -1039,10 +1039,6 @@ settled and are not gaps. These are:
 - **Copy refuses a transcript over 4,096 characters.** Command 23's sanity cap (§1.3) rejects it:
   the error is reported (`mic-copy`) and no check shows. A 119 s take is roughly 2,400 characters at
   speaking pace (an estimate, not a measurement).
-- **The wheel over the mic moves the book about one frame after the engine would.** The frame
-  (CONTRACT §0.58) is animated by the engine and `mic.ts` copies each of its `scroll` steps to the
-  book, so the book follows one frame behind (about 8 ms at 120 Hz), on the same curve. Measured
-  with a mouse's ticks through `sendInputEvent`; not visible in use.
 - **A staged pick can still be placed from the keyboard under the card.** Tab can reach an
   `.ex-place-half` under the shield, and Enter or Space places the staged pick, a billed request,
   while the card is open. A press cannot (the shield takes it). `explain.ts` is unchanged; the fix

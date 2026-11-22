@@ -20,39 +20,16 @@
  * Cairn's zoom), the Stop grid and the extra Stops, the full card, its grip,
  * CHECK and word chips.
  *
- * SCOPE.  Every rule is under `.ep-mic-frame` (the body-level frame),
- * `.ep-mic` (the button root) or `.ep-mic-layer` (the card's layer), the last
- * two inside the frame: `main.editor` is `contain: paint`, so nothing inside
- * `#reader` could cover the sidebar.  The frame is `[hidden]` unless a book
- * shows, so nothing here can reach the note view and G9 cannot move.
+ * SCOPE.  Every rule is under `.ep-mic` (the button root) or `.ep-mic-layer`
+ * (the card's layer).  Both are body children: `main.editor` is `contain:
+ * paint`, so nothing inside `#reader` could cover the sidebar.  Nothing here
+ * can reach the note view, so G9 cannot move.
  *
- * TWO SCROLLER RULES.  `.mc-body`: the card's text scrolls inside a card capped
- * at a third of the window; the card is removed on close, never hidden.
- * `.ep-mic-frame`: an invisible scroller with no pointer and no scrollbar, the
- * wheel's carrier (mic.ts, "the frame").
+ * ONE SCROLLER RULE, `.mc-body`: the card's text scrolls inside a card capped at
+ * a third of the window.  The card is removed on close, never hidden.
  *
  * DECLARES NO CUSTOM PROPERTY — tokens.css is the only declaration site (§5.1).
  * ======================================================================== */
-
-/* ── the frame ────────────────────────────────────────────────────────────
- * A wheel over the button, the shield or the card chains to the frame, the
- * engine animates the frame as it would the book, and mic.ts hands each step
- * to the scroller under the pointer.  The pin is sticky, so the mic holds
- * still while the frame moves; the run is the frame's travel, 100000px each
- * way from where mic.ts parks it.  z 70 is the old card layer's: nothing in
- * the app sits between the find bar's 30 and the modal's 80. */
-.ep-mic-frame {
-  position: fixed;
-  inset: 0;
-  z-index: 70;
-  pointer-events: none;
-  overflow-x: hidden;
-  overflow-y: scroll;
-  scrollbar-width: none;
-  overflow-anchor: none;
-}
-.ep-mic-frame .mc-pin { position: sticky; top: 0; height: 100%; pointer-events: none; }
-.ep-mic-frame .mc-run { height: 200000px; pointer-events: none; }
 
 /* ── the button ───────────────────────────────────────────────────────────
  * Bottom-right, 16px in, and it never moves: over the band it floats above the
@@ -60,7 +37,7 @@
  * menus' 100).  `.app` reaches the window's right and bottom edges, so this is
  * also the reader pane's corner. */
 .ep-mic {                                   /* mic.css:44-92 */
-  position: absolute;                       /* in the pin, which is the window */
+  position: fixed;
   bottom: 16px;
   right: 16px;
   z-index: 71;
@@ -177,9 +154,9 @@
 
 /* ── the plain card ───────────────────────────────────────────────────────
  * comart hangs its plain card inside a host modal; here the layer is the
- * host's frame.  It is appended to the pin on open and removed on close.  The
- * layer takes no pointer: the shield and the card do. */
-.ep-mic-layer { position: absolute; inset: 0; z-index: 70; pointer-events: none; }
+ * host's frame.  It is appended on open and removed on close.  The layer takes
+ * no pointer: the shield and the card do. */
+.ep-mic-layer { position: fixed; inset: 0; z-index: 70; pointer-events: none; }
 /* The click-catcher: every click outside the card lands here and closes only
  * the card.  It stops at the title bar, which stays live. */
 .ep-mic-layer .mc-shield {                  /* :767-771 */
@@ -188,15 +165,13 @@
   z-index: 2;
   pointer-events: auto;
 }
-/* mic.ts writes top/left/right/width from #reader's rect: comart's card top,
- * 15% of the pane's height down (its modal's padding-top: 15vh, :417-445),
- * and the pane's edges and width.  15vh here only keeps a stray card on
- * screen if that write never happens. */
+/* mic.ts writes top/left/right/width from #reader's rect: the pane's middle
+ * line, edges and width. */
 .ep-mic-layer .mc-wrap {                    /* :740-755 */
   position: absolute;
   left: 0;
   right: 0;
-  top: 15vh;
+  top: 50vh;
   height: 0;
   padding: 0;
   display: flex;
@@ -204,11 +179,10 @@
   align-items: flex-start;
   z-index: 2;
 }
-/* :455-508 with the plain card's :782-784 and :802-806 folded in.  The card
- * hangs DOWN from the line, top-anchored like comart's full card, and is
- * capped at 33vh like its plain card, so it never grows past that (comart's
- * full card grows for its explanation; this card has none).  The entrance
- * rides `translate`, as comart's plain card's does. */
+/* :455-508 with the plain card's :779-784 and :802-806 folded in.  The card
+ * hangs on the line by half its own height, so no measurement is needed when
+ * the text reflows; the entrance rides `translate`, since `transform` holds
+ * the centring. */
 .ep-mic-layer .mc-card {
   position: relative;
   z-index: 1;
@@ -226,6 +200,7 @@
   box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
   -webkit-font-smoothing: antialiased;
   pointer-events: auto;
+  transform: translateY(-50%);
   opacity: 0;
   translate: 0 10px;
 }

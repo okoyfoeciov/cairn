@@ -192,12 +192,11 @@ function mount(over = {}) {
     ...over,
   })
   mounted.push(view)
-  // The newest frame: a test may hold two mounts.
-  const frame = document.body.children.filter((e) => e.classList.contains('ep-mic-frame')).at(-1)
-  const root = frame?.querySelector('.ep-mic')
+  // The newest root: a test may hold two mounts.
+  const root = document.body.children.filter((e) => e.classList.contains('ep-mic')).at(-1)
   const btn = root?.querySelector('.mc-btn')
   return {
-    view, audio, log, host, frame, root, btn,
+    view, audio, log, host, root, btn,
     setAbove: (v) => { above = v },
     setCopy: (fn) => { copyResult = fn },
     setRect: (r) => { rect = { ...rect, ...r } },
@@ -205,7 +204,7 @@ function mount(over = {}) {
   }
 }
 
-const layers = () => document.body.querySelectorAll('.ep-mic-layer')
+const layers = () => document.body.children.filter((e) => e.classList.contains('ep-mic-layer'))
 const layer = () => layers()[0] ?? null
 const part = (sel) => layer()?.querySelector(sel) ?? null
 const state = (m) => m.root.getAttribute('data-state')
@@ -244,15 +243,9 @@ const tag = (el) => el.tagName.toLowerCase()
 
 /* ── mount and the DOM contract ─────────────────────────────────────────── */
 
-test('mount: one body-level frame holding the button, hidden until a book shows, comart\'s DOM and words', () => {
+test('mount: one body-level button, hidden until a book shows, comart\'s DOM and words', () => {
   const m = mount()
-  assert.equal(m.frame.parentNode, document.body, 'the frame is a body child (SPEC-UI §1.1: main.editor clips its descendants)')
-  assert.deepEqual(attrs(m.frame), { class: 'ep-mic-frame', hidden: '' })
-  const [pin, run] = m.frame.children
-  assert.equal(m.frame.children.length, 2)
-  assert.deepEqual([attrs(pin), attrs(run)], [{ class: 'mc-pin' }, { class: 'mc-run' }])
-  assert.deepEqual(pin.children, [m.root], 'the button rides in the pin')
-  assert.equal(run.children.length, 0)
+  assert.equal(m.root.parentNode, document.body, 'the root is a body child (SPEC-UI §1.1: main.editor clips its descendants)')
   assert.equal(m.host.querySelectorAll('.ep-mic').length, 0, 'nothing is mounted inside the host')
   assert.equal(tag(m.root), 'section')
   assert.deepEqual(attrs(m.root), { class: 'ep-mic', 'aria-label': 'Voice transcription', 'data-state': 'idle', hidden: '' })
@@ -403,8 +396,8 @@ test('done opens the plain card with the transcript, Copy and a player, and auto
   assert.equal(m.view.cardOpen(), true)
   assert.equal(layers().length, 1)
   const L = layer()
-  assert.equal(L.parentNode, m.frame.children[0], 'the card layer rides in the frame\'s pin, over the button\'s root')
-  assert.equal(m.frame.children[0].children.at(-1), L)
+  assert.equal(L.parentNode, document.body, 'the card layer is a body child')
+  assert.equal(document.body.children.at(-1), L)
 
   const [shield, wrap] = L.children
   assert.equal(L.children.length, 2)
@@ -590,21 +583,21 @@ test('events of a take that is no longer current are ignored, and a stale done\'
 
 /* ── the card ───────────────────────────────────────────────────────────── */
 
-test('the card\'s top is 15% of the host\'s height below its top (comart\'s full card), at its edges and width', () => {
+test('the card hangs on the host\'s middle line, at its edges and width', () => {
   const m = mount()
   withCard(m)
   const wrap = part('.mc-wrap')
-  assert.deepEqual({ ...wrap.style }, { top: '154px', left: '412px', right: 'auto', width: '788px' })
+  assert.deepEqual({ ...wrap.style }, { top: '420px', left: '412px', right: 'auto', width: '788px' })
 
   m.setRect({ left: 300, top: 40, width: 900, height: 701 })
   fire(document.body, 'resize')
-  assert.deepEqual({ ...wrap.style }, { top: '145px', left: '300px', right: 'auto', width: '900px' })
+  assert.deepEqual({ ...wrap.style }, { top: '391px', left: '300px', right: 'auto', width: '900px' })
 
   const ro = observers.find((o) => o.targets.has(m.host))
   assert.ok(ro, 'the host is observed while the card is open')
   m.setRect({ left: 250, top: 40, width: 950, height: 760 })
   ro.trigger()
-  assert.deepEqual({ ...wrap.style }, { top: '154px', left: '250px', right: 'auto', width: '950px' })
+  assert.deepEqual({ ...wrap.style }, { top: '420px', left: '250px', right: 'auto', width: '950px' })
 
   fire(part('.mc-shield'), 'click')
   assert.equal(ro.targets.has(m.host), false, 'unobserved once the card is gone')
@@ -1007,8 +1000,8 @@ test('exactly three window listeners, all removed by destroy()', () => {
   m.view.destroy()
   assert.equal(win.listeners.length, before)
   assert.equal(take.cancels, 1, 'the take in flight is discarded')
-  assert.equal(m.frame.parentNode, null)
-  assert.equal(document.body.children.includes(m.frame), false)
+  assert.equal(m.root.parentNode, null)
+  assert.equal(document.body.children.includes(m.root), false)
   assert.equal(layer(), null)
   assert.equal(m.audio.destroyed, 1)
   assert.equal(ro.disconnected, true)
@@ -1016,7 +1009,7 @@ test('exactly three window listeners, all removed by destroy()', () => {
   assert.equal(m.audio.destroyed, 1, 'idempotent')
 })
 
-/* ── the frame: the wheel over the mic is the engine's own ───────────────── */
+/* ── the wheel scrolls what is behind ───────────────────────────────────── */
 
 /** An element with a scroll box; `ovy` is its computed overflow-y. */
 function box(cls, { ovy = 'visible', top = 0, height = 0, client = 0 } = {}) {
@@ -1036,144 +1029,101 @@ function hitStack(stack) {
   win.getComputedStyle = (el) => ({ overflowY: el._ovy ?? 'visible' })
 }
 
-const PARK = 100000
 const wheel = (target, init = {}) =>
   fire(target, 'wheel', { deltaY: 120, deltaX: 0, deltaMode: 0, clientX: 600, clientY: 300, ctrlKey: false, ...init })
-/** The engine moves the frame by `d`, as its wheel animation does, one step. */
-const step = (m, d) => { m.frame.scrollTop += d; fire(m.frame, 'scroll') }
 
-test('the frame shows with the button or the card, and is parked in the middle of its run when it shows', () => {
+test('the wheel over the shield or the card scrolls the book behind them', () => {
   const m = mount()
-  assert.equal(m.frame.hidden, true)
-  m.view.setShown(true)
-  assert.equal(m.frame.hidden, false)
-  assert.equal(m.frame.scrollTop, PARK)
-  m.frame.scrollTop = PARK + 300
-  m.view.setShown(true)
-  assert.equal(m.frame.scrollTop, PARK + 300, 'a frame already showing is not parked again: that would cut the engine\'s animation')
-  m.view.setShown(false)
-  assert.equal(m.frame.hidden, true)
-
-  m.view.setShown(true)
-  withCard(m)
-  m.view.setShown(false)
-  assert.equal(m.root.hidden, true)
-  assert.equal(m.frame.hidden, false, 'the open card keeps the frame')
-  escape()
-  assert.equal(m.view.cardOpen(), false)
-  assert.equal(m.frame.hidden, true, 'nothing left to show')
-})
-
-test('a wheel over the shield picks the scroller behind it, and every step of the frame is handed to it', () => {
-  const m = mount()
-  m.view.setShown(true)
   withCard(m)
   const book = box('ep-scroller', { ovy: 'auto', top: 100, height: 5000, client: 800 })
   const para = box('ep-para')
-  hitStack([part('.mc-shield'), para, book, m.host, document.body])
+  const body = part('.mc-body')
+  body._ovy = 'auto'
+  body.scrollTop = 0
+  body.scrollHeight = 60
+  body.clientHeight = 60
+  hitStack([part('.mc-shield'), part('.ep-mic-layer') ?? layer(), para, book, m.host, document.body])
 
-  const ev = wheel(part('.mc-shield'))
-  assert.equal(ev.defaultPrevented, false, 'the engine scrolls: the wheel is never cancelled')
-  assert.equal(book.scrollTop, 100, 'the wheel itself moves nothing; the frame\'s steps do')
-  for (const d of [0.8, 4, 12, 30.4, 40, 24, 8.8]) step(m, d)
-  assert.equal(book.scrollTop, 220)
+  let ev = wheel(part('.mc-shield'))
+  assert.equal(book.scrollTop, 220, 'a wheel over the shield did not reach the book')
+  assert.equal(ev.defaultPrevented, true)
   assert.equal(layer() !== null, true, 'the wheel closed the card')
-  step(m, -20)
-  assert.equal(book.scrollTop, 200, 'back up, step by step')
-  fire(m.frame, 'scroll')
-  assert.equal(book.scrollTop, 200, 'a scroll event with no movement moves nothing')
+
+  // Over the card: its text has no room, so the book scrolls, as it would
+  // under comart's card (the page is the next scroller there).
+  ev = wheel(part('.mc-text') ?? body, { deltaY: -20 })
+  assert.equal(book.scrollTop, 200)
+  assert.equal(ev.defaultPrevented, true)
+
+  // Lines and pages are Blink's own steps.
+  wheel(part('.mc-shield'), { deltaY: 3, deltaMode: 1 })
+  assert.equal(book.scrollTop, 320)
+  wheel(part('.mc-shield'), { deltaY: -1, deltaMode: 2 })
+  assert.equal(book.scrollTop, 320 - 800)
+
+  // Ctrl+wheel is the zoom, never a scroll.
+  book.scrollTop = 400
+  ev = wheel(part('.mc-shield'), { ctrlKey: true })
+  assert.equal(book.scrollTop, 400)
+  assert.equal(ev.defaultPrevented, false)
 })
 
-test('the target is the first scroller under the pointer, outside the mic, with room that way', () => {
+test('the card text scrolls first while it has room; then the wheel goes behind', () => {
   const m = mount()
-  m.view.setShown(true)
-  withCard(m)
+  withCard(m, 'a long transcript')
   const book = box('ep-scroller', { ovy: 'auto', top: 100, height: 5000, client: 800 })
-  const half = box('ex-thread-scroll', { ovy: 'auto', top: 0, height: 900, client: 300 })
-  const flat = box('ex-band', { ovy: 'hidden', top: 0, height: 900, client: 300 })
   const body = part('.mc-body')
   body._ovy = 'auto'
   body.scrollTop = 0
   body.scrollHeight = 600
   body.clientHeight = 300
-  hitStack([body, part('.mc-card'), flat, half, book, document.body])
+  hitStack([body, layer(), book, document.body])
 
-  wheel(body, { deltaY: 100 })
-  step(m, 100)
-  assert.equal(body.scrollTop, 0, 'the card text is the engine\'s own: never a target')
-  assert.equal(half.scrollTop, 100, 'the band half under the pointer, as without the card')
+  let ev = wheel(body, { deltaY: 120 })
+  assert.equal(ev.defaultPrevented, false, 'the card text has room: the engine scrolls it')
+  assert.equal(book.scrollTop, 100)
+
+  body.scrollTop = 300
+  ev = wheel(body, { deltaY: 120 })
+  assert.equal(ev.defaultPrevented, true)
+  assert.equal(book.scrollTop, 220, 'at its end the card text hands the wheel to the book')
+
+  ev = wheel(body, { deltaY: -120 })
+  assert.equal(ev.defaultPrevented, false, 'scrolling back up the card text is the engine\'s')
+  assert.equal(book.scrollTop, 220)
+})
+
+test('the wheel goes to the first scroller under the pointer that has room, never to the mic', () => {
+  const m = mount()
+  withCard(m)
+  const book = box('ep-scroller', { ovy: 'auto', top: 100, height: 5000, client: 800 })
+  const half = box('ex-thread-scroll', { ovy: 'auto', top: 0, height: 900, client: 300 })
+  const flat = box('ex-band', { ovy: 'hidden', top: 0, height: 900, client: 300 })
+  hitStack([part('.mc-shield'), layer(), flat, half, book, document.body])
+
+  wheel(part('.mc-shield'), { deltaY: 100 })
+  assert.equal(half.scrollTop, 100, 'the band half under the pointer scrolls, as it would without the card')
   assert.equal(book.scrollTop, 100)
 
   half.scrollTop = 600
-  wheel(body, { deltaY: 100 })
-  step(m, 100)
+  wheel(part('.mc-shield'), { deltaY: 100 })
   assert.equal(half.scrollTop, 600)
   assert.equal(book.scrollTop, 200, 'a half at its end lets the next scroller have it')
 
-  wheel(body, { deltaY: -100 })
-  step(m, -100)
-  assert.equal(half.scrollTop, 500, 'up: the half has room again')
-
   book.scrollTop = 4200
-  half.scrollTop = 600
-  wheel(body, { deltaY: 100 })
-  step(m, 100)
+  const ev = wheel(part('.mc-shield'), { deltaY: 100 })
   assert.equal(book.scrollTop, 4200, 'nothing has room: nothing moves')
-  assert.equal(half.scrollTop, 600)
-
-  wheel(body, { deltaY: 0, deltaX: 50 })
-  half.scrollTop = 0
-  step(m, 100)
-  assert.equal(half.scrollTop, 0, 'a sideways wheel keeps the target it had (none)')
+  assert.equal(ev.defaultPrevented, false)
 })
 
-test('the target lasts one wheel motion: when the frame\'s scroll ends, nothing else it does moves the book', () => {
+test('the wheel over the record button scrolls the book too', () => {
   const m = mount()
   m.view.setShown(true)
   const book = box('ep-scroller', { ovy: 'auto', top: 0, height: 5000, client: 800 })
   hitStack([m.btn, m.root, book, document.body])
-  wheel(m.btn, { deltaY: 120 })
-  step(m, 120)
+  const ev = wheel(m.btn, { deltaY: 120 })
   assert.equal(book.scrollTop, 120)
-  fire(m.frame, 'scrollend')
-  // An arrow key on the focused button, or a drag-select's autoscroll, moves
-  // the frame with no wheel: the book stays.
-  step(m, 40)
-  assert.equal(book.scrollTop, 120, 'a scroll of the frame with no wheel moved the book')
-  wheel(m.btn, { deltaY: 120 })
-  step(m, 30)
-  assert.equal(book.scrollTop, 150, 'the next wheel picks again')
-})
-
-test('a wheel over the record button scrolls the book through the frame too', () => {
-  const m = mount()
-  m.view.setShown(true)
-  const book = box('ep-scroller', { ovy: 'auto', top: 0, height: 5000, client: 800 })
-  hitStack([m.btn, m.root, book, document.body])
-  wheel(m.btn, { deltaY: 120 })
-  step(m, 120)
-  assert.equal(book.scrollTop, 120)
-})
-
-test('parking moves nothing, and a frame far from the middle is parked again when its scroll ends', () => {
-  const m = mount()
-  m.view.setShown(true)
-  const book = box('ep-scroller', { ovy: 'auto', top: 1000, height: 900000, client: 800 })
-  hitStack([m.btn, book])
-  wheel(m.btn, { deltaY: 120 })
-  step(m, PARK / 2 - 10)
-  fire(m.frame, 'scrollend')
-  assert.equal(m.frame.scrollTop, PARK + PARK / 2 - 10, 'near enough: left where the engine put it')
-  wheel(m.btn, { deltaY: 120 })
-  step(m, 20)
-  const at = book.scrollTop
-  fire(m.frame, 'scrollend')
-  assert.equal(m.frame.scrollTop, PARK, 'parked again')
-  fire(m.frame, 'scroll')
-  assert.equal(book.scrollTop, at, 'the park\'s own scroll event moves nothing')
-  wheel(m.btn, { deltaY: 120 })
-  step(m, 40)
-  assert.equal(book.scrollTop, at + 40)
+  assert.equal(ev.defaultPrevented, true)
 })
 
 /* ── source rules ───────────────────────────────────────────────────────── */

@@ -4,7 +4,7 @@
  *
  * comart's microphone button and its PLAIN transcript card (`~/comart/mic.js`
  * at 7ec2379), restyled by mic.css: record → the red Stop → transcribe → a card
- * with the transcript, a player and Copy, over the reader pane.  Only the
+ * with the transcript, a player and Copy, centred on the reader pane.  Only the
  * red Stop: comart's extra Stops, its full card, grip, CHECK and word chips are
  * not ported.
  *
@@ -12,14 +12,11 @@
  * and every event is guarded by the take's own token, so nothing a discarded
  * take says can reach the screen; a stale `done` has its clip released.
  *
- * ONE BODY-LEVEL FRAME, never a child of `#reader`: `main.editor` is
+ * TWO BODY-LEVEL ROOTS, never children of `#reader`: `main.editor` is
  * `contain: paint`, which clips every fixed descendant to the pane, and the
- * shield must cover the sidebar too.  `div.ep-mic-frame` is an invisible
- * scroller that takes no pointer; it carries the wheel (see "the frame" below)
- * and shows while the button or the card does.  Inside it, `section.ep-mic`
- * lives for the mount and is `[hidden]` unless a book shows;
- * `div.ep-mic-layer` (shield + card) exists only while the card is open and is
- * removed on close, never hidden.
+ * shield must cover the sidebar too.  `section.ep-mic` lives for the mount and
+ * is `[hidden]` unless a book shows; `div.ep-mic-layer` (shield + card) exists
+ * only while the card is open and is removed on close, never hidden.
  *
  * RULE 3.  While the card is open the shield takes every click below the title
  * bar and closes only the card; the reader's outside-click rule stands down
@@ -110,6 +107,9 @@ function keepPress(el: HTMLElement): void {
   el.addEventListener('pointerdown', (ev) => ev.stopPropagation())
 }
 
+/** A wheel "line" in px: Blink's own step for a line-mode delta (explain.ts). */
+const WHEEL_LINE_PX = 40
+
 /** `el` scrolls on y and still has room in the direction of `dy`. */
 function hasRoom(el: Element, dy: number): boolean {
   const ovy = window.getComputedStyle(el).overflowY
@@ -118,11 +118,29 @@ function hasRoom(el: Element, dy: number): boolean {
   return dy > 0 ? el.scrollTop < max - 0.5 : el.scrollTop > 0.5
 }
 
-/** comart's card top: the fraction of the page's height above it. */
-const CARD_TOP = 0.15
-
-/** The frame's run: far more travel each way than a card's life needs. */
-const PARK = 100000
+/** The wheel over the mic scrolls what is behind it.  comart's page scrolls
+ *  under its shield because the document is the scroller there; here the
+ *  book and the band are inner scrollers that are not ancestors of the
+ *  shield, so the engine's chaining never reaches them and the wheel is
+ *  handed on: to the card's own text while it has room, else to the first
+ *  scroller under the pointer, outside the mic, that has room. */
+function passWheel(el: HTMLElement, isMine: (n: Element) => boolean): void {
+  el.addEventListener('wheel', (ev) => {
+    const e = ev as WheelEvent
+    // Ctrl+wheel is the zoom, not a scroll.
+    if (e.ctrlKey || !e.deltaY) return
+    for (let n = e.target as Element | null; n && n !== el; n = n.parentElement) {
+      if (hasRoom(n, e.deltaY)) return
+    }
+    const t = el.ownerDocument.elementsFromPoint(e.clientX, e.clientY)
+      .find((n) => !isMine(n) && hasRoom(n, e.deltaY))
+    if (!t) return
+    // deltaMode 1 is lines, 2 is pages.
+    const unit = e.deltaMode === 1 ? WHEEL_LINE_PX : e.deltaMode === 2 ? t.clientHeight : 1
+    t.scrollTop += e.deltaY * unit
+    e.preventDefault()
+  }, { passive: false })
+}
 
 /** The open card's parts, built fresh on every open so no listener or text
  *  survives a close. */
@@ -169,63 +187,9 @@ export function mountMic(host: HTMLElement, deps: MicDeps): MicView {
   label.setAttribute('aria-live', 'polite')
   btn.append(micIco, stopIco, dots, label)
   root.append(btn)
-
-  /* ── the frame: the wheel over the mic is the engine's own ────────────── */
-
-  // comart's page scrolls under its button and shield because the document is
-  // the scroller there.  The book and the band are inner scrollers that are
-  // not ancestors of the mic, so the engine's chaining never reaches them, and
-  // a hand-made scroll cannot have the engine's wheel animation.  So the mic
-  // lives inside an invisible scroller of its own, the frame: a wheel over the
-  // button, the shield or the card chains to the frame, the engine animates
-  // the frame exactly as it would the book, and every frame of that movement
-  // is handed to the scroller the pointer is over (`target`).  The card's text
-  // is nearer than the frame, so it scrolls first while it has room.  The pin
-  // holds the mic still while the frame moves; the frame takes no pointer.
-  const frame = doc.createElement('div')
-  frame.className = 'ep-mic-frame'
-  frame.hidden = true
-  const pin = doc.createElement('div')
-  pin.className = 'mc-pin'
-  const run = doc.createElement('div')
-  run.className = 'mc-run'
-  pin.append(root)
-  frame.append(pin, run)
-  doc.body.append(frame)
+  doc.body.append(root)
   keepPress(root)
-
-  let target: Element | null = null
-  let last = 0
-  function park(): void {
-    frame.scrollTop = PARK
-    last = frame.scrollTop
-  }
-  // Passive: the engine never waits for it, as it never waits over the book.
-  frame.addEventListener('wheel', (ev) => {
-    const e = ev as WheelEvent
-    if (!e.deltaY) return
-    target = doc.elementsFromPoint(e.clientX, e.clientY)
-      .find((n) => !frame.contains(n) && hasRoom(n, e.deltaY)) ?? null
-  }, { passive: true })
-  frame.addEventListener('scroll', () => {
-    const now = frame.scrollTop
-    const d = now - last
-    last = now
-    if (d && target) target.scrollTop += d
-  })
-  // The target lasts one wheel motion: an arrow key on the focused button or a
-  // drag-select's autoscroll also moves the frame, and must not move the book.
-  frame.addEventListener('scrollend', () => {
-    target = null
-    if (Math.abs(frame.scrollTop - PARK) > PARK / 2) park()
-  })
-  /** The frame shows while the button or the card does. */
-  function syncFrame(): void {
-    const hide = root.hidden && card === null
-    if (frame.hidden === hide) return
-    frame.hidden = hide
-    if (!hide) park()
-  }
+  passWheel(root, (n) => root.contains(n) || !!card?.layer.contains(n))
 
   /* ── state (comart mic.js:1062-1103) ──────────────────────────────────── */
 
@@ -405,16 +369,13 @@ export function mountMic(host: HTMLElement, deps: MicDeps): MicView {
     c.pp.setAttribute('aria-label', s && s.playing ? 'Pause' : 'Play')
   }
 
-  /** The card's top is where comart's own card's is: 15% of the page's
-   *  height below its top (the modal's `padding-top: 15vh`, mic.css:417-445),
-   *  the page being the reader pane, at the pane's edges and width (plainPlace,
-   *  mic.js:1270-1276, for the writing).  comart's plain card hangs on a host
-   *  card's middle line instead, but here no card is under it. */
+  /** The card hangs on the reader pane's middle line, at its edges and width
+   *  (comart plainPlace, mic.js:1270-1276). */
   function place(): void {
     const c = card
     if (!c) return
     const r = host.getBoundingClientRect()
-    c.wrap.style.top = Math.round(r.top + r.height * CARD_TOP) + 'px'
+    c.wrap.style.top = Math.round(r.top + r.height / 2) + 'px'
     c.wrap.style.left = r.left + 'px'
     c.wrap.style.right = 'auto'
     c.wrap.style.width = r.width + 'px'
@@ -488,6 +449,7 @@ export function mountMic(host: HTMLElement, deps: MicDeps): MicView {
     // The shield first: the wrapper, later at the same z-index, rides above it.
     layer.append(shield, wrap)
     keepPress(layer)
+    passWheel(layer, (n) => layer.contains(n) || root.contains(n))
     const c: Card = { layer, wrap, el, player, pp, fill, time, copy, clip }
 
     // Target phase, never capture: the reader's document-capture click must
@@ -532,8 +494,7 @@ export function mountMic(host: HTMLElement, deps: MicDeps): MicView {
     endCard()
     const c = buildCard(text, clip)
     card = c
-    pin.append(c.layer)
-    syncFrame()
+    doc.body.append(c.layer)
     paint(c, { playing: false, t: 0, dur: clip.state().dur })
     // The rect read also flushes the card's first style, so the class added on
     // the next frame transitions instead of jumping.
@@ -564,7 +525,6 @@ export function mountMic(host: HTMLElement, deps: MicDeps): MicView {
     dropSelectionIn(c.el)
     ro?.unobserve(host)
     c.layer.remove()
-    syncFrame()
     c.clip.release()
     return true
   }
@@ -628,7 +588,6 @@ export function mountMic(host: HTMLElement, deps: MicDeps): MicView {
   return {
     setShown(on: boolean): void {
       root.hidden = !on
-      syncFrame()
     },
     leave,
     cardOpen: () => card !== null,
@@ -640,7 +599,7 @@ export function mountMic(host: HTMLElement, deps: MicDeps): MicView {
       window.removeEventListener('keyup', onKeyUp, true)
       window.removeEventListener('resize', place)
       ro?.disconnect()
-      frame.remove()
+      root.remove()
       deps.audio.destroy()
     },
   }

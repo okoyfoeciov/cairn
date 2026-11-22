@@ -716,13 +716,13 @@ describe('E109 click-to-explain, real engine (fake ai-service)', { skip: SKIP },
   const g2 = gate()
   let first = null
 
-  test('launch: the band is hidden and reader mode has three rendered scrollers (the mic\'s frame is one)', async () => {
+  test('launch: the band is hidden and reader mode has two rendered scrollers', async () => {
     await setup()
     app = await launch({ vault, state, base: ai.base })
     const b = await app.X('band()')
     assert.ok(b, 'no .ep-explain in #reader')
     assert.deepEqual({ hidden: b.hidden, rendered: b.rendered, scrollers: await app.X('scrollers()') },
-      { hidden: true, rendered: false, scrollers: ['ep-mic-frame', 'ep-scroller', 'tree-scroller'] },
+      { hidden: true, rendered: false, scrollers: ['ep-scroller', 'tree-scroller'] },
       'before any pick the band must be hidden, render no box, and add no scroller')
   })
 
@@ -804,9 +804,9 @@ describe('E109 click-to-explain, real engine (fake ai-service)', { skip: SKIP },
       'the pick did not leave the keyboard with the book')
   })
 
-  test('while the band is open there are exactly four rendered scrollers', async () => {
-    assert.deepEqual(await app.X('scrollers()'), ['ep-mic-frame', 'ep-scroller', 'ex-scroll', 'tree-scroller'],
-      'the open band is not exactly the fourth rendered scroller')
+  test('while the band is open there are exactly three rendered scrollers', async () => {
+    assert.deepEqual(await app.X('scrollers()'), ['ep-scroller', 'ex-scroll', 'tree-scroller'],
+      'the open band is not exactly the third rendered scroller')
   })
 
   test('the answer streams into a live round and hides a half-arrived tag', async () => {
@@ -915,7 +915,7 @@ describe('E109 click-to-explain, real engine (fake ai-service)', { skip: SKIP },
   const gK = gate()
   const gM = gate()
   const AT_BAND = { cls: 'ep-explain', inReader: true, body: false }
-  const FIVE = ['ep-mic-frame', 'ep-scroller', 'ex-scroll', 'ex-scroll', 'tree-scroller']
+  const FOUR = ['ep-scroller', 'ex-scroll', 'ex-scroll', 'tree-scroller']
   let keeperReq = null
   let mastReq = null
   /** A point in the book's margin above the band: off the halves, on no word. */
@@ -984,7 +984,7 @@ describe('E109 click-to-explain, real engine (fake ai-service)', { skip: SKIP },
       `the preview halves are not equal: ${l.box.w} + ${r.box.w} of ${s.box.w}`)
     assert.ok(l.content.w < full.content.w * 0.6 && l.scrollHeight > full.scrollHeight,
       `the answer did not reflow to half width (content ${full.content.w} -> ${l.content.w}, height ${full.scrollHeight} -> ${l.scrollHeight})`)
-    assert.deepEqual(await app.X('scrollers()'), FIVE, 'the right preview is not exactly the fifth rendered scroller')
+    assert.deepEqual(await app.X('scrollers()'), FOUR, 'the right preview is not exactly the fourth rendered scroller')
     // Leaving the halves ends the preview, not the stage.
     await app.move(await offBand(app))
     const back = await app.X('slots()')
@@ -1161,7 +1161,7 @@ describe('E109 click-to-explain, real engine (fake ai-service)', { skip: SKIP },
   }
 
   test('E110: while split there are exactly four rendered scrollers', async () => {
-    assert.deepEqual(await app.X('scrollers()'), FIVE, 'a split band is not exactly the fifth rendered scroller')
+    assert.deepEqual(await app.X('scrollers()'), FOUR, 'a split band is not exactly the fourth rendered scroller')
   })
 
   test('E110: a drill-down extends only the half it is made in, and the other half keeps its marks', async () => {
@@ -1306,17 +1306,17 @@ describe('E109 click-to-explain, real engine (fake ai-service)', { skip: SKIP },
       focus: (await app.X('active()')).cls, scrollers: await app.X('scrollers()'), asked: ai.explains.length - n,
     }, {
       hidden: true, layout: 'single', place: true, halves: [[0, ''], [0, '']], mark: null,
-      focus: 'ep-scroller', scrollers: ['ep-mic-frame', 'ep-scroller', 'tree-scroller'], asked: 0,
+      focus: 'ep-scroller', scrollers: ['ep-scroller', 'tree-scroller'], asked: 0,
     }, 'the second Esc did not close both halves and hand the keyboard back to the book')
   })
 
-  test('E110: reopened, the band is one panel and the fourth scroller; after a mouse placement Esc still closes it', async () => {
+  test('E110: reopened, the band is one panel and the third scroller; after a mouse placement Esc still closes it', async () => {
     await pick(app, 'lantern')
     await settled(app)
     const s = await app.X('slots()')
     assert.deepEqual({ layout: s.layout, right: s.cols[1].display, scrollers: await app.X('scrollers()') },
-      { layout: 'single', right: 'none', scrollers: ['ep-mic-frame', 'ep-scroller', 'ex-scroll', 'tree-scroller'] },
-      'the reopened band is not one panel, the fourth rendered scroller')
+      { layout: 'single', right: 'none', scrollers: ['ep-scroller', 'ex-scroll', 'tree-scroller'] },
+      'the reopened band is not one panel, the third rendered scroller')
     await pick(app, 'keeper', 0, 0.3, 'right')
     await app.until('the split', `window.__EXP__.slots().layout === 'split'`)
     assert.deepEqual(await app.X('active()'), AT_BAND, 'a mouse placement left focus outside the band')
@@ -1625,7 +1625,7 @@ describe('E109 click-to-explain, real engine (fake ai-service)', { skip: SKIP },
     assert.equal(ai.explains.length, n, 'a margin click was a pick')
     assert.equal((await app.X('band()')).hidden, true, 'a click in the book\'s margin did not close the band')
     assert.equal(await app.X(`hl('cairn-explain-mark')`), null, 'the mark outlived the band')
-    assert.deepEqual(await app.X('scrollers()'), ['ep-mic-frame', 'ep-scroller', 'tree-scroller'], 'the closed band still renders a scroller')
+    assert.deepEqual(await app.X('scrollers()'), ['ep-scroller', 'tree-scroller'], 'the closed band still renders a scroller')
   })
 
   test('the marked word is scrolled clear of the band when the band would cover it', async () => {

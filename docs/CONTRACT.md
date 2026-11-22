@@ -233,7 +233,7 @@ Sections are numbered in the order below: §0's passes are §0.1–§0.58, then 
 | E108 | EPUB files are first-class tree entries (OS copy or Import move) with an in-house reader, commands 28/29, and per-vault bookmarks | §0.55 |
 | E109 | Click-to-explain in the reader: a press (or a drag of ≤ 8 words) on a book word asks the local ai-service; the answer streams into a bottom band with comart's frozen pronunciation badges; book text is not selectable | §0.56 |
 | E110 | The band's answer fills its width; a pick on a band that holds an answer is STAGED, then placed over the whole band or in a half (comart §3h); the split lasts until the band closes or both halves have ended empty | §0.57 |
-| E111 | The book reader's microphone, Debian only: comart's button, 16px in from the reader pane's bottom-right corner, records; voice-typing's chain streams the take to ai-service's `/api/transcribe/ws` with word timings; comart's PLAIN transcript card (transcript, player, Copy) opens with its top where comart's card's is, 15% down the pane, trimmed by comart's Silero VAD, whose runtime rides inside `app.js`; while the card is open the first outside click closes only the card; the sixth rule-5 exemption | §0.58 |
+| E111 | The book reader's microphone, Debian only: comart's button, 16px in from the reader pane's bottom-right corner, records; voice-typing's chain streams the take to ai-service's `/api/transcribe/ws` with word timings; comart's PLAIN transcript card (transcript, player, Copy) opens on the pane's middle line, trimmed by comart's Silero VAD, whose runtime rides inside `app.js`; while the card is open the first outside click closes only the card; the sixth rule-5 exemption | §0.58 |
 
 ### §0.1 — DELETED (the errata changelog; the X/Y/Z ids it alone defined are folded into §0's index).
 
@@ -1880,10 +1880,8 @@ button — the shortcut is the entry point.
 - **Scrollers.** Reader mode replaces the note viewer in the same band: the sidebar scroller plus
   the book scroller is **two rendered scrollers** (§5.12.4); the find bar overlays and adds none.
   The explanation band adds a **third, only while it is open** (§0.56 E109), and a **fourth** only
-  while it is split or previews the split (§0.57 E110). The microphone adds its frame,
-  `.ep-mic-frame`, an invisible wheel carrier with no pointer and no scrollbar, whenever its button
-  or card shows, and its transcript card adds `.mc-body` only while it is open (§0.58 E111; the
-  frame's +1 is a user ruling).
+  while it is split or previews the split (§0.57 E110). The microphone's transcript card adds one
+  more, `.mc-body`, only while it is open (§0.58 E111).
 - **A note takes the pane back from the reader, whatever it shows.** `cancelOpen()`, which every
   other surface calls first, gives the pane back at once when an open has taken it with nothing on
   it yet: a first open's blank page, or a replacement between dropping the old book and rendering
@@ -2489,18 +2487,13 @@ recording in another tab"; opening `setup.html` on a denial; `mic:clipgone`; bfc
   cancel a pending flash's timer, so an error set within 1.8 s of a flash is cleared when that
   timer fires at idle.
 - **The plain card** (comart `showPlainOnMicCard` / `endPlain`). It is built fresh on each `done`, in
-  `div.ep-mic-layer`, inside the frame's pin beside the button's root, that exists only while the
-  card is open and is removed on close, never hidden. It holds the transcript (selectable text), the player (play/pause, a seek
+  `div.ep-mic-layer`, a second body child that exists only while the card is open and is removed on
+  close, never hidden. It holds the transcript (selectable text), the player (play/pause, a seek
   track and an `m:ss / m:ss` clock) and Copy. **There is no grip, no CHECK, no word chips, no
-  explanation, no header and no ×.** **Its top is where comart's own card's top is** (user
-  ruling): comart's full card is top-anchored at its modal's `padding-top: 15vh` of the page, so
-  here the card's top is 15% of `#reader`'s height below `#reader`'s top, at the pane's left edge
-  and width (`top`, `left`, `right: auto` and `width` written from `#reader`'s rect), and it hangs
-  down from there (no centring transform). comart's plain card is centred on a host card's middle
-  line instead, but no card is under this one; a first cut that centred it on the pane's middle
-  line sat too low. comart's full card grows downward for its explanation; this card has none and
-  keeps the plain card's `33vh` cap, so it never grows past that, and its body scrolls. Measured
-  (E5, dpr 2, a 1200×800 window): `#reader` top 40, height 760; the card's top 154, height 264. It is placed again on a window `resize` and, while it is open, by
+  explanation, no header and no ×.** It hangs on `#reader`'s middle line at the pane's left edge
+  and width (`top`, `left`, `right: auto` and `width` written from `#reader`'s rect), by
+  `transform: translateY(-50%)` of its own height, so a reflow needs no measurement. It is capped
+  at `33vh`, and its body scrolls. It is placed again on a window `resize` and, while it is open, by
   a `ResizeObserver` on `#reader` (the sidebar's drag resizes the pane without one). It autoplays
   (`clip.play(true)`). The entrance class is added on the next frame, after the rect read has
   flushed the card's first style. Copy goes through command 23 (`copy_text`; V6), and the check
@@ -2539,29 +2532,15 @@ recording in another tab"; opening `setup.html` on a denial; `mic:clipgone`; bfc
     closed the bar.
   - A press in the card released on the shield, or the reverse, clicks the common ancestor
     `.ep-mic-layer`, and nothing happens (comart is the same).
-  - **The wheel scrolls what is behind, with the engine's own motion.** comart's page scrolls
-    under its shield because the document is the scroller there. Cairn's book and band are inner
-    scrollers that are not ancestors of the mic, so the engine's chaining never reaches them, and a
-    scroll made by hand cannot have the engine's wheel animation (a first cut that moved the book
-    by `deltaY` jumped in one frame where the bare book glides; the user ruled it out). So the mic
-    lives in **the frame**, `div.ep-mic-frame`: a body-level, `position: fixed`, full-window
-    scroller with `pointer-events: none`, no scrollbar and a 200,000px run, parked in its middle
-    when it shows and again on a `scrollend` more than 50,000px away. Its sticky pin holds the
-    button's root and the card's layer still. A wheel over the button, the shield or the card
-    chains to the frame; the engine animates the frame exactly as it would the book; a passive
-    `wheel` listener on the frame picks the target, the first scroller under the pointer outside
-    the mic (`elementsFromPoint`) with room that way; and every `scroll` step of the frame moves
-    the target by the same amount. The target lasts one wheel motion: `scrollend` clears it, so an
-    arrow key on the focused button or a drag-select's autoscroll, which also move the frame, move
-    nothing else. The card's text is nearer than the frame, so it scrolls first
-    while it has room, and within one wheel sequence the engine stays latched to it, as to any
-    inner scroller. Ctrl+wheel and sideways wheels are the engine's, over the frame as over the
-    book. Measured (Electron 39.8.3, a mouse's non-precise ticks through `sendInputEvent`, dpr
-    1.25, 120 Hz windowed): one tick moves the book 120px over 21–22 frames bare and over 21–22
-    through the frame, the frame's steps within 0.8px of the bare ones, about one frame later;
-    with the frame present but the pointer off the mic, the book's own wheel is unchanged (same
-    steps, timing and distance). E24 drives the same ticks through the main process (60 Hz
-    offscreen, dpr 2): 9–10 steps to 120 both ways, against the hand-made scroll's 1.
+  - **The wheel scrolls what is behind.** comart's page scrolls under its shield because the
+    document is the scroller there. Cairn's book and band are inner scrollers that are not
+    ancestors of the shield, so the engine's chaining never reaches them: a wheel over the shield,
+    the card or the button (`passWheel` in `mic.ts`) goes to the card's own text while it has room
+    in that direction (the engine scrolls it), else to the first scroller under the pointer outside
+    the mic (`elementsFromPoint`) that has room, by `deltaY` (lines 40px, pages its height, as
+    explain.ts's staged-pick overlay), and the event is cancelled. Ctrl+wheel is the zoom and is
+    left alone; nothing with room means nothing moves. E24 wheels over the shield, the long card's
+    text, the text at its end and the button.
 - **Esc.** The mic listens for `keydown` at WINDOW capture, the first keydown listener in the page.
   A trusted, non-repeat Esc with the card open closes the card, stops propagation and calls
   `restoreFocus()`. It steps aside while a modal or a menu is open (`layerAbove()`; V8), whose own
@@ -2856,10 +2835,10 @@ recording in another tab"; opening `setup.html` on a denial; `mic:clipgone`; bfc
   for code 4; aborts say nothing. `release()` pauses, detaches the listener (nothing fires after it),
   removes the element and revokes the URL.
 - **The divergences from comart, each with its reason.**
-  - **V1 — the card's frame.** The host is the reader pane (comart's 15% top gap, its edges and
-    width, the plain card's 33vh cap) instead of comart's host modal, and the shield stops at the title bar: it is the app's own
+  - **V1 — the card's frame.** The host is the reader pane (its middle line, edges and width, a 33vh
+    cap) instead of comart's host modal, and the shield stops at the title bar: it is the app's own
     chrome, as the browser's is comart's.
-  - **V2 — one body-level frame.** Paint containment (above), and the wheel's carrier. The button is anchored to the reader
+  - **V2 — body-level roots.** Paint containment (above). The button is anchored to the reader
     pane's corner, which is the window's today; E2 pins the reader-relative form, so a future right
     panel fails loudly.
   - **V3 — an arming click cancels the take at once.** comart keeps the start pending because its
@@ -2927,46 +2906,40 @@ recording in another tab"; opening `setup.html` on a denial; `mic:clipgone`; bfc
   motion, as comart's do. Measured in the engine: E19 (reduced motion: the Stop's
   `animation-name` is `none`, the dots still `mc-dot`), and the UI probe's 0.16s transitions, the
   dots' delays 0s / 0.15s / 0.3s and the blink at 1.2s.
-- **The scrollers.** `mic.css` has two scroller rules. `.mc-body` is `overflow-y: auto`, with the
-  band's 12px bar (`--scrollbar-w-editor`); it is a rendered scroller only while the card is open:
-  the layer is removed on close. It is not under `main.editor`, so §5.12.4.3's "chrome fits or
-  clips" does not apply; it is a content scroller, like the band's (§5.12.4's table). The frame is
-  `overflow-y: scroll` with `scrollbar-width: none` and no pointer, rendered while the button or the
-  card shows (the wheel bullet above; its +1 in §5.12.4's table is a user ruling). Measured (E5,
-  band closed): `ep-mic-frame`, `ep-scroller`, `mc-body`, `tree-scroller`.
-- **Layers.** The frame is z 70, and its sticky pin is the stacking context of the rest:
-  `.ep-mic-layer` z 70 (the shield 2 and the wrapper 2 inside it, the card 1 inside the wrapper),
-  `.ep-mic` z 71, above the shield, so the button stays live while the card is open. All of it is
-  above `main.editor` and the sidebar (nothing in the app sits between the find bar's 30 and 80), and
-  BELOW the modal and the name prompt (80) and the menus (100). `mic-css.test.mjs` pins the order against `modal.ts` and `chrome.css`.
+- **The card's scroller.** `.mc-body` is `overflow-y: auto`, `mic.css`'s only scroller rule, with
+  the band's 12px bar (`--scrollbar-w-editor`). It is a rendered scroller only while the card is
+  open: the layer is removed on close. It is not under `main.editor`, so §5.12.4.3's "chrome fits or
+  clips" does not apply; it is a content scroller, like the band's (§5.12.4's table). Measured (E5,
+  band closed): `ep-scroller`, `mc-body`, `tree-scroller`.
+- **Layers.** `.ep-mic-layer` is z 70 (the shield 2 and the wrapper 2 inside it, the card 1 inside
+  the wrapper), `.ep-mic` z 71, above the shield, so the button stays live while the card is open.
+  Both are above all of `main.editor` and the sidebar, and BELOW the modal and the name prompt (80)
+  and the menus (100). `mic-css.test.mjs` pins the order against `modal.ts` and `chrome.css`.
 - **Billing.** Every take that passes the floors is a billed transcription, through whichever
   provider ai-service's tray picker chose. A retry after a lost answer can bill twice (voice-typing
   accepts that). A take cancelled, capped, left or under the floors was already streamed while it
   recorded; closing the socket cancels ai-service's inner request, and whether the provider bills
   an aborted session is unverified. An arming click bills nothing: no socket exists before the
   first buffer. Nothing is sent on hover, and an untrusted event starts nothing.
-- **The DOM contract** (one body child; every word is `textContent`, no HTML string, §6.1):
+- **The DOM contract** (body children; every word is `textContent`, no HTML string, §6.1):
 
   ```
-  div.ep-mic-frame[hidden unless the button or the card shows]
-    div.mc-pin
-      section.ep-mic[aria-label="Voice transcription"][data-state=idle|arming|recording|transcribing]
-                    [data-msg="1" while a status shows][hidden unless a book shows]
-        button.mc-btn[type=button][aria-label=Record|Starting|Stop recording|Transcribing](.is-error)
-          svg.mc-ico.mc-ico-mic   svg.mc-ico.mc-ico-stop   span.mc-dots > i×3   span.mc-label[aria-live=polite]
-      div.ep-mic-layer                                     only while the card is open
-        div.mc-shield
-        div.mc-wrap[style=top/left/right:auto/width]
-          section.mc-card[role=dialog][aria-modal=true][aria-label=Transcript](.is-shown)
-            div.mc-body
-              p.mc-text(.is-empty)
-              div.mc-player(.is-playing) > button.mc-pp[aria-label=Play|Pause], div.mc-track > div.mc-fill, span.mc-time
-              div.mc-actions > button.mc-copy[aria-label=Copy|Copied](.is-copied)[hidden when empty]
-    div.mc-run
+  section.ep-mic[aria-label="Voice transcription"][data-state=idle|arming|recording|transcribing]
+                [data-msg="1" while a status shows][hidden unless a book shows]
+    button.mc-btn[type=button][aria-label=Record|Starting|Stop recording|Transcribing](.is-error)
+      svg.mc-ico.mc-ico-mic   svg.mc-ico.mc-ico-stop   span.mc-dots > i×3   span.mc-label[aria-live=polite]
+  div.ep-mic-layer                                     only while the card is open
+    div.mc-shield
+    div.mc-wrap[style=top/left/right:auto/width]
+      section.mc-card[role=dialog][aria-modal=true][aria-label=Transcript](.is-shown)
+        div.mc-body
+          p.mc-text(.is-empty)
+          div.mc-player(.is-playing) > button.mc-pp[aria-label=Play|Pause], div.mc-track > div.mc-fill, span.mc-time
+          div.mc-actions > button.mc-copy[aria-label=Copy|Copied](.is-copied)[hidden when empty]
   ```
 - **The CSS** (`src/styles/mic.css`, the eleventh sheet in `CSS_ORDER`, straight after
-  `explain.css`). Every rule is under `.ep-mic-frame`, `.ep-mic` or `.ep-mic-layer`, and the frame
-  is hidden unless a book shows, so nothing reaches the note view and G9 cannot move. Each rule carries its comart line. It declares no custom property (§5.1). The
+  `explain.css`). Every rule is under `.ep-mic` or `.ep-mic-layer`, so nothing reaches the note view
+  and G9 cannot move. Each rule carries its comart line. It declares no custom property (§5.1). The
   transcript takes the band's typography (`--font-text`, `--fs-text`, `--lh-text`); the card's top
   edge is the band's hairline in `--divider-color`; the black shadows and the halo stay comart's
   literals.
@@ -2991,8 +2964,8 @@ recording in another tab"; opening `setup.html` on a denial; `mic:clipgone`; bfc
   command (the table stays at 29), no new npm dependency, no new `state.json` field and no vault
   write (G8).
 - **Tests.** Each new test was watched failing first, against a missing module or under mutation.
-  `tests/frontend/`: `mic-ui.test.mjs` (38, the real `mountMic` on a fake `MicAudio`),
-  `mic-css.test.mjs` (15, the sheet), `mic-webm.test.mjs` (9; byte-identical to a GStreamer golden
+  `tests/frontend/`: `mic-ui.test.mjs` (36, the real `mountMic` on a fake `MicAudio`),
+  `mic-css.test.mjs` (14, the sheet), `mic-webm.test.mjs` (9; byte-identical to a GStreamer golden
   of a synthetic signal, `tests/fixtures/mic/gst-ticks.webm`, 6,787 B, regenerated by the
   `gst-launch` line in its header), `mic-wire.test.mjs` (34, every row of the mapping above),
   `mic-recorder.test.mjs` (45, the state machine on fake browser APIs), `mic-take.test.mjs` (39),
@@ -3003,23 +2976,17 @@ recording in another tab"; opening `setup.html` on a denial; `mic:clipgone`; bfc
   21 (the survivor is equivalent: `showMode('read')` follows at once); the UI's 10 of 10, one only
   after a test was added; the recorder's 11 of 12 (the survivor is equivalent: there is no retry
   loop); the writer's, the trim's and the VAD host's each caught; the floor counted from the click
-  instead of the first buffer, and rule 1's 50 ms and 500 ms edges moved either way, each caught;
-  the frame's 5 of 5 (parking on every show, mic parts as targets, parking on every `scrollend`, a
-  park that forgets its own scroll, a sideways wheel that drops the target).
+  instead of the first buffer, and rule 1's 50 ms and 500 ms edges moved either way, each caught.
   **In the real engine**, `electron-shell/mic.test.mjs` gives `ℹ tests 29`, `ℹ pass 29`, `ℹ fail
   0` (a self-test of `electron-shell/fake-ai-ws.mjs`, an RFC 6455 fake ai-service; two of the
-  device locks; E1–E24; the Silero leg), on build hash `9427f73cc4a9214d`, at dpr 2, 1200×800, X11,
+  device locks; E1–E24; the Silero leg), on build hash `ebfa68081ae7da09`, at dpr 2, 1200×800, X11,
   with the fake capture device only: argv `--use-fake-device-for-media-stream
   --use-fake-ui-for-media-stream --use-file-for-fake-audio-capture=<generated WAV>`, its own
   `--user-data-dir`, an empty `XDG_RUNTIME_DIR`, an unreachable `PULSE_SERVER` and an empty
   `ALSA_CONFIG_PATH`. A launch is refused before it is spawned unless its argv and env carry every
   lock (`cdp-drive.mjs`'s `assertLocked`); in the page, the inputs are listed first, which opens
   no device, and only when every one is "Fake …" is the default opened, and it must be "Fake
-  Default Audio Input", or the suite refuses to drive. E24's wheel is a mouse's: the suite also
-  starts the main process with `--inspect=127.0.0.1:0` and sends non-precise ticks through
-  `webContents.sendInputEvent`, because CDP's `mouseWheel` is precise and lands in one step even on
-  the bare book. Against the build with the hand-made scroll, E24 failed: "the motion differs: 1
-  steps against the engine's 10". E21, E22 and E23 (the held Enter, the Esc
+  Default Audio Input", or the suite refuses to drive. E21, E22 and E23 (the held Enter, the Esc
   on the button, the find bar) each failed on the `mic.ts` before its fix, built into a scratch
   copy of the app. E3 checks that the upload is the device's audio: a 2.6 s take reached the fake as
   44,218 B in 45 frames (`audio/webm;codecs=opus;client=cairn`, origin `file://`, EBML first,
@@ -4456,17 +4423,10 @@ while split and while one panel previews the right half, and the microphone card
 | Mode | Rendered scrollers | Status |
 |---|---|---|
 | note | `.tree-scroller` or `.search-scroller`, `.cm-scroller` — **2** | ruled; G9's `layers.scrollers` |
-| reader (§0.55 E108) | the sidebar's, `.ep-scroller`, the mic's `.ep-mic-frame` — **3**; the find bar adds none | ruled; the frame's +1 by user ruling (§0.58 E111): it shows while the mic's button or card does, so on Debian, in every reader row below |
-| reader, explanation band open | the sidebar's, `.ep-scroller`, `.ep-mic-frame`, `.ex-scroll` — **4** | ruled (§0.56 E109): only while open; closed is `display: none` |
-| reader, explanation band split | the sidebar's, `.ep-scroller`, `.ep-mic-frame`, two `.ex-scroll` — **5** | ruled (§0.57 E110): only while split, and while one panel previews the right half; otherwise the right column is `display: none` |
-| reader, microphone card open | the sidebar's, `.ep-scroller`, `.ep-mic-frame`, `.mc-body` — **4**; **5** with the band open, **6** with it split | ruled (§0.58 E111): only while the card is open, because its layer is removed on close, not hidden. The 4 is measured (`mic.test.mjs` E5); the 5 and 6 are derived. `.mc-body` is a content scroller like the band's, so §5.12.4.3's "chrome fits or clips" does not apply |
-
-**The frame is a scroller nobody sees or points at** (§0.58 E111): `position: fixed`, full-window,
-`pointer-events: none`, `scrollbar-width: none`. It exists so a wheel over the mic chains to an
-engine scroller and keeps the engine's own animation; `mic.ts` hands each of its steps to the
-scroller under the pointer. It is hidden in note mode (E1 asserts it renders no box over a note),
-so G9's `layers.scrollers` is unchanged. The counts above are those of a Linux build; on macOS the
-mic is not mounted and every reader row has one fewer.
+| reader (§0.55 E108) | the sidebar's, `.ep-scroller` — **2**; the find bar adds none | ruled |
+| reader, explanation band open | the sidebar's, `.ep-scroller`, `.ex-scroll` — **3** | ruled (§0.56 E109): only while open; closed is `display: none` |
+| reader, explanation band split | the sidebar's, `.ep-scroller`, two `.ex-scroll` — **4** | ruled (§0.57 E110): only while split, and while one panel previews the right half; otherwise the right column is `display: none` |
+| reader, microphone card open | the sidebar's, `.ep-scroller`, `.mc-body` — **3**; **4** with the band open, **5** with it split | ruled (§0.58 E111): only while the card is open, because its layer is removed on close, not hidden. The 3 is measured (`mic.test.mjs` E5) and so is the 4 (the UI's engine probe, band open); the 5 is derived. `.mc-body` is body-level, a content scroller like the band's, so §5.12.4.3's "chrome fits or clips" does not apply |
 | Memoir tab | the sidebar's, `textarea#mm-editor`, the check drawer's `.mm-scroll` — **3**, drawer open or closed | **measured, never ruled** (KNOWN-ISSUES X-14) |
 
 The Memoir drawer counts while it is closed because closed is `transform: translateX(100%)`, not

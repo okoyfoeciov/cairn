@@ -39,14 +39,14 @@ Verified numbers move. **Re-run rather than trusting a count quoted here.** The 
 cd core && cargo test --no-fail-fast       332 passed, 0 failed, 17 ignored (all targets)
 cd core && cargo clippy --all-targets -- -D warnings   clean
 npx tsc --noEmit                            clean
-npm test                                    1236 tests: 1236 pass, 0 fail, 0 todo
+npm test                                    1233 tests: 1233 pass, 0 fail, 0 todo
 node --test electron-shell/explain.test.mjs        63 pass (fake ai-service; live leg gated; dpr 1.25)
 node --test electron-shell/explain-badge.test.mjs  21 pass: 0 differing badge pixels, dpr 1/1.25/1.5/2
 node --test electron-shell/mic.test.mjs            29 pass (fake ai-service WebSocket; fake capture device; X11, dpr 2)
 node electron-shell/build-native.mjs        BUILD-NATIVE result=PASS tauri_crates=0
-node electron-shell/build-app.mjs           BUILD-APP result=PASS modules=46 (js=18681531 B, vad=18123768 B)
+node electron-shell/build-app.mjs           BUILD-APP result=PASS modules=46 (js=18681393 B, vad=18123768 B)
 npm run selftest:geometry                   50 identities, 50 pass
-./tools/run-g9-electron.sh                  137/137, ok=True, 1920x964, dpr=1.25 (3 of 3 runs)
+./tools/run-g9-electron.sh                  137/137, ok=True, 1920x964, dpr=1.25 (10 of 10 runs)
 node tools/scroll-bench.mjs --self-test     67 passed, 0 failed
 ```
 

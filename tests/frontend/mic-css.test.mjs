@@ -109,7 +109,7 @@ test('every var() mic.css reads is declared in tokens.css', () => {
   }
 })
 
-test('every selector is scoped to .ep-mic-frame, .ep-mic or .ep-mic-layer; the only at-rules are hover, reduced motion and mc-* keyframes', () => {
+test('every selector is scoped to .ep-mic or .ep-mic-layer; the only at-rules are hover, reduced motion and mc-* keyframes', () => {
   const at = ALL.filter((b) => b.prelude.startsWith('@')).map((b) => b.prelude)
   assert.deepEqual(at, ['@keyframes mc-dot', '@keyframes mc-blink'])
   for (const b of STYLE) {
@@ -117,20 +117,17 @@ test('every selector is scoped to .ep-mic-frame, .ep-mic or .ep-mic-layer; the o
     for (const s of selectors(b.prelude)) {
       const button = s === '.ep-mic' || s.startsWith('.ep-mic[') || s.startsWith('.ep-mic ')
       const layer = s === '.ep-mic-layer' || s.startsWith('.ep-mic-layer ')
-      const frame = s === '.ep-mic-frame' || s.startsWith('.ep-mic-frame ')
-      assert.ok(button || layer || frame, `selector escapes the mic: ${s}`)
+      assert.ok(button || layer, `selector escapes the mic: ${s}`)
     }
   }
   assert.equal(SHEET.includes('.cmtm'), false, 'a comart class name survived the rename')
 })
 
-test('two scroller declarations: the frame, with no scrollbar, and .ep-mic-layer .mc-body, with the band\'s 12px bar; no scrollbar-color', () => {
+test('exactly one scroller declaration, .ep-mic-layer .mc-body, with the band\'s 12px bar and no scrollbar-color', () => {
   const scrollers = STYLE.flatMap((b) =>
     decls(b.body).filter(([p, v]) => /^overflow(-[xy])?$/.test(p) && /auto|scroll/.test(v)).map(() => b.prelude))
-  assert.deepEqual(scrollers, ['.ep-mic-frame', '.ep-mic-layer .mc-body'])
-  assert.equal(/scrollbar-color/.test(SHEET), false)
-  const widths = STYLE.flatMap((b) => decls(b.body).filter(([p]) => p === 'scrollbar-width').map(([, v]) => [b.prelude, v]))
-  assert.deepEqual(widths, [['.ep-mic-frame', 'none']])
+  assert.deepEqual(scrollers, ['.ep-mic-layer .mc-body'])
+  assert.equal(/scrollbar-color|scrollbar-width/.test(SHEET), false)
   const bars = STYLE.filter((b) => b.prelude.includes('::-webkit-scrollbar')).map((b) => [b.prelude, decls(b.body)])
   assert.deepEqual(bars, [
     ['.ep-mic-layer .mc-body::-webkit-scrollbar', [['width', 'var(--scrollbar-w-editor)'], ['background', 'transparent']]],
@@ -176,7 +173,7 @@ test('no !important outside transition, animation and animation-delay (comart\'s
 const SHADOW = '0 6px 20px rgba(0, 0, 0, 0.28)'
 const BUTTON = [
   [null, '.ep-mic', [
-    ['position', 'absolute'], ['bottom', '16px'], ['right', '16px'], ['z-index', '71'],
+    ['position', 'fixed'], ['bottom', '16px'], ['right', '16px'], ['z-index', '71'],
     ['display', 'flex'], ['flex-direction', 'column'], ['align-items', 'flex-end'], ['justify-content', 'flex-end'],
     ['gap', '10px'], ['margin', '0'], ['padding', '0'], ['pointer-events', 'none'],
   ]],
@@ -226,18 +223,6 @@ const BUTTON = [
   [null, '.ep-mic[data-state="transcribing"] .mc-btn', [['color', 'var(--text-muted)'], ['cursor', 'progress']]],
 ]
 
-test('the frame: a fixed, pointerless, barless scroller over the window at z 70; a sticky pin; a 200000px run', () => {
-  const actual = still((b) => b.prelude.startsWith('.ep-mic-frame'))
-  assert.deepEqual(actual, [
-    [null, '.ep-mic-frame', [
-      ['position', 'fixed'], ['inset', '0'], ['z-index', '70'], ['pointer-events', 'none'],
-      ['overflow-x', 'hidden'], ['overflow-y', 'scroll'], ['scrollbar-width', 'none'], ['overflow-anchor', 'none'],
-    ]],
-    [null, '.ep-mic-frame .mc-pin', [['position', 'sticky'], ['top', '0'], ['height', '100%'], ['pointer-events', 'none']]],
-    [null, '.ep-mic-frame .mc-run', [['height', '200000px'], ['pointer-events', 'none']]],
-  ])
-})
-
 test('the button is comart\'s, rule by rule and in order', () => {
   const actual = still((b) => b.prelude === '.ep-mic' || /^\.ep-mic[[ ]/.test(b.prelude))
     .filter(([, p]) => !p.includes(':focus-visible'))
@@ -247,12 +232,12 @@ test('the button is comart\'s, rule by rule and in order', () => {
 // comart's plain card: mic.css:455-508 with :740-810 folded in, the host modal's
 // frame replaced by the layer, no grip, no CHECK, no word chips.
 const CARD = [
-  [null, '.ep-mic-layer', [['position', 'absolute'], ['inset', '0'], ['z-index', '70'], ['pointer-events', 'none']]],
+  [null, '.ep-mic-layer', [['position', 'fixed'], ['inset', '0'], ['z-index', '70'], ['pointer-events', 'none']]],
   [null, '.ep-mic-layer .mc-shield', [
     ['position', 'absolute'], ['inset', 'var(--titlebar-h) 0 0 0'], ['z-index', '2'], ['pointer-events', 'auto'],
   ]],
   [null, '.ep-mic-layer .mc-wrap', [
-    ['position', 'absolute'], ['left', '0'], ['right', '0'], ['top', '15vh'], ['height', '0'], ['padding', '0'],
+    ['position', 'absolute'], ['left', '0'], ['right', '0'], ['top', '50vh'], ['height', '0'], ['padding', '0'],
     ['display', 'flex'], ['justify-content', 'center'], ['align-items', 'flex-start'], ['z-index', '2'],
   ]],
   [null, '.ep-mic-layer .mc-card', [
@@ -262,7 +247,7 @@ const CARD = [
     ['border', '0'], ['border-top', 'var(--hairline) solid var(--divider-color)'], ['border-radius', '0'],
     ['box-shadow', '0 16px 48px rgba(0, 0, 0, 0.5)'],
     ['-webkit-font-smoothing', 'antialiased'], ['pointer-events', 'auto'],
-    ['opacity', '0'], ['translate', '0 10px'],
+    ['transform', 'translateY(-50%)'], ['opacity', '0'], ['translate', '0 10px'],
   ]],
   [null, '.ep-mic-layer .mc-card.is-shown', [['opacity', '1'], ['translate', 'none']]],
   [null, '.ep-mic-layer .mc-body', [['overflow-y', 'auto'], ['padding', '18px 20px 14px'], ['min-height', '0'], ['flex', '1 1 auto']]],
@@ -319,7 +304,7 @@ const CARD = [
   [null, '.ep-mic-layer .mc-copy[hidden]', [['display', 'none']]],
 ]
 
-test('the card is the plain card, top-anchored as comart\'s full card (no centring transform): 33vh, 18px top padding, 100% wide, hairline top, square, comart\'s shadow', () => {
+test('the card is the plain card: translateY(-50%), 33vh, 18px top padding, 100% wide, hairline top, square, comart\'s shadow', () => {
   const actual = still((b) => b.prelude.startsWith('.ep-mic-layer')).filter(([, p]) => !p.includes(':focus-visible'))
   assert.deepEqual(actual, CARD)
 })
