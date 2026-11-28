@@ -1959,8 +1959,15 @@ modes"; that is STRUCK by §0.57 E110, which ports them.
   block's normalized text. The word counts only if the pointer is inside one of its own line boxes
   (±2px); otherwise a margin or a line's blank end would snap to the nearest word. The book's DOM is
   never rewritten: the CSS Highlight API paints `cairn-explain-hover` (the word under the pointer,
-  with a pointer cursor through `.ep-content.ex-over-word`) and `cairn-explain-mark` (the pick the
-  band is showing). A word is comart's `WORD_RE`, extended so combining marks (`\p{M}`) stay inside a
+  with a pointer cursor through `.ex-over-word` on the word's block, never on `.ep-content`) and
+  `cairn-explain-mark` (the pick the band is showing). Where the ±2px falls outside the block (a
+  blockquote's or a list's indent, a chapter's padding) the class goes on the element under the
+  pointer instead, so the cursor agrees with the pick. `cursor` inherits, so a class on the book's
+  root restyles every element of the book at each hover change, and a wheel scroll with a hand on
+  the mouse changes the hover many times a second. Measured on Debian at dpr 1.25 and 120 Hz, on a
+  novel of 4,041 elements, in one 6 s wheel scroll: on the root, 78 whole-book recalcs of 12–23 ms
+  and 103.8 fps; on the block, 1–6 elements at ≤ 0.4 ms and 119.2–119.7 fps. A word is comart's
+  `WORD_RE`, extended so combining marks (`\p{M}`) stay inside a
   word and a soft hyphen (U+00AD) does not split one. The soft hyphen is dropped from the word sent.
 - **Book text is not selectable.** §0.55's "book text remains selectable" is STRUCK. `.ep-content`
   is `user-select: none`, and a press on a word is `preventDefault`ed. Focus moves to the book's
@@ -2138,12 +2145,12 @@ modes"; that is STRUCK by §0.57 E110, which ports them.
 - **Tests.** `tests/frontend/explain-render.test.mjs` (34), `explain-panel.test.mjs` (30 for E109;
   56 with §0.57 E110's; a fake ai-service whose `fetch` returns real `ReadableStream` SSE bodies),
   `explain-css.test.mjs` (17 for E109; 23 with E110's), `explain-persist.test.mjs` (12),
-  `bookpick.test.mjs` (21), the 22 `explain: …` tests in `reader.test.mjs` (E110 adds 11 `split: …`
+  `bookpick.test.mjs` (21), the 24 `explain: …` tests in `reader.test.mjs` (E110 adds 11 `split: …`
   tests), and 5 `explain_h` unit tests in `prefs.rs`. Each was watched failing under mutation. The
   renderer was also run differentially against comart's own `panel.js` in the pinned engine: 0
   mismatches over 6,007 Markdown cases and 1,728 badge cases. That run came before the bridge was
   tightened, which is the one deliberate difference. The real-engine suites are
-  `electron-shell/explain.test.mjs` (63 with §0.57 E110's steps and §0.55 E108's two steps, the resume and a note after a broken book: a hermetic app on a generated
+  `electron-shell/explain.test.mjs` (65 with §0.57 E110's steps, §0.55 E108's two steps, the resume and a note after a broken book, and the hover's two, the restyle count under a wheel and the cursor in the slop: a hermetic app on a generated
   book, a fake ai-service through `CAIRN_AI_BASE`, and CDP's trusted input) and
   `electron-shell/explain-badge.test.mjs` (21, the badge's pixels). The live leg bills one real
   `/api/explain` and runs only with `CAIRN_EXPLAIN_LIVE=1`. §0.57's Tests bullet quotes the latest
@@ -2366,8 +2373,8 @@ the stream, the error lines, the badges, the follow-up and the close rules.
   watched failing first, against the code before E110 or under mutation (the band's 24
   mutations: 24 caught; the review fixes' 11: 11 caught). Two later review mutations still
   survive (KNOWN-ISSUES §5). **In the real engine**, `electron-shell/explain.test.mjs` gives
-  `ℹ tests 63`, `ℹ pass 63`, `ℹ fail 0`, `ℹ skipped 0` against the fake ai-service, with the live
-  leg not run, on build hash `2ff86c2892a9b23f`. Its wide leg prints
+  `ℹ tests 65`, `ℹ pass 65`, `ℹ fail 0`, `ℹ skipped 0` against the fake ai-service, with the live
+  leg not run, on build hash `50f8b650e2b0d6b9`. Its wide leg prints
   `dpr 1.25, viewport 1700x900 CSS px`; the 1200×800 session prints no dpr, so its CSS px numbers
   below carry none. Its 21 `E110:` steps walk one band through: staging; both previews; Esc and a
   held Esc; a drag released over the band, with the preview asserted at once; the grip over a

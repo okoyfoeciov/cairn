@@ -491,5 +491,7 @@ test('reader.css: book text is not selectable, and a pickable word shows a point
   const content = /\.ep-content\s*\{([^}]*)\}/.exec(reader)
   assert.ok(content, 'reader.css has no .ep-content rule')
   assert.equal(Object.fromEntries(decls(content[1]))['user-select'], 'none')
-  assert.match(reader, /\.ep-content\.ex-over-word\s*\{\s*cursor:\s*pointer;?\s*\}/)
+  assert.match(reader, /\.ep-content \.ex-over-word\s*\{\s*cursor:\s*pointer;?\s*\}/)
+  // `cursor` inherits: on the book's root, every hover change restyles the whole book.
+  assert.equal(/\.ep-content\.ex-over-word/.test(reader), false, 'the pointer cursor is set on the whole book')
 })

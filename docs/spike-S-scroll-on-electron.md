@@ -342,6 +342,15 @@ in vblank units next to the percentiles; that is what to read.
 - **A real mouse wheel's cadence.** The gesture is Chromium's synthetic one and runs at
   ~120 events a second whatever the panel — two per frame at 60 Hz, one at 120 Hz, fewer than
   one per frame above that.
+- **A wheel's smooth-scroll animation, and the hand on the mouse.** `Input.synthesizeScrollGesture`
+  sends precise pixel deltas, which Chromium never animates, and it moves no pointer. Hover work
+  that a wheel scroll triggers is therefore invisible to it. The EPUB reader's pointer-cursor class
+  on the book's root (CONTRACT §0.56, the hit-test) measured 119 fps under this gesture and 103.8
+  fps under a non-precise `gpuBenchmarking.smoothScrollBy` (Electron run with
+  `--enable-gpu-benchmarking`) with a one-pixel `mouseMoved` every 50 ms. Per-notch
+  `smoothScrollBy` calls are no fix: each synthetic gesture waits for its ack, which waits for its
+  animation to end and then for a presented frame, so an idle pane slows the driver itself. There is
+  no `--pane reader` arm.
 - **A panel the machine cannot see.** The refresh rate is measured from the trace, and a
   60 Hz machine cannot say whether an app can feed a 120 Hz panel; `--expect-hz` exists so a
   faster machine prints the deficit against a rate the trace itself does not reveal.

@@ -306,7 +306,10 @@ export function mountReader(pane: HTMLElement, deps: ReaderDeps): ReaderView {
   let shown: PickSpan | null = null
   let staged: PickSpan | null = null
   let hover: PickSpan | null = null
-  let pointer: { x: number; y: number; buttons: number } | null = null
+  /** The element that carries the pointer cursor while a word is hovered. */
+  let cursorEl: Element | null = null
+  /** `over` is the element the pointer is over, the one whose cursor shows. */
+  let pointer: { x: number; y: number; buttons: number; over: Element | null } | null = null
   let moveFrame = 0
   let swallowing = false
   let swallowTimer: ReturnType<typeof setTimeout> | null = null
@@ -1197,8 +1200,20 @@ export function mountReader(pane: HTMLElement, deps: ReaderDeps): ReaderView {
     )
   }
 
-  function setHover(span: PickSpan | null): void {
-    content.classList.toggle('ex-over-word', span !== null)
+  /** The cursor class goes on the word's block, never on `.ep-content`:
+   *  `cursor` inherits, so on the book's root every hover change would restyle
+   *  the whole book, and a wheel notch changes the hover as it starts and ends.
+   *  In the ±2px slop outside the block the pointer is over an ancestor (a
+   *  chapter's padding, a list's indent), and the class goes there instead. */
+  function setHover(hit: { span: PickSpan; block: HTMLElement } | null, over: Element | null = null): void {
+    let carrier: Element | null = hit?.block ?? null
+    if (hit && over && over !== content && content.contains(over) && !hit.block.contains(over)) carrier = over
+    if (carrier !== cursorEl) {
+      cursorEl?.classList.remove('ex-over-word')
+      carrier?.classList.add('ex-over-word')
+      cursorEl = carrier
+    }
+    const span = hit?.span ?? null
     if (sameSpan(hover, span)) return
     hover = span
     paintHighlight(HOVER_HIGHLIGHT, span)
@@ -1329,7 +1344,7 @@ export function mountReader(pane: HTMLElement, deps: ReaderDeps): ReaderView {
     setHover(null)
     // A hover sample flushed with this press still says buttons 0; its frame
     // must not read it as a release.
-    pointer = { x: e.clientX, y: e.clientY, buttons: e.buttons | 1 }
+    pointer = { x: e.clientX, y: e.clientY, buttons: e.buttons | 1, over: elementOf(e.target) }
     const words = wordsIn(hit.text)
     const anchor = words.findIndex((w) => w.from === hit.word.from)
     if (anchor < 0) return
@@ -1349,9 +1364,15 @@ export function mountReader(pane: HTMLElement, deps: ReaderDeps): ReaderView {
     if (drag.fire) paintHighlight(MARK_HIGHLIGHT, hit.span)
   }
 
+  function elementOf(target: EventTarget | null): Element | null {
+    const n = target as Node | null
+    if (!n || typeof n.nodeType !== 'number') return null
+    return n.nodeType === 1 ? (n as Element) : n.parentElement
+  }
+
   function onPointerMove(ev: Event): void {
     const e = ev as MouseEvent
-    pointer = { x: e.clientX, y: e.clientY, buttons: e.buttons }
+    pointer = { x: e.clientX, y: e.clientY, buttons: e.buttons, over: elementOf(e.target) }
     if (moveFrame !== 0) return
     moveFrame = requestAnimationFrame(() => {
       if (moveFrame === 0) return
@@ -1379,7 +1400,7 @@ export function mountReader(pane: HTMLElement, deps: ReaderDeps): ReaderView {
       extendDrag(p.x, p.y)
       return
     }
-    setHover(wordUnder(p.x, p.y)?.span ?? null)
+    setHover(wordUnder(p.x, p.y), p.over)
   }
 
   function extendDrag(x: number, y: number): void {

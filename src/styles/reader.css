@@ -81,8 +81,11 @@
   -webkit-user-select: none;
   user-select: none;
 }
-/* The reader sets this while the pointer is over a pickable word. */
-.ep-content.ex-over-word { cursor: pointer; }
+/* The reader sets this on the word's block (in the slop just outside it, on
+   the element under the pointer) while the pointer is over a pickable word.
+   Never on `.ep-content`: `cursor` inherits, and a class on the book's root
+   restyles every element of the book on each hover change. */
+.ep-content .ex-over-word { cursor: pointer; }
 
 .ep-chapter + .ep-chapter {
   margin-top: 64px;

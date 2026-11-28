@@ -115,6 +115,7 @@ function makeBook(archiveUrl) {
   ${filler('c', 8)}
   <aside epub:type="footnote" id="fn1"><p>A mast is a tall pole on a ship.</p></aside>
   ${filler('d', 8)}
+  <blockquote><p>Waves broke over the seawall at dawn.</p></blockquote>
 </body></html>`
   return Buffer.from(zip([
     { name: 'mimetype', data: 'application/epub+zip', store: true },
@@ -469,6 +470,7 @@ async function launch({ vault, state, base, expect = base, geom = '1200x800', no
   let ws = null
   const consoleLines = []
   const exceptions = []
+  const listeners = new Set()
   const close = async () => {
     try { ws && ws.close() } catch {}
     if (child.exitCode === null && child.signalCode === null) child.kill('SIGKILL')
@@ -506,6 +508,7 @@ async function launch({ vault, state, base, expect = base, geom = '1200x800', no
       }
       const p = m.id && pending.get(m.id)
       if (p) { pending.delete(m.id); p(m) }
+      else if (m.method) for (const h of listeners) h(m)
     }
     const send = (method, params = {}) => new Promise((resolve, reject) => {
       const n = ++id
@@ -583,6 +586,30 @@ async function launch({ vault, state, base, expect = base, geom = '1200x800', no
       format: 'png',
       clip: { x: Math.floor(r.left - pad), y: Math.floor(r.top - pad), width: Math.ceil(r.w + 2 * pad), height: Math.ceil(r.h + 2 * pad), scale: 1 },
     })).data
+    /** Every element count Chromium restyled while `fn` ran, one per
+     *  `UpdateLayoutTree` (its own trace event, so no timing enters). */
+    const restyles = async (fn) => {
+      const events = []
+      let done = false
+      const h = (m) => {
+        if (m.method === 'Tracing.dataCollected') events.push(...m.params.value)
+        else if (m.method === 'Tracing.tracingComplete') done = true
+      }
+      listeners.add(h)
+      try {
+        await send('Tracing.start', { transferMode: 'ReportEvents', traceConfig: { includedCategories: ['devtools.timeline'] } })
+        try { await fn() } finally {
+          await send('Tracing.end')
+          for (let i = 0; i < 400 && !done; i++) await sleep(25)
+        }
+      } finally {
+        listeners.delete(h)
+      }
+      if (!done) throw new Error('the trace never completed')
+      const counts = events.filter((e) => e.name === 'UpdateLayoutTree' && e.ph === 'X').map((e) => e.args?.elementCount)
+      if (counts.some((n) => typeof n !== 'number')) throw new Error('an UpdateLayoutTree event carries no elementCount')
+      return counts
+    }
     const inject = async () => {
       const r = await send('Runtime.evaluate', { expression: PAGE_HELPER })
       if (r.exceptionDetails) throw new Error('page helper: ' + JSON.stringify(r.exceptionDetails).slice(0, 600))
@@ -608,7 +635,7 @@ async function launch({ vault, state, base, expect = base, geom = '1200x800', no
     }
     await frames()
     return {
-      send, ev, X, frames, until, move, click, gesture, drag, key, hold, wheel, shot, pages, close, consoleLines, exceptions,
+      send, ev, X, frames, until, move, click, gesture, drag, key, hold, wheel, shot, restyles, pages, close, consoleLines, exceptions,
     }
   } catch (e) {
     await close()
@@ -724,17 +751,74 @@ describe('E109 click-to-explain, real engine (fake ai-service)', { skip: SKIP },
     await app.move(word)
     assert.deepEqual({
       hover: await app.X(`hl('cairn-explain-hover')`),
-      over: await app.ev(`document.querySelector('.ep-content').classList.contains('ex-over-word')`),
+      over: await app.ev(`(() => { const el = document.querySelector('.ex-over-word'); return !!el && !el.matches('.ep-content') && el.textContent.includes('lit the lantern') })()`),
     }, { hover: 'lantern', over: true }, 'hover did not highlight the word under the pointer')
-    assert.equal(await app.ev(`getComputedStyle(document.querySelector('.ep-content')).cursor`), 'pointer',
-      'the cursor over a pickable word is not a pointer')
+    const cursorAt = (p) => app.ev(`getComputedStyle(document.elementFromPoint(${p.x}, ${p.y})).cursor`)
+    assert.equal(await cursorAt(word), 'pointer', 'the cursor over a pickable word is not a pointer')
     assert.notEqual(await app.shot(word), clean, 'the hover highlight paints nothing (::highlight did not resolve)')
     // A margin snaps the caret to the nearest text; it must not light a word.
     await app.move(margin)
     assert.equal(await app.shot(word), clean, 'the hover paint outlived the hover')
     assert.equal(await app.X(`hl('cairn-explain-hover')`), null, 'a margin point still highlights a word')
-    assert.equal(await app.ev(`getComputedStyle(document.querySelector('.ep-content')).cursor`), 'auto',
-      'the pointer cursor outlived the hover')
+    assert.equal(await cursorAt(word), 'auto', 'the pointer cursor outlived the hover')
+    assert.equal(await app.ev(`document.querySelector('.ex-over-word')`), null, 'the cursor class outlived the hover')
+  })
+
+  // `cursor` inherits: set on `.ep-content`, every hover change restyled the
+  // whole book, and a wheel notch changes the hover as it starts and ends.
+  test('the hover and a wheel over it restyle the word\'s paragraph, never the whole book', async () => {
+    const at = await app.X(`reveal('lantern', 0, 0.3)`)
+    const word = at.first
+    const margin = { x: (await app.X('scroller()')).left + 12, y: word.y }
+    await app.move(margin)
+    const book = await app.ev(`document.querySelectorAll('.ep-content *').length + 1`)
+    // The wheel can leave the pointer over another paragraph, and a class
+    // that moves restyles both: two of the largest paragraph is the bound.
+    const bound = 2 * await app.ev(`Math.max(...[...document.querySelectorAll('.ep-content p')].map((p) => p.querySelectorAll('*').length + 1))`)
+    assert.ok(book >= 10 * bound, `fixture: the book (${book} elements) is too small to tell from two paragraphs (${bound})`)
+    const top = await app.ev(`document.querySelector('.ep-scroller').scrollTop`)
+    let counts
+    try {
+      counts = await app.restyles(async () => {
+        await app.move(word)
+        assert.equal(await app.X(`hl('cairn-explain-hover')`), 'lantern', 'the hover did not light the word')
+        await app.wheel(word, 40)
+        await app.frames()
+        assert.notEqual(await app.ev(`document.querySelector('.ep-scroller').scrollTop`), top, 'the wheel did not scroll the book')
+        assert.equal(await app.X(`hl('cairn-explain-hover')`), null, 'the scroll did not take the hover off')
+        // The notch is over; the hand moves and the word under it lights again.
+        const again = (await app.X(`reveal('lantern', 0, 0.3)`)).first
+        await app.move(again)
+        assert.equal(await app.X(`hl('cairn-explain-hover')`), 'lantern', 'the hover did not come back after the scroll')
+        await app.move(margin)
+        await app.frames()
+      })
+    } finally {
+      await app.ev(`(() => { document.querySelector('.ep-scroller').scrollTop = ${top}; return 1 })()`)
+      await app.frames()
+    }
+    assert.ok(counts.length > 0, 'the hover restyled nothing at all: the trace saw no UpdateLayoutTree')
+    assert.ok(Math.max(...counts) <= bound,
+      `a hover restyled ${Math.max(...counts)} elements; two paragraphs have at most ${bound}, the book ${book} (all: ${counts.join(', ')})`)
+  })
+
+  // A word lights within 2px of its glyphs, and a press there picks it, so
+  // the cursor must say so even where that strip lies outside the word's
+  // block: here the blockquote's own left padding, whatever the font.
+  test('in the slop outside a block, a lit word still shows a pointer', async () => {
+    const at = await app.X(`reveal('Waves broke', 0, 0.4)`)
+    assert.ok(at, 'fixture: the book has no blockquote paragraph')
+    const p = { x: at.first.left - 1, y: at.first.y }
+    assert.equal(await app.ev(`document.elementFromPoint(${p.x}, ${p.y})?.tagName`), 'BLOCKQUOTE',
+      'fixture: 1px left of the quote\'s first glyph is not the blockquote\'s padding')
+    await app.move(p)
+    assert.equal(await app.X(`hl('cairn-explain-hover')`), 'Waves', 'a point inside the slop lit no word')
+    assert.equal(await app.ev(`getComputedStyle(document.elementFromPoint(${p.x}, ${p.y})).cursor`), 'pointer',
+      'a lit word under the pointer shows no pointer cursor')
+    assert.equal(await app.ev(`document.querySelector('.ep-content').classList.contains('ex-over-word')`), false,
+      'the cursor class went on the whole book')
+    await app.move({ x: (await app.X('scroller()')).left + 12, y: p.y })
+    assert.equal(await app.ev(`document.querySelector('.ex-over-word')`), null, 'the cursor class outlived the hover')
   })
 
   test('book text is not selectable', async () => {
@@ -1654,7 +1738,7 @@ describe('E109 click-to-explain, real engine (fake ai-service)', { skip: SKIP },
       await app.move(at ? at.first : await app.X(`box('a.ep-noteref')`))
       assert.deepEqual({
         hover: await app.X(`hl('cairn-explain-hover')`),
-        over: await app.ev(`document.querySelector('.ep-content').classList.contains('ex-over-word')`),
+        over: await app.ev(`!!document.querySelector('.ep-content.ex-over-word, .ep-content .ex-over-word')`),
       }, { hover: null, over: false }, `hovering link "${text}" lit a word`)
     }
   })
@@ -1667,7 +1751,7 @@ describe('E109 click-to-explain, real engine (fake ai-service)', { skip: SKIP },
       await app.frames()
       assert.deepEqual({
         hover: await app.X(`hl('cairn-explain-hover')`),
-        over: await app.ev(`document.querySelector('.ep-content').classList.contains('ex-over-word')`),
+        over: await app.ev(`!!document.querySelector('.ep-content.ex-over-word, .ep-content .ex-over-word')`),
       }, { hover: null, over: false }, `hovering "${text}" lit a word`)
       await app.click(at)
       await sleep(200)

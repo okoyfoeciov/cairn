@@ -861,6 +861,23 @@ const painted = (t, name) => {
 const marked = (t) => painted(t, 'cairn-explain-mark')
 const hovered = (t) => painted(t, 'cairn-explain-hover')
 
+/** The one element that carries the pointer cursor, or null. */
+function cursorOn(t) {
+  const on = [t.content, ...t.content.querySelectorAll('.ex-over-word')]
+    .filter((el) => el.classList.contains('ex-over-word'))
+  assert.ok(on.length <= 1, 'the pointer cursor is on ' + on.length + ' elements')
+  return on[0] ?? null
+}
+/** The book's paragraph that holds `text`. */
+function para(t, text) {
+  const all = []
+  const walk = (n) => { for (const c of n.childNodes) if (c.nodeType === 1) { all.push(c); walk(c) } }
+  walk(t.content)
+  const p = all.find((el) => el.tagName.toLowerCase() === 'p' && el.textContent.includes(text))
+  assert.ok(p, 'no paragraph holds ' + JSON.stringify(text))
+  return p
+}
+
 function findQuery(t, query) {
   t.root.dispatch('keydown', {
     key: 'f', ctrlKey: true, metaKey: false, altKey: false, shiftKey: false,
@@ -921,7 +938,7 @@ test('explain: links stay links, and a noteref does not glue onto its word', asy
     assert.equal(t.band.asks.length, 0)
     t.scroller.dispatch('mousemove', mouse('mousemove', t.layout.at('the site')))
     await settle()
-    assert.equal(t.content.classList.contains('ex-over-word'), false)
+    assert.equal(cursorOn(t), null)
     await gesture(t, t.layout.at('lizard', { char: 5, right: true }))
     assert.deepEqual(t.band.asks[0].items, [{ phrase: 'lizard', words: ['lizard'] }])
     assert.equal(marked(t), 'lizard')
@@ -1132,17 +1149,74 @@ test('explain: the word under the pointer lights up', async () => {
   try {
     t.scroller.dispatch('mousemove', mouse('mousemove', t.layout.at('stone')))
     await settle()
-    assert.equal(t.content.classList.contains('ex-over-word'), true)
+    assert.equal(cursorOn(t), para(t, 'the stone'))
     assert.equal(hovered(t), 'stone')
     t.scroller.dispatch('mousemove', mouse('mousemove', { x: 5000, y: t.layout.at('stone').y }))
     await settle()
-    assert.equal(t.content.classList.contains('ex-over-word'), false)
+    assert.equal(cursorOn(t), null)
     assert.equal(hovered(t), null)
     t.scroller.dispatch('mousemove', mouse('mousemove', t.layout.at('stone')))
     await settle()
     t.scroller.dispatch('mouseleave', {})
     assert.equal(hovered(t), null)
-    assert.equal(t.content.classList.contains('ex-over-word'), false)
+    assert.equal(cursorOn(t), null)
+  } finally {
+    t.reader.destroy()
+  }
+})
+
+// `cursor` is inherited: on `.ep-content` every hover change would restyle
+// the whole book, and the hover changes as each wheel notch starts and ends.
+test("explain: the pointer cursor is on the hovered word's paragraph, never on the whole book", async () => {
+  const t = await mountPick()
+  try {
+    const stone = para(t, 'the stone')
+    t.scroller.dispatch('mousemove', mouse('mousemove', t.layout.at('stone'), { target: stone }))
+    await settle()
+    assert.equal(t.content.classList.contains('ex-over-word'), false, 'the whole book carries the cursor class')
+    assert.equal(cursorOn(t), stone)
+    // A word split across an inline element, on either half: its paragraph.
+    const needle = para(t, 'A nee')
+    const span = [...needle.childNodes].find((n) => n.nodeType === 1)
+    t.scroller.dispatch('mousemove', mouse('mousemove', t.layout.at('A nee', { char: 3 }), { target: needle }))
+    await settle()
+    assert.equal(hovered(t), 'needle')
+    assert.equal(cursorOn(t), needle)
+    t.scroller.dispatch('mousemove', mouse('mousemove', t.layout.at('dle', { char: 1 }), { target: span }))
+    await settle()
+    assert.equal(hovered(t), 'needle')
+    assert.equal(cursorOn(t), needle, 'the cursor follows the caret into the inline element')
+    // The text moves under a still pointer: the scroll takes the cursor off.
+    t.scroller.dispatch('scroll', {})
+    assert.equal(hovered(t), null)
+    assert.equal(cursorOn(t), null)
+  } finally {
+    t.reader.destroy()
+  }
+})
+
+// A word is hovered within 2px of its line boxes, which can lie outside its
+// block: then the pointer is over an ancestor, and that is where the cursor
+// shows.  Never the book's root, whatever the event says.
+test('explain: in the slop outside the block, the cursor is on the element under the pointer', async () => {
+  const t = await mountPick()
+  try {
+    const stone = para(t, 'the stone')
+    const chapter = stone.parentElement
+    assert.ok(chapter.classList.contains('ep-chapter'), 'fixture: the paragraph is not a chapter child')
+    // 19px down a 20px line: past the 18px glyph box, inside the slop.
+    const below = { ...t.layout.at('stone'), y: t.layout.at('stone').y + 14 }
+    t.scroller.dispatch('mousemove', mouse('mousemove', below, { target: chapter }))
+    await settle()
+    assert.equal(hovered(t), 'stone')
+    assert.equal(cursorOn(t), chapter)
+    t.scroller.dispatch('mousemove', mouse('mousemove', t.layout.at('stone'), { target: stone }))
+    await settle()
+    assert.equal(cursorOn(t), stone)
+    t.scroller.dispatch('mousemove', mouse('mousemove', below, { target: t.content }))
+    await settle()
+    assert.equal(hovered(t), 'stone')
+    assert.equal(cursorOn(t), stone, 'the cursor class went on the whole book')
   } finally {
     t.reader.destroy()
   }

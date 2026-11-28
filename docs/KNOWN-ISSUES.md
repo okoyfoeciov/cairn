@@ -880,9 +880,9 @@ and are not gaps. These are:
 - **The real band in a real `#reader` is only the real-engine suite's to show.** The unit suites run
   on the minidom with a fake ai-service. Live SSE through the app window, the grip's pointer
   capture, MW playback, the reveal scroll, code words, the find-bar click and Esc after a badge
-  click are `electron-shell/explain.test.mjs`'s subject. Its latest run, with E110 and its review
-  fixes, gives 63 of 63 against a fake ai-service (wide leg at dpr 1.25, 1700×900 CSS px; build
-  hash `2ff86c2892a9b23f`). Quote a fresh run before calling any of them verified.
+  click are `electron-shell/explain.test.mjs`'s subject. Its latest run, with E110, its review
+  fixes and the hover cursor on the word's block, gives 65 of 65 against a fake ai-service (wide leg
+  at dpr 1.25, 1700×900 CSS px; build hash `50f8b650e2b0d6b9`). Quote a fresh run before calling any of them verified.
 - **The badge's pixel match is per machine.** `electron-shell/explain-badge.test.mjs` measures 0
   differing pixels on Debian at dpr 1, 1.25, 1.5 and 2, where the glyphs outside the faces'
   `unicode-range` (comart's subsets' 226 code points) fall back to Liberation Serif. On macOS the
@@ -898,6 +898,11 @@ and are not gaps. These are:
   after 120 s with empty output.
 - **CJK is not segmented.** A run of CJK text with no spaces is one "word", as in comart, and
   `。！？` do not end a sentence, so the ±5-sentence window counts whole paragraphs there.
+- **Text with no block around it moves the cursor class onto its chapter.** The pointer cursor sits
+  on the hovered word's block (CONTRACT §0.56, the hit-test). A book whose text lies directly in
+  its chapter body, with no `<p>` or `<div>`, has no block below the chapter, so each hover change
+  there restyles that whole chapter. In a one-file book that is the whole book, the cost the rule
+  exists to avoid. Unmeasured: no such book has been opened.
 - **`Mr.` ends a sentence.** There is no abbreviation list (comart has none either). It only
   narrows the window.
 - **Picked words are not NFC-normalized.** A decomposed `café` is sent decomposed, and the
